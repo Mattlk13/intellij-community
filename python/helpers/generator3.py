@@ -1,17 +1,38 @@
 # encoding: utf-8
 import atexit
+import hashlib
 import zipfile
 
 from pycharm_generator_utils.clr_tools import *
 from pycharm_generator_utils.module_redeclarator import *
 from pycharm_generator_utils.util_methods import *
 
+BIN_BLOCK_SIZE = 64 * 1024
+FAILED_VERSION_STAMP = '.failed'
+
+
 # TODO: Move all CLR-specific functions to clr_tools
+debug_mode = True
+quiet = False
 
-debug_mode = False
+# TODO move to property of Generator3 as soon as tests finished
+def version():
+    return os.environ.get(ENV_VERSION, VERSION)
 
 
-def redo_module(module_name, outfile, module_file_name, doing_builtins):
+# TODO move to property of Generator3 as soon as tests finished
+def required_gen_version_file_path():
+    return os.environ.get(ENV_REQUIRED_GEN_VERSION_FILE, os.path.join(_helpers_dir, 'required_gen_version'))
+
+
+def is_test_mode():
+    return ENV_TEST_MODE_FLAG in os.environ
+
+
+_helpers_dir = os.path.dirname(__file__)
+
+
+def redo_module(module_name, module_file_name, doing_builtins, cache_dir, sdk_dir=None):
     # gobject does 'del _gobject' in its __init__.py, so the chained attribute lookup code
     # fails to find 'gobject._gobject'. thus we need to pull the module directly out of
     # sys.modules
@@ -31,7 +52,10 @@ def redo_module(module_name, outfile, module_file_name, doing_builtins):
                 break
     if mod:
         action("restoring")
-        r = ModuleRedeclarator(mod, outfile, module_file_name, doing_builtins=doing_builtins)
+        r = ModuleRedeclarator(mod, module_name, module_file_name,
+                               cache_dir=cache_dir,
+                               sdk_dir=sdk_dir,
+                               doing_builtins=doing_builtins)
         r.redo(module_name, ".".join(mod_path[:-1]) in MODULES_INSPECT_DIR)
         action("flushing")
         r.flush()
@@ -147,10 +171,11 @@ def list_binaries(paths):
             prefix = root[(len(path) + len(SEP)):].replace(SEP, '.')
             if prefix:
                 prefix += '.'
-            note("root: %s path: %s prefix: %s preprefix: %s", root, path, prefix, preprefix)
-            for f in files:
-                name = cut_binary_lib_suffix(root, f)
-                if name:
+            binaries = ((f, cut_binary_lib_suffix(root, f)) for f in files)
+            binaries = [(f, name) for (f, name) in binaries if name]
+            if binaries:
+                note("root: %s path: %s prefix: %s preprefix: %s", root, path, prefix, preprefix)
+                for f, name in binaries:
                     the_name = prefix + name
                     if is_skipped_module(root, f, the_name):
                         note('skipping module %s' % the_name)
@@ -318,9 +343,157 @@ def zip_stdlib(zip_path):
         zip.close()
 
 
+def build_cache_dir_path(subdir, mod_qname, mod_path):
+    return os.path.join(subdir, module_hash(mod_qname, mod_path))
+
+
+def module_hash(mod_qname, mod_path):
+    # Hash the content of a physical module
+    if mod_path:
+        if os.environ.get(ENV_CONTENT_INDEPENDENT_HASHES_FLAG) == 'True':
+            prefix = 'sha256:' + mod_qname
+            version = getattr(__import__(mod_qname), '__version__', None)
+            if version:
+                return prefix + ':' + version
+            return prefix
+        else:
+            return physical_module_hash(mod_path)
+    else:
+        return builtin_module_hash(mod_qname)
+
+
+def builtin_module_hash(mod_qname):
+    # Hash the content of interpreter executable, i.e. it will be the same for all built-in modules.
+    # Also, it's the same for a virtualenv interpreter and its base.
+    with fopen(sys.executable, 'rb') as f:
+        return sha256(f)
+
+
+def physical_module_hash(mod_path):
+    pure_py = os.path.splitext(mod_path)[1] == '.py'
+    if pure_py:
+        # Open .py files in text mode to avoid LF/CRLF conversion issues. It should happen only in tests.
+        with fopen(mod_path, 'r') as f:
+            return sha256(f.read().encode(OUT_ENCODING))
+    else:
+        with fopen(mod_path, 'rb') as f:
+            return sha256(f)
+
+
+def sha256(binary_or_file):
+    if isinstance(binary_or_file, bytes):
+        return hashlib.sha256(binary_or_file).hexdigest()
+    else:
+        acc = hashlib.sha256()
+        while True:
+            block = binary_or_file.read(BIN_BLOCK_SIZE)
+            if not block:
+                break
+            acc.update(block)
+        return acc.hexdigest()
+
+
+def version_to_tuple(version):
+    return tuple(map(int, version.split('.')))
+
+
+def read_generator_version(skeleton_file):
+    for line in skeleton_file:
+        if not line.startswith('#'):
+            break
+
+        m = GENERATOR_VERSION_LINE.match(line)
+        if m:
+            return version_to_tuple(m.group('version'))
+    return None
+
+
+def should_update_skeleton(base_dir, mod_qname, mod_path):
+    cur_version = version_to_tuple(version())
+
+    failed_version = read_failed_version_from_stamp(base_dir)
+    if failed_version:
+        return failed_version < cur_version
+
+    # noinspection PyUnreachableCode
+    failed_version = read_failed_version_from_legacy_blacklist(base_dir, mod_path)
+    if failed_version:
+        return failed_version < cur_version
+
+    required_version = read_required_version(mod_qname)
+
+    for path in skeleton_path_candidates(base_dir, mod_qname, init_for_pkg=True):
+        with ignored_os_errors(errno.ENOENT):
+            with fopen(path, 'r') as f:
+                used_version = read_generator_version(f)
+                if used_version and required_version:
+                    return used_version < required_version
+    return True
+
+
+def read_failed_version_from_stamp(base_dir):
+    with ignored_os_errors(errno.ENOENT):
+        with fopen(os.path.join(base_dir, FAILED_VERSION_STAMP), 'r') as f:
+            return version_to_tuple(f.read().strip())
+    # noinspection PyUnreachableCode
+    return None
+
+
+def skeleton_path_candidates(base_dir, mod_qname, init_for_pkg=False):
+    base_path = os.path.join(base_dir, *mod_qname.split('.'))
+    if init_for_pkg:
+        yield os.path.join(base_path, '__init__.py')
+    else:
+        yield base_path
+    yield base_path + '.py'
+
+
+def read_required_gen_version_file():
+    result = {}
+    with fopen(required_gen_version_file_path(), 'r') as f:
+        for line in f:
+            if not line or line.startswith('#'):
+                continue
+            m = REQUIRED_VERSION_LINE.match(line)
+            if m:
+                result[m.group('name')] = version_to_tuple(m.group('version'))
+
+    return result
+
+
+def read_required_version(mod_qname):
+    mod_id = '(built-in)' if mod_qname in sys.builtin_module_names else mod_qname
+    versions = read_required_gen_version_file()
+    # TODO use glob patterns here
+    for pattern, version in versions.items():
+        if mod_id == pattern:
+            return version
+    return versions.get('(default)')
+
+
+def read_failed_version_from_legacy_blacklist(sdk_skeletons_dir, mod_path):
+    blacklist = read_legacy_blacklist_file(sdk_skeletons_dir)
+    record = blacklist.get('{mod_path}' if is_test_mode() else mod_path)
+    return record[0] if record else None
+
+
+def read_legacy_blacklist_file(sdk_skeletons_dir):
+    results = {}
+    with ignored_os_errors(errno.ENOENT):
+        with fopen(os.path.join(sdk_skeletons_dir, '.blacklist'), 'r') as f:
+            for line in f:
+                if not line or line.startswith('#'):
+                    continue
+
+                m = BLACKLIST_VERSION_LINE.match(line)
+                if m:
+                    results[m.group('path')] = (version_to_tuple(m.group('version')), int(m.group('mtime')) / 1000)
+    return results
+
+
 # command-line interface
 # noinspection PyBroadException
-def process_one(name, mod_file_name, doing_builtins, subdir):
+def process_one(name, mod_file_name, doing_builtins, sdk_skeletons_dir):
     """
     Processes a single module named name defined in file_name (autodetect if not given).
     Returns True on success.
@@ -333,55 +506,77 @@ def process_one(name, mod_file_name, doing_builtins, subdir):
         sys.stdout.flush()
     action("doing nothing")
 
+    # Normalize the path to directory for os.path functions
+    sdk_skeletons_dir = sdk_skeletons_dir.rstrip(os.path.sep)
     try:
-        fname = build_output_name(subdir, name)
-        action("opening %r", fname)
-        old_modules = list(sys.modules.keys())
-        imported_module_names = set()
+        python_stubs_dir = os.path.dirname(sdk_skeletons_dir)
+        global_cache_dir = os.path.join(python_stubs_dir, 'cache')
+        mod_cache_dir = build_cache_dir_path(global_cache_dir, name, mod_file_name)
+        # At the moment this is actually enforced on Java-side
+        if not should_update_skeleton(sdk_skeletons_dir, name, mod_file_name):
+            return True
 
-        class MyFinder:
-            # noinspection PyMethodMayBeStatic
-            def find_module(self, fullname, path=None):
-                if fullname != name:
-                    imported_module_names.add(fullname)
-                return None
+        if should_update_skeleton(mod_cache_dir, name, mod_file_name):
+            note('Updating cache for %s at %r', name, mod_cache_dir)
+            delete(mod_cache_dir)
+            mkdir(mod_cache_dir)
 
-        my_finder = None
-        if hasattr(sys, 'meta_path'):
-            my_finder = MyFinder()
-            sys.meta_path.append(my_finder)
-        else:
-            imported_module_names = None
+            old_modules = list(sys.modules.keys())
+            imported_module_names = set()
 
-        action("importing")
-        __import__(name)  # sys.modules will fill up with what we want
+            class MyFinder:
+                # noinspection PyMethodMayBeStatic
+                def find_module(self, fullname, path=None):
+                    if fullname != name:
+                        imported_module_names.add(fullname)
+                    return None
 
-        if my_finder:
-            sys.meta_path.remove(my_finder)
-        if imported_module_names is None:
-            imported_module_names = set(sys.modules.keys()) - set(old_modules)
+            my_finder = None
+            if hasattr(sys, 'meta_path'):
+                my_finder = MyFinder()
+                sys.meta_path.append(my_finder)
+            else:
+                imported_module_names = None
 
-        redo_module(name, fname, mod_file_name, doing_builtins)
-        # The C library may have called Py_InitModule() multiple times to define several modules (gtk._gtk and gtk.gdk);
-        # restore all of them
-        path = name.split(".")
-        redo_imports = not ".".join(path[:-1]) in MODULES_INSPECT_DIR
-        if imported_module_names and redo_imports:
-            for m in sys.modules.keys():
-                if m.startswith("pycharm_generator_utils"): continue
-                action("looking at possible submodule %r", m)
-                # if module has __file__ defined, it has Python source code and doesn't need a skeleton
-                if m not in old_modules and m not in imported_module_names and m != name and not hasattr(
-                        sys.modules[m], '__file__'):
-                    if not quiet:
-                        say(m)
-                        sys.stdout.flush()
-                    fname = build_output_name(subdir, m)
-                    action("opening %r", fname)
-                    try:
-                        redo_module(m, fname, mod_file_name, doing_builtins)
-                    finally:
-                        action("closing %r", fname)
+            failed_version_stamp = os.path.join(mod_cache_dir, FAILED_VERSION_STAMP)
+            with fopen(failed_version_stamp, 'w') as f:
+                f.write(version())
+
+            action("importing")
+            __import__(name)  # sys.modules will fill up with what we want
+
+            if my_finder:
+                sys.meta_path.remove(my_finder)
+            if imported_module_names is None:
+                imported_module_names = set(sys.modules.keys()) - set(old_modules)
+
+            redo_module(name, mod_file_name, doing_builtins, mod_cache_dir, sdk_skeletons_dir)
+            # The C library may have called Py_InitModule() multiple times to define several modules (gtk._gtk and gtk.gdk);
+            # restore all of them
+            path = name.split(".")
+            redo_imports = not ".".join(path[:-1]) in MODULES_INSPECT_DIR
+            if imported_module_names and redo_imports:
+                for m in sys.modules.keys():
+                    if m.startswith("pycharm_generator_utils"): continue
+                    action("looking at possible submodule %r", m)
+                    # if module has __file__ defined, it has Python source code and doesn't need a skeleton
+                    if (m not in old_modules and
+                            m not in imported_module_names and
+                            m != name and
+                            not hasattr(sys.modules[m], '__file__') and
+                            m not in sys.builtin_module_names):
+                        if not quiet:
+                            say(m)
+                            sys.stdout.flush()
+                        action("opening %r", mod_cache_dir)
+                        try:
+                            redo_module(m, mod_file_name, doing_builtins, cache_dir=mod_cache_dir, sdk_dir=sdk_skeletons_dir)
+                        finally:
+                            action("closing %r", mod_cache_dir)
+            delete(failed_version_stamp)
+        note('Copying cached skeletons for %s from %r to %r', name, mod_cache_dir, sdk_skeletons_dir)
+        copy_skeletons(mod_cache_dir, sdk_skeletons_dir)
+
     except:
         exctype, value = sys.exc_info()[:2]
         msg = "Failed to process %r while %s: %s"
@@ -474,7 +669,7 @@ if __name__ == "__main__":
         if len(args) > 0:
             report("Expected no args with -L, got %d args", len(args))
             sys.exit(1)
-        say(VERSION)
+        say(version())
         results = list(list_binaries(sys.path))
         results.sort()
         for name, path, size, last_modified in results:
@@ -485,7 +680,7 @@ if __name__ == "__main__":
         if len(args) > 0:
             report("Expected no args with -S, got %d args", len(args))
             sys.exit(1)
-        say(VERSION)
+        say(version())
         list_sources(sys.path)
         sys.exit(0)
 

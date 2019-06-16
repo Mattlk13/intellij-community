@@ -1,4 +1,6 @@
+import generator3
 from pycharm_generator_utils.util_methods import *
+from pycharm_generator_utils.util_methods import copy
 
 is_pregenerated = os.getenv("IS_PREGENERATED_SKELETONS", None)
 
@@ -56,18 +58,23 @@ class ClassBuf(Buf):
         self.name = name
 
 
-#noinspection PyUnresolvedReferences,PyBroadException
+#noinspection PyBroadException
 class ModuleRedeclarator(object):
-    def __init__(self, module, outfile, mod_filename, indent_size=4, doing_builtins=False):
+    def __init__(self, module, mod_qname, mod_filename, cache_dir, sdk_dir=None, indent_size=4, doing_builtins=False):
         """
-        Create new instance.
-        @param module module to restore.
-        @param outfile output file, must be open and writable.
-        @param mod_filename filename of binary module (the .dll or .so)
-        @param indent_size amount of space characters per indent
+        @param module: module object
+        @param mod_qname: module qualified name
+        @param mod_filename: filename of binary module (the .dll or .so). Can be None for modules
+            that don't have corresponding binary file
+        @param cache_dir: path to skeletons cache directory (e.g. python_stubs/cache)
+        @param sdk_dir: path to interpreter specific skeletons directory
+        @param indent_size: amount of space characters per indent
         """
+        self.test_mode = generator3.is_test_mode()
         self.module = module
-        self.outfile = outfile # where we finally write
+        self.qname = mod_qname
+        self.cache_dir = cache_dir
+        self.sdk_dir = sdk_dir
         self.mod_filename = mod_filename
         # we write things into buffers out-of-order
         self.header_buf = Buf(self)
@@ -118,41 +125,34 @@ class ModuleRedeclarator(object):
         return self._indent_step * level
 
     def flush(self):
-        init = None
-        try:
-            if self.split_modules:
-                mod_path = module_to_package_name(self.outfile)
-
-                fname = build_output_name(mod_path, "__init__")
-                init = fopen(fname, "w")
+        qname_parts = self.qname.split('.')
+        if self.split_modules:
+            last_pkg_dir = build_pkg_structure(self.cache_dir, self.qname)
+            with fopen(os.path.join(last_pkg_dir, "__init__.py"), "w") as init:
                 for buf in (self.header_buf, self.imports_buf, self.functions_buf, self.classes_buf):
                     buf.flush(init)
 
                 data = ""
                 for buf in self.classes_buffs:
-                    fname = build_output_name(mod_path, buf.name)
-                    dummy = fopen(fname, "w")
-                    self.header_buf.flush(dummy)
-                    self.imports_buf.flush(dummy)
-                    buf.flush(dummy)
-                    data += self.create_local_import(buf.name)
-                    dummy.close()
+                    with fopen(os.path.join(last_pkg_dir, buf.name) + '.py', "w") as dummy:
+                        self.header_buf.flush(dummy)
+                        self.imports_buf.flush(dummy)
+                        buf.flush(dummy)
+                        data += self.create_local_import(buf.name)
 
                 init.write(data)
                 self.footer_buf.flush(init)
-            else:
-                init = fopen(self.outfile, "w")
+        else:
+            last_pkg_dir = build_pkg_structure(self.cache_dir, '.'.join(qname_parts[:-1]))
+            skeleton_path = os.path.join(last_pkg_dir, qname_parts[-1] + '.py')
+            with fopen(skeleton_path, "w") as mod:
                 for buf in (self.header_buf, self.imports_buf, self.functions_buf, self.classes_buf):
-                    buf.flush(init)
+                    buf.flush(mod)
 
                 for buf in self.classes_buffs:
-                    buf.flush(init)
+                    buf.flush(mod)
 
-                self.footer_buf.flush(init)
-
-        finally:
-            if init is not None and not init.closed:
-                init.close()
+                self.footer_buf.flush(mod)
 
     # Some builtin classes effectively change __init__ signature without overriding it.
     # This callable serves as a placeholder to be replaced via REDEFINED_BUILTIN_SIGS
@@ -305,7 +305,11 @@ class ModuleRedeclarator(object):
                             import traceback
                             traceback.print_exc(file=sys.stderr)
                             return
-                        real_value = cleanup(representation)
+                        if not self.test_mode:
+                            real_value = cleanup(representation)
+                        else:
+                            # Don't rely on repr() output in tests, as it may contain memory layout dependent id
+                            real_value = ''
                         if found_name:
                             if found_name == as_name:
                                 notice = " # (!) real value is %r" % real_value
@@ -789,9 +793,9 @@ class ModuleRedeclarator(object):
             filename = BUILT_IN_HEADER
         else:
             filename = getattr(self.module, "__file__", BUILT_IN_HEADER)
-
-        out(0, "# from %s" % filename)  # line 3
-        out(0, "# by generator %s" % VERSION) # line 4
+        if not self.test_mode:
+            out(0, "# from %s" % filename)  # line 3
+        out(0, "# by generator %s" % generator3.version())  # line 4
         if p_name == BUILTIN_MOD_NAME and version[0] == 2 and version[1] >= 6:
             out(0, "from __future__ import print_function")
         out_doc_attr(out, self.module, 0)
@@ -808,6 +812,8 @@ class ModuleRedeclarator(object):
                 self.add_import_header_if_needed()
                 ref_notice = getattr(item, "__file__", str(item))
                 if hasattr(item, "__name__"):
+                    if self.test_mode and item_name.name in ('builtins', '__builtin__'):
+                        continue
                     self.imports_buf.out(0, "import ", item.__name__, " as ", item_name, " # ", ref_notice)
                 else:
                     self.imports_buf.out(0, item_name, " = None # ??? name unknown; ", ref_notice)
@@ -855,6 +861,8 @@ class ModuleRedeclarator(object):
             if item_name in (
                 "__dict__", "__doc__", "__module__", "__file__", "__name__", "__builtins__", "__package__"):
                 continue # handled otherwise
+            if self.test_mode and item_name in ('__loader__', '__spec__', '__cached__'):
+                continue
             try:
                 item = getattr(self.module, item_name) # let getters do the magic
             except AttributeError:
@@ -1109,7 +1117,3 @@ class ModuleRedeclarator(object):
             for mod_name in sorted_no_case(self.hidden_imports.keys()):
                 out(0, 'import ', mod_name, ' as ', self.hidden_imports[mod_name])
             out(0, "") # empty line after group
-
-
-def module_to_package_name(module_name):
-    return re.sub(r"(.*)\.py$", r"\1", module_name)

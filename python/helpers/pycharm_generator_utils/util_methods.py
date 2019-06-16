@@ -1,5 +1,8 @@
 import ast
+import errno
 import keyword
+import shutil
+from contextlib import contextmanager
 
 from pycharm_generator_utils.constants import *
 
@@ -694,12 +697,14 @@ def restore_clr(p_name, p_class):
         is_static = True
     return is_static, build_signature(p_name, params), None
 
-def build_output_name(dirname, qualified_name):
-    qualifiers = qualified_name.split(".")
-    if dirname and not dirname.endswith("/") and not dirname.endswith("\\"):
-        dirname += os.path.sep # "a -> a/"
-    for pathindex in range(len(qualifiers) - 1): # create dirs for all qualifiers but last
-        subdirname = dirname + os.path.sep.join(qualifiers[0: pathindex + 1])
+
+def build_pkg_structure(base_dir, qname):
+    if not qname:
+        return base_dir
+
+    subdirname = base_dir
+    for part in qname.split("."):
+        subdirname = os.path.join(subdirname, part)
         if not os.path.isdir(subdirname):
             action("creating subdir %r", subdirname)
             os.makedirs(subdirname)
@@ -707,20 +712,9 @@ def build_output_name(dirname, qualified_name):
         if os.path.isfile(subdirname + ".py"):
             os.rename(subdirname + ".py", init_py)
         elif not os.path.isfile(init_py):
-            init = fopen(init_py, "w")
-            init.close()
-    target_name = dirname + os.path.sep.join(qualifiers)
-    if os.path.isdir(target_name):
-        fname = os.path.join(target_name, "__init__.py")
-    else:
-        fname = target_name + ".py"
+            fopen(init_py, "w").close()
 
-    dirname = os.path.dirname(fname)
-
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)
-
-    return fname
+    return subdirname
 
 
 def is_valid_implicit_namespace_package_name(s):
@@ -746,6 +740,96 @@ def isidentifier(s):
                 not s[:1].isdigit() and
                 "-" not in s and
                 " " not in s)
+
+
+@contextmanager
+def ignored_os_errors(*errno):
+    try:
+        yield
+    # Since Python 3.3 IOError and OSError were merged into OSError
+    except EnvironmentError as e:
+        if e.errno not in errno:
+            raise
+
+
+def mkdir(path):
+    try:
+        os.makedirs(path)
+    except EnvironmentError as e:
+        if e.errno != errno.EEXIST or not os.path.isdir(path):
+            raise
+
+
+def copy(src, dst, merge=False, conflict_handler=None, post_copy_hook=None):
+    if post_copy_hook is None:
+        def post_copy_hook(p1, p2):
+            pass
+
+    if conflict_handler is None:
+        def conflict_handler(p1, p2):
+            return False
+
+    if os.path.isdir(src):
+        if not merge:
+            shutil.copytree(src, dst)
+            post_copy_hook(src, dst)
+        else:
+            mkdir(dst)
+            for child in os.listdir(src):
+                child_src = os.path.join(src, child)
+                child_dst = os.path.join(dst, child)
+                try:
+                    copy(child_src, child_dst, merge=merge,
+                         conflict_handler=conflict_handler,
+                         post_copy_hook=post_copy_hook)
+                    post_copy_hook(child_src, child_dst)
+                except OSError as e:
+                    if e.errno == errno.EEXIST and not (os.path.isdir(child_src) and os.path.isdir(child_dst)):
+                        if conflict_handler(child_src, child_dst):
+                            continue
+                    raise
+    else:
+        mkdir(os.path.dirname(dst))
+        shutil.copy2(src, dst)
+        post_copy_hook(src, dst)
+
+
+def copy_merging_packages(src, dst):
+    def ignore_init_py(src_file, dst_file):
+        return (os.path.basename(src_file) == '__init__.py' and
+                os.path.basename(dst_file) == '__init__.py')
+
+    copy(src, dst, merge=True, conflict_handler=ignore_init_py)
+
+
+def copy_skeletons(src_dir, dst_dir):
+    def overwrite(src, dst):
+        delete(dst)
+        copy(src, dst)
+        return True
+
+    # Remove packages/modules with the same import name
+    def mod_pkg_cleanup(src, dst):
+        dst_dir = os.path.dirname(dst)
+        name, ext = os.path.splitext(os.path.basename(src))
+        if ext == '.py':
+            delete(os.path.join(dst_dir, name))
+        elif not ext:
+            delete(dst + '.py')
+
+    copy(src_dir, dst_dir, merge=True, conflict_handler=overwrite, post_copy_hook=mod_pkg_cleanup)
+
+
+def delete(path, content=False):
+    with ignored_os_errors(errno.ENOENT):
+        if os.path.isdir(path):
+            if not content:
+                shutil.rmtree(path)
+            else:
+                for child in os.listdir(path):
+                    delete(child)
+        else:
+            os.remove(path)
 
 
 def is_text_file(path):
