@@ -18,8 +18,6 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.JavaDummyHolder;
-import com.intellij.psi.impl.source.PsiCodeFragmentImpl;
-import com.intellij.psi.impl.source.tree.JavaElementType;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.javadoc.PsiDocToken;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -484,7 +482,10 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
   }
 
   @Override
-  public boolean shouldShowProblem(HighlightInfo highlightInfo, PsiFile file) {
+  public boolean shouldShowProblem(HighlightInfo highlightInfo, PsiFile file, PatternContext context) {
+    if (!Registry.is("ssr.in.editor.problem.highlighting")) {
+      return false;
+    }
     if (highlightInfo.getSeverity() != HighlightSeverity.ERROR && highlightInfo.getSeverity() != HighlightSeverity.INFORMATION) {
       return false;
     }
@@ -511,7 +512,7 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
       return false;
     }
     final List<PsiStatement> children = PsiTreeUtil.getChildrenOfTypeAsList(file, PsiStatement.class);
-    if (children.size() == 1 && ((PsiCodeFragmentImpl)file).getContentElementType() == JavaElementType.STATEMENTS) {
+    if (children.size() == 1 && context == DEFAULT_CONTEXT) {
       final PsiStatement child = children.get(0);
       if (child == parent && (child instanceof PsiExpressionStatement || child instanceof PsiDeclarationStatement)) {
         // search for expression, type, annotation or symbol
@@ -572,6 +573,10 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
   public void checkSearchPattern(CompiledPattern pattern) {
     final ValidatingVisitor visitor = new ValidatingVisitor();
     final NodeIterator nodes = pattern.getNodes();
+    if (pattern.getNodeCount() == 1 && (
+      nodes.current() instanceof PsiExpressionStatement || nodes.current() instanceof PsiDeclarationStatement)) {
+      visitor.setCurrent(nodes.current());
+    }
     while (nodes.hasNext()) {
       nodes.current().accept(visitor);
       nodes.advance();
@@ -593,6 +598,9 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
     final boolean replaceIsExpression = statements2.length == 1 && statements2[0].getLastChild() instanceof PsiErrorElement;
 
     final ValidatingVisitor visitor = new ValidatingVisitor();
+    if (statements2.length == 1 && (statements2[0] instanceof PsiExpressionStatement || statements2[0] instanceof PsiDeclarationStatement)) {
+      visitor.setCurrent(statements2[0]);
+    }
     for (PsiElement statement : statements2) {
       statement.accept(visitor);
     }
@@ -617,6 +625,7 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
   }
 
   static class ValidatingVisitor extends JavaRecursiveElementWalkingVisitor {
+    private PsiElement myCurrent;
 
     @Override public void visitAnnotation(PsiAnnotation annotation) {
       super.visitAnnotation(annotation);
@@ -641,6 +650,44 @@ public class JavaStructuralSearchProfile extends StructuralSearchProfile {
         ) {
         throw new MalformedPatternException(SSRBundle.message("invalid.modifier.type",name));
       }
+    }
+
+    @Override
+    public void visitErrorElement(PsiErrorElement element) {
+      super.visitErrorElement(element);
+      if (Registry.is("ssr.in.editor.problem.highlighting") && Registry.is("ssr.use.new.search.dialog")) {
+        return;
+      }
+      final PsiElement parent = element.getParent();
+      final String errorDescription = element.getErrorDescription();
+      if (parent instanceof PsiClass && "Identifier expected".equals(errorDescription)) {
+        // other class content variable.
+        return;
+      }
+      if (parent instanceof PsiTryStatement && "'catch' or 'finally' expected".equals(errorDescription)) {
+        // searching for naked try allowed
+        return;
+      }
+      if (parent == myCurrent) {
+        // search for expression, type, annotation or symbol
+        if ("';' expected".equals(errorDescription)  && element.getNextSibling() == null) {
+          // expression
+          return;
+        }
+        if ("Identifier or type expected".equals(errorDescription)) {
+          // annotation
+          return;
+        }
+        if ("Identifier expected".equals(errorDescription)) {
+          // type
+          return;
+        }
+      }
+      throw new MalformedPatternException(errorDescription);
+    }
+
+    void setCurrent(PsiElement current) {
+      myCurrent = current;
     }
   }
 
