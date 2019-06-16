@@ -1,5 +1,7 @@
 import ast
 import errno
+import functools
+import hashlib
 import keyword
 import shutil
 from contextlib import contextmanager
@@ -10,6 +12,9 @@ try:
     import inspect
 except ImportError:
     inspect = None
+
+BIN_READ_BLOCK = 64 * 1024
+
 
 def create_named_tuple():   #TODO: user-skeleton
     return """
@@ -760,19 +765,25 @@ def mkdir(path):
             raise
 
 
-def copy(src, dst, merge=False, conflict_handler=None, post_copy_hook=None):
-    if post_copy_hook is None:
-        def post_copy_hook(p1, p2):
-            pass
+def copy(src, dst, merge=False, pre_copy_hook=None, conflict_handler=None, post_copy_hook=None):
+    if pre_copy_hook is None:
+        def pre_copy_hook(p1, p2):
+            return True
 
     if conflict_handler is None:
         def conflict_handler(p1, p2):
             return False
 
+    if post_copy_hook is None:
+        def post_copy_hook(p1, p2):
+            pass
+
+    if not pre_copy_hook(src, dst):
+        return
+
     if os.path.isdir(src):
         if not merge:
             shutil.copytree(src, dst)
-            post_copy_hook(src, dst)
         else:
             mkdir(dst)
             for child in os.listdir(src):
@@ -780,9 +791,9 @@ def copy(src, dst, merge=False, conflict_handler=None, post_copy_hook=None):
                 child_dst = os.path.join(dst, child)
                 try:
                     copy(child_src, child_dst, merge=merge,
+                         pre_copy_hook=pre_copy_hook,
                          conflict_handler=conflict_handler,
                          post_copy_hook=post_copy_hook)
-                    post_copy_hook(child_src, child_dst)
                 except OSError as e:
                     if e.errno == errno.EEXIST and not (os.path.isdir(child_src) and os.path.isdir(child_dst)):
                         if conflict_handler(child_src, child_dst):
@@ -791,18 +802,10 @@ def copy(src, dst, merge=False, conflict_handler=None, post_copy_hook=None):
     else:
         mkdir(os.path.dirname(dst))
         shutil.copy2(src, dst)
-        post_copy_hook(src, dst)
+    post_copy_hook(src, dst)
 
 
-def copy_merging_packages(src, dst):
-    def ignore_init_py(src_file, dst_file):
-        return (os.path.basename(src_file) == '__init__.py' and
-                os.path.basename(dst_file) == '__init__.py')
-
-    copy(src, dst, merge=True, conflict_handler=ignore_init_py)
-
-
-def copy_skeletons(src_dir, dst_dir):
+def copy_skeletons(src_dir, dst_dir, new_origin=None):
     def overwrite(src, dst):
         delete(dst)
         copy(src, dst)
@@ -817,7 +820,35 @@ def copy_skeletons(src_dir, dst_dir):
         elif not ext:
             delete(dst + '.py')
 
-    copy(src_dir, dst_dir, merge=True, conflict_handler=overwrite, post_copy_hook=mod_pkg_cleanup)
+    def override_origin_stamp(src, dst):
+        _, ext = os.path.splitext(dst)
+        if ext == '.py' and new_origin:
+            with fopen(dst, 'r') as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if not line.startswith('#'):
+                        return
+
+                    m = SKELETON_HEADER_ORIGIN_LINE.match(line)
+                    if m:
+                        break
+                else:
+                    return
+            with fopen(dst, 'w') as f:
+                lines[i] = '# from ' + new_origin + '\n'
+                f.writelines(lines)
+
+    def post_copy_hook(src, dst):
+        override_origin_stamp(src, dst)
+        mod_pkg_cleanup(src, dst)
+
+    def ignore_failed_version_stamps(src, dst):
+        return not os.path.basename(src).startswith(FAILED_VERSION_STAMP_PREFIX)
+
+    copy(src_dir, dst_dir, merge=True,
+         pre_copy_hook=ignore_failed_version_stamps,
+         conflict_handler=overwrite,
+         post_copy_hook=post_copy_hook)
 
 
 def delete(path, content=False):
@@ -831,6 +862,44 @@ def delete(path, content=False):
         else:
             os.remove(path)
 
+
+def cached(func):
+    func._results = {}
+    unknown = object()
+
+    # noinspection PyProtectedMember
+    @functools.wraps(func)
+    def wrapper(*args):
+        result = func._results.get(args, unknown)
+        if result is unknown:
+            result = func._results[args] = func(*args)
+        return result
+
+    return wrapper
+
+
+def sha256_digest(binary_or_file):
+    # "bytes" type is available in Python 2.7
+    if isinstance(binary_or_file, bytes):
+        return hashlib.sha256(binary_or_file).hexdigest()
+    else:
+        acc = hashlib.sha256()
+        while True:
+            block = binary_or_file.read(BIN_READ_BLOCK)
+            if not block:
+                break
+            acc.update(block)
+        return acc.hexdigest()
+
+
+def get_relative_path_by_qname(abs_path, qname):
+    abs_path_components = os.path.split(abs_path)
+    qname_components_count = len(qname.split('.'))
+    if os.path.splitext(abs_path_components[-1])[0] == '__init__':
+        rel_path_components_count = qname_components_count + 1
+    else:
+        rel_path_components_count = qname_components_count
+    return os.path.join(*abs_path_components[-rel_path_components_count:])
 
 def is_text_file(path):
     """

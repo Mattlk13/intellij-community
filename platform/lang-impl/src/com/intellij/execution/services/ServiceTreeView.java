@@ -7,6 +7,7 @@ import com.intellij.ide.util.treeView.TreeState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.ui.AppUIUtil;
+import com.intellij.ui.AutoScrollToSourceHandler;
 import com.intellij.ui.tree.TreeVisitor;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
@@ -103,7 +104,7 @@ class ServiceTreeView extends ServiceView {
     mySelected = true;
     if (myLastSelection != null) {
       ServiceViewDescriptor descriptor = myLastSelection.getViewDescriptor();
-      onNodeSelected(descriptor);
+      onViewSelected(descriptor);
       myUi.setDetailsComponent(descriptor.getContentComponent());
     }
     else {
@@ -140,7 +141,7 @@ class ServiceTreeView extends ServiceView {
 
     ServiceViewDescriptor newDescriptor = newSelection == null ? null : newSelection.getViewDescriptor();
     if (newDescriptor != null) {
-      onNodeSelected(newDescriptor);
+      newDescriptor.onNodeSelected();
     }
     myUi.setDetailsComponent(newDescriptor == null ? null : newDescriptor.getContentComponent());
   }
@@ -151,10 +152,18 @@ class ServiceTreeView extends ServiceView {
       ServiceViewItem updatedItem = ContainerUtil.getOnlyItem(selected);
       if (Comparing.equal(updatedItem, myLastSelection)) {
         myLastSelection = updatedItem;
-        ServiceViewDescriptor descriptor = updatedItem == null ? null : updatedItem.getViewDescriptor();
-        myUi.setDetailsComponent(descriptor == null ? null : descriptor.getContentComponent());
+        if (mySelected) {
+          ServiceViewDescriptor descriptor = updatedItem == null ? null : updatedItem.getViewDescriptor();
+          myUi.setDetailsComponent(descriptor == null ? null : descriptor.getContentComponent());
+        }
       }
     }, myProject.getDisposed());
+  }
+
+  @Override
+  void setAutoScrollToSourceHandler(@NotNull AutoScrollToSourceHandler autoScrollToSourceHandler) {
+    super.setAutoScrollToSourceHandler(autoScrollToSourceHandler);
+    autoScrollToSourceHandler.install(myTree);
   }
 
   @Override
@@ -177,15 +186,20 @@ class ServiceTreeView extends ServiceView {
     @Override
     public void rootsChanged() {
       AppUIUtil.invokeOnEdt(() -> {
-        List<ServiceViewItem> selectedItems = getSelectedItems();
+        TreePath[] currentPaths = myTree.getSelectionPaths();
+        List<TreePath> selectedPaths =
+          currentPaths == null || currentPaths.length == 0 ? Collections.emptyList() : Arrays.asList(currentPaths);
         myTreeModel.rootsChanged();
-        if (selectedItems.isEmpty()) return;
+        if (selectedPaths.isEmpty()) return;
 
         myTreeModel.getInvoker().invokeLater(() -> {
           List<Promise<TreePath>> pathPromises =
-            ContainerUtil.map(selectedItems, item -> myTreeModel.findPath(item.getValue(), item.getRootContributor().getClass()));
+            ContainerUtil.mapNotNull(selectedPaths, path -> {
+              ServiceViewItem item = ObjectUtils.tryCast(path.getLastPathComponent(), ServiceViewItem.class);
+              return item == null ? null : myTreeModel.findPath(item.getValue(), item.getRootContributor().getClass());
+            });
           Promises.collectResults(pathPromises, true).onProcessed(paths -> {
-            if (paths != null) {
+            if (paths != null && !paths.isEmpty() && !paths.equals(selectedPaths)) {
               TreeUtil.promiseSelect(myTree, paths.stream().map(PathSelectionVisitor::new));
             }
           });

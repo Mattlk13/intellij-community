@@ -15,7 +15,7 @@ import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.project.ex.ProjectManagerEx;
 import com.intellij.openapi.project.impl.ProjectManagerImpl;
 import com.intellij.openapi.util.Disposer;
-import com.intellij.openapi.util.SystemInfoRt;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.io.IoTestUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.newvfs.ManagingFS;
@@ -49,7 +49,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import static com.intellij.testFramework.UsefulTestCase.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.*;
 
 public class VfsUtilTest extends BareTestFixtureTestCase {
   @Rule public TempDirectory myTempDir = new TempDirectory();
@@ -108,7 +109,7 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
     VirtualFile child = vDir.findChild(" ");
     assertNull(child);
 
-    assertEmpty(vDir.getChildren());
+    assertThat(vDir.getChildren()).isEmpty();
   }
 
   @Test
@@ -143,7 +144,7 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
 
   @Test
   public void testToUri() {
-    if (!SystemInfoRt.isWindows) {
+    if (!SystemInfo.isWindows) {
       assertEquals("file:///asd", VfsUtil.toUri(new File("/asd")).toASCIIString());
       assertEquals("file:///asd%20/sd", VfsUtil.toUri(new File("/asd /sd")).toASCIIString());
     }
@@ -167,7 +168,7 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
     assertNotNull(uri);
     assertEquals("someone@example.com", uri.getSchemeSpecificPart());
 
-    if (SystemInfoRt.isWindows) {
+    if (SystemInfo.isWindows) {
       uri = VfsUtil.toUri("file://C:/p");
       assertNotNull(uri);
       assertEquals("file", uri.getScheme());
@@ -382,13 +383,13 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
       assertTrue(dir2.mkdirs());
 
       VirtualFile vDir = VfsUtil.findFileByIoFile(tempDir, true);
-      assertSize(2, vDir.getChildren());
+      assertThat(vDir.getChildren()).hasSize(2);
       VirtualFile vDir1 = vDir.getChildren()[0];
       VirtualFile vDir2 = vDir.getChildren()[1];
       assertEquals(dir1.getName(), vDir1.getName());
 
-      assertEmpty(vDir1.getChildren());
-      assertEmpty(vDir2.getChildren());
+      assertThat(vDir1.getChildren()).isEmpty();
+      assertThat(vDir2.getChildren()).isEmpty();
 
       assertTrue(new File(dir1, "a.txt").createNewFile());
       assertTrue(new File(dir2, "a.txt").createNewFile());
@@ -409,7 +410,7 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
           assertFalse(ApplicationManager.getApplication().isDispatchThread());
 
           vDir2.refresh(false, true, () -> log.add("modal finished"));
-          assertSize(1, vDir2.getChildren());
+          assertThat(vDir2.getChildren()).hasSize(1);
         }
       }));
 
@@ -418,9 +419,9 @@ public class VfsUtilTest extends BareTestFixtureTestCase {
         UIUtil.dispatchAllInvocationEvents();
       }
 
-      assertSize(1, vDir1.getChildren());
-      assertSize(1, vDir2.getChildren());
-      assertOrderedEquals(log, "modal finished", "non-modal finished");
+      assertThat(vDir1.getChildren()).hasSize(1);
+      assertThat(vDir2.getChildren()).hasSize(1);
+      assertThat(log).containsExactly("modal finished", "non-modal finished");
     });
   }
 }

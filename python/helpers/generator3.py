@@ -1,35 +1,42 @@
 # encoding: utf-8
 import atexit
-import hashlib
 import zipfile
 
 from pycharm_generator_utils.clr_tools import *
 from pycharm_generator_utils.module_redeclarator import *
 from pycharm_generator_utils.util_methods import *
 
-BIN_BLOCK_SIZE = 64 * 1024
-FAILED_VERSION_STAMP = '.failed'
-
-
 # TODO: Move all CLR-specific functions to clr_tools
 debug_mode = True
 quiet = False
 
+
 # TODO move to property of Generator3 as soon as tests finished
+@cached
 def version():
     return os.environ.get(ENV_VERSION, VERSION)
 
 
 # TODO move to property of Generator3 as soon as tests finished
+@cached
 def required_gen_version_file_path():
     return os.environ.get(ENV_REQUIRED_GEN_VERSION_FILE, os.path.join(_helpers_dir, 'required_gen_version'))
 
 
+@cached
 def is_test_mode():
     return ENV_TEST_MODE_FLAG in os.environ
 
 
-_helpers_dir = os.path.dirname(__file__)
+# Future generator mode where all the checks will be performed on Python side.
+# Now it works in transitional mode where validity of existing SDK skeletons is checked on
+# Java side (see PySkeletonRefresher), and generator itself inspects only the cache.
+@cached
+def is_standalone_mode():
+    return ENV_STANDALONE_MODE_FLAG in os.environ
+
+
+_helpers_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def redo_module(module_name, module_file_name, doing_builtins, cache_dir, sdk_dir=None):
@@ -52,13 +59,14 @@ def redo_module(module_name, module_file_name, doing_builtins, cache_dir, sdk_di
                 break
     if mod:
         action("restoring")
-        r = ModuleRedeclarator(mod, module_name, module_file_name,
-                               cache_dir=cache_dir,
-                               sdk_dir=sdk_dir,
-                               doing_builtins=doing_builtins)
+        r = ModuleRedeclarator(mod, module_name, module_file_name, cache_dir=cache_dir, doing_builtins=doing_builtins)
+        create_failed_version_stamp(cache_dir, module_name)
         r.redo(module_name, ".".join(mod_path[:-1]) in MODULES_INSPECT_DIR)
         action("flushing")
         r.flush()
+        delete_failed_version_stamp(cache_dir, module_name)
+        # Incrementally copy whatever we managed to successfully generate so far
+        copy_skeletons(cache_dir, sdk_dir, get_module_origin(module_file_name, module_name))
     else:
         report("Failed to find imported module in sys.modules " + module_name)
 
@@ -71,8 +79,7 @@ def cut_binary_lib_suffix(path, f):
     @return f without a binary suffix (that is, an importable name) if path+f is indeed a binary lib, or None.
     Note: if for .pyc or .pyo file a .py is found, None is returned.
     """
-    if not f.endswith(".pyc") and not f.endswith(".typelib") and not f.endswith(".pyo") and not f.endswith(".so") and not f.endswith(
-            ".pyd"):
+    if not f.endswith((".pyc", ".typelib", ".pyo", ".so", ".pyd")):
         return None
     ret = None
     match = BIN_MODULE_FNAME_PAT.match(f)
@@ -189,8 +196,15 @@ def list_binaries(paths):
                         note("done with %s", name)
                     file_path = os.path.join(root, f)
 
-                    res[the_name.upper()] = (the_name, file_path, os.path.getsize(file_path), int(os.stat(file_path).st_mtime))
+                    res[the_name.upper()] = (the_name,
+                                             file_path,
+                                             os.path.getsize(file_path),
+                                             file_modification_timestamp(file_path))
     return list(res.values())
+
+
+def file_modification_timestamp(path):
+    return int(os.stat(path).st_mtime)
 
 
 def is_source_file(path):
@@ -350,92 +364,67 @@ def build_cache_dir_path(subdir, mod_qname, mod_path):
 def module_hash(mod_qname, mod_path):
     # Hash the content of a physical module
     if mod_path:
-        if os.environ.get(ENV_CONTENT_INDEPENDENT_HASHES_FLAG) == 'True':
-            prefix = 'sha256:' + mod_qname
-            version = getattr(__import__(mod_qname), '__version__', None)
-            if version:
-                return prefix + ':' + version
-            return prefix
-        else:
-            return physical_module_hash(mod_path)
+        hash_ = physical_module_hash(mod_path)
     else:
-        return builtin_module_hash(mod_qname)
+        hash_ = builtin_module_hash(mod_qname)
+    # Use shorter hashes in test data as it might affect developers on Windows
+    if is_test_mode():
+        return hash_[:10]
+    return hash_
 
 
 def builtin_module_hash(mod_qname):
     # Hash the content of interpreter executable, i.e. it will be the same for all built-in modules.
     # Also, it's the same for a virtualenv interpreter and its base.
     with fopen(sys.executable, 'rb') as f:
-        return sha256(f)
+        return sha256_digest(f)
 
 
 def physical_module_hash(mod_path):
-    pure_py = os.path.splitext(mod_path)[1] == '.py'
-    if pure_py:
-        # Open .py files in text mode to avoid LF/CRLF conversion issues. It should happen only in tests.
-        with fopen(mod_path, 'r') as f:
-            return sha256(f.read().encode(OUT_ENCODING))
-    else:
-        with fopen(mod_path, 'rb') as f:
-            return sha256(f)
-
-
-def sha256(binary_or_file):
-    if isinstance(binary_or_file, bytes):
-        return hashlib.sha256(binary_or_file).hexdigest()
-    else:
-        acc = hashlib.sha256()
-        while True:
-            block = binary_or_file.read(BIN_BLOCK_SIZE)
-            if not block:
-                break
-            acc.update(block)
-        return acc.hexdigest()
+    with fopen(mod_path, 'rb') as f:
+        return sha256_digest(f)
 
 
 def version_to_tuple(version):
     return tuple(map(int, version.split('.')))
 
 
-def read_generator_version(skeleton_file):
+def should_update_skeleton(base_dir, mod_qname, mod_path):
+    gen_version = version_to_tuple(version())
+
+    failed_version = read_failed_version_from_stamp(base_dir, mod_qname)
+    if failed_version:
+        return failed_version < gen_version
+
+    record = read_failed_version_and_mtime_from_legacy_blacklist(base_dir, mod_path)
+    if record:
+        failed_version, mtime = record
+        return failed_version < gen_version or (mod_path and mtime < file_modification_timestamp(mod_path))
+
+    required_version = read_required_version(mod_qname)
+    used_version = read_used_generator_version_from_skeleton_header(base_dir, mod_qname)
+    if required_version and used_version:
+        return used_version < required_version
+
+    return True
+
+
+def read_used_generator_version_from_skeleton_header(base_dir, mod_qname):
+    for path in skeleton_path_candidates(base_dir, mod_qname, init_for_pkg=True):
+        with ignored_os_errors(errno.ENOENT):
+            with fopen(path, 'r') as f:
+                return read_generator_version_from_header(f)
+    return None
+
+
+def read_generator_version_from_header(skeleton_file):
     for line in skeleton_file:
         if not line.startswith('#'):
             break
 
-        m = GENERATOR_VERSION_LINE.match(line)
+        m = SKELETON_HEADER_VERSION_LINE.match(line)
         if m:
             return version_to_tuple(m.group('version'))
-    return None
-
-
-def should_update_skeleton(base_dir, mod_qname, mod_path):
-    cur_version = version_to_tuple(version())
-
-    failed_version = read_failed_version_from_stamp(base_dir)
-    if failed_version:
-        return failed_version < cur_version
-
-    # noinspection PyUnreachableCode
-    failed_version = read_failed_version_from_legacy_blacklist(base_dir, mod_path)
-    if failed_version:
-        return failed_version < cur_version
-
-    required_version = read_required_version(mod_qname)
-
-    for path in skeleton_path_candidates(base_dir, mod_qname, init_for_pkg=True):
-        with ignored_os_errors(errno.ENOENT):
-            with fopen(path, 'r') as f:
-                used_version = read_generator_version(f)
-                if used_version and required_version:
-                    return used_version < required_version
-    return True
-
-
-def read_failed_version_from_stamp(base_dir):
-    with ignored_os_errors(errno.ENOENT):
-        with fopen(os.path.join(base_dir, FAILED_VERSION_STAMP), 'r') as f:
-            return version_to_tuple(f.read().strip())
-    # noinspection PyUnreachableCode
     return None
 
 
@@ -448,17 +437,41 @@ def skeleton_path_candidates(base_dir, mod_qname, init_for_pkg=False):
     yield base_path + '.py'
 
 
-def read_required_gen_version_file():
-    result = {}
-    with fopen(required_gen_version_file_path(), 'r') as f:
-        for line in f:
-            if not line or line.startswith('#'):
-                continue
-            m = REQUIRED_VERSION_LINE.match(line)
-            if m:
-                result[m.group('name')] = version_to_tuple(m.group('version'))
+def read_failed_version_from_stamp(base_dir, mod_qname):
+    with ignored_os_errors(errno.ENOENT):
+        with fopen(os.path.join(base_dir, FAILED_VERSION_STAMP_PREFIX + mod_qname), 'r') as f:
+            return version_to_tuple(f.read().strip())
+    # noinspection PyUnreachableCode
+    return None
 
-    return result
+
+def read_failed_version_and_mtime_from_legacy_blacklist(sdk_skeletons_dir, mod_path):
+    blacklist = read_legacy_blacklist_file(sdk_skeletons_dir, mod_path)
+    return blacklist.get(mod_path)
+
+
+def read_legacy_blacklist_file(sdk_skeletons_dir, mod_path):
+    results = {}
+    with ignored_os_errors(errno.ENOENT):
+        with fopen(os.path.join(sdk_skeletons_dir, '.blacklist'), 'r') as f:
+            for line in f:
+                if not line or line.startswith('#'):
+                    continue
+
+                m = BLACKLIST_VERSION_LINE.match(line)
+                if m:
+                    bin_path = m.group('path')
+                    bin_mtime = m.group('mtime')
+                    if is_test_mode() and bin_path == '{mod_path}':
+                        bin_path = mod_path
+                    if is_test_mode() and bin_mtime == '{mod_mtime}':
+                        bin_mtime = file_modification_timestamp(mod_path)
+                    else:
+                        # On Java side modification time stored in milliseconds.
+                        # Python API uses seconds for resolution in os.stat results.
+                        bin_mtime = int(m.group('mtime')) / 1000
+                    results[bin_path] = (version_to_tuple(m.group('version')), bin_mtime)
+    return results
 
 
 def read_required_version(mod_qname):
@@ -471,24 +484,17 @@ def read_required_version(mod_qname):
     return versions.get('(default)')
 
 
-def read_failed_version_from_legacy_blacklist(sdk_skeletons_dir, mod_path):
-    blacklist = read_legacy_blacklist_file(sdk_skeletons_dir)
-    record = blacklist.get('{mod_path}' if is_test_mode() else mod_path)
-    return record[0] if record else None
+def read_required_gen_version_file():
+    result = {}
+    with fopen(required_gen_version_file_path(), 'r') as f:
+        for line in f:
+            if not line or line.startswith('#'):
+                continue
+            m = REQUIRED_GEN_VERSION_LINE.match(line)
+            if m:
+                result[m.group('name')] = version_to_tuple(m.group('version'))
 
-
-def read_legacy_blacklist_file(sdk_skeletons_dir):
-    results = {}
-    with ignored_os_errors(errno.ENOENT):
-        with fopen(os.path.join(sdk_skeletons_dir, '.blacklist'), 'r') as f:
-            for line in f:
-                if not line or line.startswith('#'):
-                    continue
-
-                m = BLACKLIST_VERSION_LINE.match(line)
-                if m:
-                    results[m.group('path')] = (version_to_tuple(m.group('version')), int(m.group('mtime')) / 1000)
-    return results
+    return result
 
 
 # command-line interface
@@ -510,15 +516,17 @@ def process_one(name, mod_file_name, doing_builtins, sdk_skeletons_dir):
     sdk_skeletons_dir = sdk_skeletons_dir.rstrip(os.path.sep)
     try:
         python_stubs_dir = os.path.dirname(sdk_skeletons_dir)
-        global_cache_dir = os.path.join(python_stubs_dir, 'cache')
+        global_cache_dir = os.path.join(python_stubs_dir, CACHE_DIR_NAME)
         mod_cache_dir = build_cache_dir_path(global_cache_dir, name, mod_file_name)
         # At the moment this is actually enforced on Java-side
-        if not should_update_skeleton(sdk_skeletons_dir, name, mod_file_name):
+        if is_standalone_mode() and not should_update_skeleton(sdk_skeletons_dir, name, mod_file_name):
             return True
 
         if should_update_skeleton(mod_cache_dir, name, mod_file_name):
             note('Updating cache for %s at %r', name, mod_cache_dir)
-            delete(mod_cache_dir)
+            # All builtin modules go into the same directory
+            if not doing_builtins:
+                delete(mod_cache_dir)
             mkdir(mod_cache_dir)
 
             old_modules = list(sys.modules.keys())
@@ -534,13 +542,11 @@ def process_one(name, mod_file_name, doing_builtins, sdk_skeletons_dir):
             my_finder = None
             if hasattr(sys, 'meta_path'):
                 my_finder = MyFinder()
-                sys.meta_path.append(my_finder)
+                sys.meta_path.insert(0, my_finder)
             else:
                 imported_module_names = None
 
-            failed_version_stamp = os.path.join(mod_cache_dir, FAILED_VERSION_STAMP)
-            with fopen(failed_version_stamp, 'w') as f:
-                f.write(version())
+            create_failed_version_stamp(mod_cache_dir, name)
 
             action("importing")
             __import__(name)  # sys.modules will fill up with what we want
@@ -555,28 +561,27 @@ def process_one(name, mod_file_name, doing_builtins, sdk_skeletons_dir):
             # restore all of them
             path = name.split(".")
             redo_imports = not ".".join(path[:-1]) in MODULES_INSPECT_DIR
-            if imported_module_names and redo_imports:
+            if redo_imports:
                 for m in sys.modules.keys():
                     if m.startswith("pycharm_generator_utils"): continue
                     action("looking at possible submodule %r", m)
-                    # if module has __file__ defined, it has Python source code and doesn't need a skeleton
-                    if (m not in old_modules and
-                            m not in imported_module_names and
-                            m != name and
-                            not hasattr(sys.modules[m], '__file__') and
-                            m not in sys.builtin_module_names):
+                    if m == name or m in old_modules or m in sys.builtin_module_names:
+                        continue
+                    # Synthetic module, not explicitly imported
+                    if m not in imported_module_names and not hasattr(sys.modules[m], '__file__'):
                         if not quiet:
                             say(m)
                             sys.stdout.flush()
                         action("opening %r", mod_cache_dir)
                         try:
-                            redo_module(m, mod_file_name, doing_builtins, cache_dir=mod_cache_dir, sdk_dir=sdk_skeletons_dir)
+                            redo_module(m, mod_file_name, doing_builtins, cache_dir=mod_cache_dir,
+                                        sdk_dir=sdk_skeletons_dir)
                         finally:
                             action("closing %r", mod_cache_dir)
-            delete(failed_version_stamp)
-        note('Copying cached skeletons for %s from %r to %r', name, mod_cache_dir, sdk_skeletons_dir)
-        copy_skeletons(mod_cache_dir, sdk_skeletons_dir)
-
+        else:
+            # Copy entire skeletons directory if nothing needs to be updated
+            say('Copying cached skeletons for %s from %r to %r', name, mod_cache_dir, sdk_skeletons_dir)
+            copy_skeletons(mod_cache_dir, sdk_skeletons_dir, get_module_origin(mod_file_name, name))
     except:
         exctype, value = sys.exc_info()[:2]
         msg = "Failed to process %r while %s: %s"
@@ -589,6 +594,26 @@ def process_one(name, mod_file_name, doing_builtins, sdk_skeletons_dir):
             raise
         return False
     return True
+
+
+def get_module_origin(mod_path, mod_qname):
+    if not mod_path:
+        return None
+
+    if is_test_mode():
+        return get_relative_path_by_qname(mod_path, mod_qname)
+    return mod_path
+
+
+def create_failed_version_stamp(base_dir, mod_qname):
+    failed_version_stamp = os.path.join(base_dir, FAILED_VERSION_STAMP_PREFIX + mod_qname)
+    with fopen(failed_version_stamp, 'w') as f:
+        f.write(version())
+    return failed_version_stamp
+
+
+def delete_failed_version_stamp(base_dir, mod_qname):
+    delete(os.path.join(base_dir, FAILED_VERSION_STAMP_PREFIX + mod_qname))
 
 
 def get_help_text():

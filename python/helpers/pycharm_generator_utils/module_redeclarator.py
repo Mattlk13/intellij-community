@@ -1,6 +1,5 @@
-import generator3
 from pycharm_generator_utils.util_methods import *
-from pycharm_generator_utils.util_methods import copy
+from pycharm_generator_utils.util_methods import get_relative_path_by_qname
 
 is_pregenerated = os.getenv("IS_PREGENERATED_SKELETONS", None)
 
@@ -57,24 +56,30 @@ class ClassBuf(Buf):
         super(ClassBuf, self).__init__(indenter)
         self.name = name
 
+class OriginType(object):
+    FILE = 'FILE'
+    BUILTIN = '(built-in)'
+    PREGENERATED = '(pre-generated)'
+
 
 #noinspection PyBroadException
 class ModuleRedeclarator(object):
-    def __init__(self, module, mod_qname, mod_filename, cache_dir, sdk_dir=None, indent_size=4, doing_builtins=False):
+    def __init__(self, module, mod_qname, mod_filename, cache_dir, indent_size=4, doing_builtins=False):
         """
         @param module: module object
         @param mod_qname: module qualified name
         @param mod_filename: filename of binary module (the .dll or .so). Can be None for modules
-            that don't have corresponding binary file
-        @param cache_dir: path to skeletons cache directory (e.g. python_stubs/cache)
-        @param sdk_dir: path to interpreter specific skeletons directory
+            that don't have corresponding binary files (e.g. builtins)
+        @param cache_dir: per-binary cache directory where the generated stub will be stored.
+            Normally, it's "<IDE system dir>/python_stubs/cache/<sha256 digest>/".
         @param indent_size: amount of space characters per indent
         """
+        import generator3
         self.test_mode = generator3.is_test_mode()
+        self.gen_version = generator3.version()
         self.module = module
         self.qname = mod_qname
         self.cache_dir = cache_dir
-        self.sdk_dir = sdk_dir
         self.mod_filename = mod_filename
         # we write things into buffers out-of-order
         self.header_buf = Buf(self)
@@ -144,7 +149,16 @@ class ModuleRedeclarator(object):
                 self.footer_buf.flush(init)
         else:
             last_pkg_dir = build_pkg_structure(self.cache_dir, '.'.join(qname_parts[:-1]))
-            skeleton_path = os.path.join(last_pkg_dir, qname_parts[-1] + '.py')
+            # In some rare cases submodules of a binary might have been generated earlier than the module
+            # for the binary itself. For instance, it happens for "pyexpat" built-in module which
+            # submodules "pyexpat.errors" and "pyexpat.model" are processed together with "_elementtree"
+            # and "pickle" before "pyexpat" and thus empty pyexpat/__init__.py for them should be replaced
+            # with the skeleton for the main module itself later on.
+            existing_pkg_init = os.path.join(last_pkg_dir, qname_parts[-1], '__init__.py')
+            if os.path.exists(existing_pkg_init):
+                skeleton_path = existing_pkg_init
+            else:
+                skeleton_path = os.path.join(last_pkg_dir, qname_parts[-1] + '.py')
             with fopen(skeleton_path, "w") as mod:
                 for buf in (self.header_buf, self.imports_buf, self.functions_buf, self.classes_buf):
                     buf.flush(mod)
@@ -784,18 +798,25 @@ class ModuleRedeclarator(object):
             mod_name = " does not know its name"
         out(0, "# module ", p_name, mod_name) # line 2
 
-        BUILT_IN_HEADER = "(built-in)"
+        origin_type = OriginType.FILE
         if is_pregenerated is not None:
-            filename = '(pre-generated)'
+            origin = origin_type = OriginType.PREGENERATED
         elif self.mod_filename:
-            filename = self.mod_filename
+            origin = self.mod_filename
         elif p_name in sys.builtin_module_names:
-            filename = BUILT_IN_HEADER
+            origin = origin_type = OriginType.BUILTIN
         else:
-            filename = getattr(self.module, "__file__", BUILT_IN_HEADER)
-        if not self.test_mode:
-            out(0, "# from %s" % filename)  # line 3
-        out(0, "# by generator %s" % generator3.version())  # line 4
+            try:
+                origin = getattr(self.module, "__file__")
+            except AttributeError:
+                origin = origin_type = OriginType.BUILTIN
+
+        if self.test_mode and origin_type == OriginType.FILE:
+            origin = get_relative_path_by_qname(origin, self.qname)
+
+
+        out(0, "# from %s" % origin)  # line 3
+        out(0, "# by generator %s" % self.gen_version)  # line 4
         if p_name == BUILTIN_MOD_NAME and version[0] == 2 and version[1] >= 6:
             out(0, "from __future__ import print_function")
         out_doc_attr(out, self.module, 0)
@@ -812,8 +833,6 @@ class ModuleRedeclarator(object):
                 self.add_import_header_if_needed()
                 ref_notice = getattr(item, "__file__", str(item))
                 if hasattr(item, "__name__"):
-                    if self.test_mode and item_name.name in ('builtins', '__builtin__'):
-                        continue
                     self.imports_buf.out(0, "import ", item.__name__, " as ", item_name, " # ", ref_notice)
                 else:
                     self.imports_buf.out(0, item_name, " = None # ??? name unknown; ", ref_notice)
@@ -1117,3 +1136,5 @@ class ModuleRedeclarator(object):
             for mod_name in sorted_no_case(self.hidden_imports.keys()):
                 out(0, 'import ', mod_name, ' as ', self.hidden_imports[mod_name])
             out(0, "") # empty line after group
+
+

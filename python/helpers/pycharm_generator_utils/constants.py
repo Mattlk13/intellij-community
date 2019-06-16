@@ -1,9 +1,9 @@
 import os
 import re
-import types
-import sys
 import string
+import sys
 import time
+import types
 
 # !!! Don't forget to update VERSION and required_gen_version if necessary !!!
 VERSION = "1.147"
@@ -805,11 +805,17 @@ CLASS_ATTR_BLACKLIST = [
     'panda3d.core.ExecutionEnvironment.environment_variables',
 ]
 
-GENERATOR_VERSION_LINE = re.compile(r'# by generator (?P<version>\d+\.\d+)')
-REQUIRED_VERSION_LINE = re.compile(r'(?P<name>\S+)\s+(?P<version>\d+\.\d+)')
-BLACKLIST_VERSION_LINE = re.compile(r'(?P<path>[^=]+) = (?P<version>\d+\.\d+) (?P<mtime>\d+)')
+SKELETON_HEADER_VERSION_LINE = re.compile(r'# by generator (?P<version>\d+\.\d+)')
+SKELETON_HEADER_ORIGIN_LINE = re.compile(r'# from (?P<path>.*)')
+REQUIRED_GEN_VERSION_LINE = re.compile(r'(?P<name>\S+)\s+(?P<version>\d+\.\d+)')
+# "mod_path" and "mod_mtime" markers are used in tests
+BLACKLIST_VERSION_LINE = re.compile(r'(?P<path>{mod_path}|[^=]+) = (?P<version>\d+\.\d+) (?P<mtime>{mod_mtime}|\d+)')
 
 ENV_TEST_MODE_FLAG = 'GENERATOR3_TEST_MODE'
-ENV_CONTENT_INDEPENDENT_HASHES_FLAG = 'GENERATOR3_CONTENT_INDEPENDENT_HASHES'
+ENV_STANDALONE_MODE_FLAG = 'GENERATOR3_STANDALONE_MODE'
 ENV_VERSION = 'GENERATOR3_VERSION'
 ENV_REQUIRED_GEN_VERSION_FILE = 'GENERATOR3_REQUIRED_GEN_VERSION_FILE'
+
+FAILED_VERSION_STAMP_PREFIX = '.failed__'
+
+CACHE_DIR_NAME = 'cache'
