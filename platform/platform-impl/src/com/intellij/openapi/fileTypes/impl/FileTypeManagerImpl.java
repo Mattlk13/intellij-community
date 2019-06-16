@@ -996,8 +996,24 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
 
   @Override
   public boolean isFileOfType(@NotNull VirtualFile file, @NotNull FileType type) {
-    if (type instanceof FileTypeIdentifiableByVirtualFile) {
-      return ((FileTypeIdentifiableByVirtualFile)type).isMyFileType(file);
+    if (type.equals(PlainTextFileType.INSTANCE) || type.equals(UnknownFileType.INSTANCE)) {
+      // a file has unknown file type if none of file type detectors matched it
+      // for plain text file type, we run file type detection based on content
+
+      //noinspection SSBasedInspection
+      return file.getFileType().equals(type);
+    }
+
+    if (file instanceof LightVirtualFile) {
+      FileType assignedFileType = ((LightVirtualFile)file).getAssignedFileType();
+      if (assignedFileType != null) {
+        return type.equals(assignedFileType);
+      }
+    }
+
+    if (type instanceof FileTypeIdentifiableByVirtualFile &&
+        ((FileTypeIdentifiableByVirtualFile)type).isMyFileType(file)) {
+      return true;
     }
 
     return getFileTypeByFileName(file.getNameSequence()) == type;
