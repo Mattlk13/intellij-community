@@ -5,13 +5,19 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.execution.util.ExecUtil;
+import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.ServiceManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.Restarter;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,8 +33,10 @@ public class WindowsDefenderChecker {
 
   private static final Pattern WINDOWS_ENV_VAR_PATTERN = Pattern.compile("%([^%]+?)%");
   private static final Pattern WINDOWS_DEFENDER_WILDCARD_PATTERN = Pattern.compile("[?*]");
+  private static final int WMIC_COMMAND_TIMEOUT_MS = 10000;
   private static final int POWERSHELL_COMMAND_TIMEOUT_MS = 10000;
   private static final int MAX_POWERSHELL_STDERR_LENGTH = 500;
+  private static final String IGNORE_VIRUS_CHECK = "ignore.virus.scanning.warn.message";
 
   public enum RealtimeScanningStatus {
     SCANNING_DISABLED,
@@ -52,7 +60,17 @@ public class WindowsDefenderChecker {
     }
   }
 
+  public boolean isVirusCheckIgnored(Project project) {
+    return PropertiesComponent.getInstance().isTrueValue(IGNORE_VIRUS_CHECK) ||
+           PropertiesComponent.getInstance(project).isTrueValue(IGNORE_VIRUS_CHECK);
+  }
+
   public CheckResult checkWindowsDefender(@NotNull Project project) {
+    final Boolean windowsDefenderActive = isWindowsDefenderActive();
+    if (windowsDefenderActive == null || !windowsDefenderActive) {
+      return new CheckResult(RealtimeScanningStatus.SCANNING_DISABLED, Collections.emptyMap());
+    }
+
     RealtimeScanningStatus scanningStatus = getRealtimeScanningEnabled();
     if (scanningStatus == RealtimeScanningStatus.SCANNING_ENABLED) {
       final Collection<String> processes = getExcludedProcesses();
@@ -70,6 +88,44 @@ public class WindowsDefenderChecker {
       }
     }
     return new CheckResult(scanningStatus, Collections.emptyMap());
+  }
+
+  private static Boolean isWindowsDefenderActive() {
+    try {
+      ProcessOutput output = ExecUtil.execAndGetOutput(new GeneralCommandLine(
+        "wmic", "/Namespace:\\\\root\\SecurityCenter2", "Path", "AntivirusProduct", "Get", "displayName,productState"
+      ), WMIC_COMMAND_TIMEOUT_MS);
+      if (output.getExitCode() == 0) {
+        return parseWindowsDefenderProductState(output);
+      }
+      else {
+        LOG.warn("wmic Windows Defender check exited with status " + output.getExitCode() + ": " +
+                 StringUtil.first(output.getStderr(), MAX_POWERSHELL_STDERR_LENGTH, false));
+      }
+    }
+    catch (ExecutionException e) {
+      LOG.warn("wmic Windows Defender check failed", e);
+    }
+    return null;
+  }
+
+  private static Boolean parseWindowsDefenderProductState(ProcessOutput output) {
+    final String[] lines = StringUtil.splitByLines(output.getStdout());
+    for (String line : lines) {
+      if (line.startsWith("Windows Defender")) {
+        final String productStateString = StringUtil.substringAfterLast(line, " ");
+        int productState;
+        try {
+          productState = Integer.parseInt(productStateString);
+          return (productState & 0x1000) != 0;
+        }
+        catch (NumberFormatException e) {
+          LOG.info("Unexpected wmic output format: " + line);
+          return null;
+        }
+      }
+    }
+    return false;
   }
 
   /** Runs a powershell command to list the paths that are excluded from realtime scanning by Windows Defender. These
@@ -211,11 +267,42 @@ public class WindowsDefenderChecker {
     return result;
   }
 
+  public void configureActions(Project project, WindowsDefenderNotification notification) {
+    notification.addAction(new WindowsDefenderFixAction(notification.getPaths()));
 
-  @NotNull
-  public static String getNotificationTextForNonExcludedPaths(@NotNull Map<Path, Boolean> pathStatuses) {
-    StringBuilder sb = new StringBuilder();
-    pathStatuses.entrySet().stream().filter(entry -> !entry.getValue()).forEach(entry -> sb.append("<br/>" + entry.getKey()));
-    return sb.toString();
+    notification.addAction(new NotificationAction(DiagnosticBundle.message("virus.scanning.dont.show.again")) {
+      @Override
+      public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
+        notification.expire();
+        PropertiesComponent.getInstance().setValue(IGNORE_VIRUS_CHECK, "true");
+      }
+    });
+    notification.addAction(new NotificationAction(DiagnosticBundle.message("virus.scanning.dont.show.again.this.project")) {
+      @Override
+      public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
+        notification.expire();
+        PropertiesComponent.getInstance(project).setValue(IGNORE_VIRUS_CHECK, "true");
+      }
+    });
+
+  }
+
+  public String getConfigurationInstructionsUrl() {
+    // TODO Provide a better article
+    return "https://intellij-support.jetbrains.com/hc/en-us/articles/360005028939-Slow-startup-on-Windows-splash-screen-appears-in-more-than-20-seconds";
+  }
+
+  public boolean runExcludePathsCommand(Project project, Collection<Path> paths) {
+    try {
+      ExecUtil.sudoAndGetOutput(new GeneralCommandLine("powershell", "-Command", "Add-MpPreference", "-ExclusionPath",
+                                                       StringUtil.join(paths, (path) -> StringUtil.wrapWithDoubleQuote(path.toString()), ",")), "");
+      return true;
+    }
+    catch (IOException | ExecutionException e) {
+      UIUtil.invokeLaterIfNeeded(() ->
+       Messages.showErrorDialog(project, DiagnosticBundle.message("virus.scanning.fix.failed", e.getMessage()),
+                                DiagnosticBundle.message("virus.scanning.fix.title")));
+    }
+    return false;
   }
 }

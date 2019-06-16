@@ -2,11 +2,13 @@
 package com.siyeh.ipp.modifiers;
 
 import com.intellij.codeInsight.intention.BaseElementAtCaretIntentionAction;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.command.impl.FinishMarkAction;
 import com.intellij.openapi.command.impl.StartMarkAction;
 import com.intellij.openapi.command.undo.UndoManager;
+import com.intellij.openapi.editor.CaretModel;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.RangeMarker;
@@ -36,6 +38,7 @@ import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
+import com.intellij.refactoring.BaseRefactoringProcessor;
 import com.intellij.refactoring.RefactoringBundle;
 import com.intellij.refactoring.changeSignature.ChangeSignatureProcessor;
 import com.intellij.refactoring.changeSignature.JavaChangeSignatureUsageProcessor;
@@ -69,8 +72,7 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
 
   @Override
   public boolean isAvailable(@NotNull Project project, Editor editor, @NotNull PsiElement element) {
-    PsiMember member =
-      PsiTreeUtil.getParentOfType(element, PsiMember.class, false, PsiCodeBlock.class, PsiStatement.class, PsiExpression.class);
+    PsiMember member = findMember(element);
     if (!(member instanceof PsiNameIdentifierOwner)) return false;
     PsiElement identifier = ((PsiNameIdentifierOwner)member).getNameIdentifier();
     if (identifier == null || identifier.getTextRange().getEndOffset() <= element.getTextRange().getStartOffset()) return false;
@@ -88,6 +90,17 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
     }
     myTarget = target;
     return true;
+  }
+
+  private static PsiMember findMember(@NotNull PsiElement element) {
+    while (true) {
+      PsiMember member =
+        PsiTreeUtil.getParentOfType(element, PsiMember.class, false, PsiCodeBlock.class, PsiStatement.class, PsiExpression.class);
+      if (!(member instanceof PsiTypeParameter)) {
+        return member;
+      }
+      element = member.getParent();
+    }
   }
 
   @NotNull
@@ -133,8 +146,7 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
 
   @Override
   public void invoke(@NotNull Project project, Editor editor, @NotNull PsiElement element) throws IncorrectOperationException {
-    PsiMember member =
-      PsiTreeUtil.getParentOfType(element, PsiMember.class, false, PsiCodeBlock.class, PsiStatement.class, PsiExpression.class);
+    PsiMember member = findMember(element);
     if (member == null) return;
     PsiFile file = member.getContainingFile();
     if (file == null) return;
@@ -155,7 +167,9 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
       }
       range = TextRange.from(pos, 0);
     }
-    editor.getCaretModel().moveToOffset(range.getStartOffset());
+    CaretModel model = editor.getCaretModel();
+    RangeMarker cursorMarker = document.createRangeMarker(model.getOffset(), model.getOffset());
+    model.moveToOffset(range.getStartOffset());
     StartMarkAction markAction;
     try {
       markAction = StartMarkAction.start(editor, project, getFamilyName());
@@ -187,12 +201,14 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
         @Override
         public void onClosed(@NotNull LightweightWindowEvent event) {
           highlighter.dispose();
+          model.moveToOffset(cursorMarker.getStartOffset());
           if (!event.isOk()) {
             FinishMarkAction.finish(project, editor, markAction);
             updater.undoChange(true);
           }
         }
       })
+      .setNamerForFiltering(AccessModifier::toString)
       .setItemChosenCallback(t -> {
         updater.undoChange(false);
         PsiDocumentManager.getInstance(project).commitDocument(document);
@@ -204,17 +220,23 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
         PsiModifierList modifierList = m.getModifierList();
         if (modifierList == null) return;
         final MultiMap<PsiElement, String> conflicts = checkForConflicts(m, t);
-        if (conflicts == null ||
-            !conflicts.isEmpty() && !new ConflictsDialog(project, conflicts, () -> changeModifier(modifierList, t)).showAndGet()) {
+        if (conflicts == null) {
           //canceled by user
           FinishMarkAction.finish(project, editor, markAction);
           updater.undoChange(true);
           return;
         }
-        updater.undoChange(false);
-        PsiDocumentManager.getInstance(project).commitDocument(document);
-        changeModifier(modifierList, t);
-        FinishMarkAction.finish(project, editor, markAction);
+        if (!conflicts.isEmpty()) {
+          FinishMarkAction.finish(project, editor, markAction);
+          updater.undoChange(true);
+          PsiDocumentManager.getInstance(project).commitDocument(document);
+          processWithConflicts(modifierList, t, conflicts);
+        } else {
+          updater.undoChange(false);
+          PsiDocumentManager.getInstance(project).commitDocument(document);
+          changeModifier(modifierList, t, false);
+          FinishMarkAction.finish(project, editor, markAction);
+        }
       })
       .createPopup();
     popup.showInBestPositionFor(editor);
@@ -313,16 +335,35 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
       //canceled by user
       return;
     }
-    if (!conflicts.isEmpty() &&
-        !new ConflictsDialog(member.getProject(), conflicts, () -> changeModifier(modifierList, modifier)).showAndGet()) {
-      return;
-    }
-    changeModifier(modifierList, modifier);
+    processWithConflicts(modifierList, modifier, conflicts);
   }
 
-  private static void changeModifier(PsiModifierList modifierList, AccessModifier modifier) {
+  private static void processWithConflicts(@NotNull PsiModifierList modifierList,
+                                           @NotNull AccessModifier modifier,
+                                           @NotNull MultiMap<PsiElement, String> conflicts) {
+    boolean shouldProcess;
+    if (conflicts.isEmpty()) {
+      shouldProcess = true;
+    }
+    else if (ApplicationManager.getApplication().isUnitTestMode()) {
+      if (!BaseRefactoringProcessor.ConflictsInTestsException.isTestIgnore()) {
+        throw new BaseRefactoringProcessor.ConflictsInTestsException(conflicts.values());
+      }
+      shouldProcess = true;
+    }
+    else {
+      ConflictsDialog dialog =
+        new ConflictsDialog(modifierList.getProject(), conflicts, () -> changeModifier(modifierList, modifier, true));
+      shouldProcess = dialog.showAndGet();
+    }
+    if (shouldProcess) {
+      changeModifier(modifierList, modifier, !conflicts.isEmpty());
+    }
+  }
+
+  private static void changeModifier(PsiModifierList modifierList, AccessModifier modifier, boolean hasConflicts) {
     PsiElement parent = modifierList.getParent();
-    if (parent instanceof PsiMethod) {
+    if (parent instanceof PsiMethod && hasConflicts) {
       PsiMethod method = (PsiMethod)parent;
       //no myPrepareSuccessfulSwingThreadCallback means that the conflicts when any, won't be shown again
       new ChangeSignatureProcessor(parent.getProject(),
