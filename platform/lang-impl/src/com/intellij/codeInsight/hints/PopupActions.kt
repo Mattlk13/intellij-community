@@ -7,8 +7,8 @@ import com.intellij.codeInsight.CodeInsightBundle
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.codeInsight.daemon.impl.ParameterHintsPresentationManager
 import com.intellij.codeInsight.hints.HintInfo.MethodInfo
+import com.intellij.codeInsight.hints.config.InlayHintsConfigurable
 import com.intellij.codeInsight.hints.settings.Diff
-import com.intellij.codeInsight.hints.settings.ParameterNameHintsConfigurable
 import com.intellij.codeInsight.hints.settings.ParameterNameHintsSettings
 import com.intellij.codeInsight.intention.HighPriorityAction
 import com.intellij.codeInsight.intention.IntentionAction
@@ -46,7 +46,7 @@ class ShowSettingsWithAddedPattern : AnAction() {
     
     val offset = editor.caretModel.offset
     val info = getHintInfoFromProvider(offset, file, editor)
-    if (info is HintInfo.MethodInfo) {
+    if (info is MethodInfo) {
       e.presentation.setText(CodeInsightBundle.message("inlay.hints.show.settings", info.getMethodName()), false)
     }
     else {
@@ -58,7 +58,7 @@ class ShowSettingsWithAddedPattern : AnAction() {
     showParameterHintsDialog(e) {
       when (it) {
         is HintInfo.OptionInfo -> null
-        is HintInfo.MethodInfo -> it.toPattern()
+        is MethodInfo -> it.toPattern()
       }}
   }
 }
@@ -79,10 +79,12 @@ fun showParameterHintsDialog(e: AnActionEvent, getPattern: (HintInfo) -> String?
   val offset = editor.caretModel.offset
   val info = getHintInfoFromProvider(offset, file, editor) ?: return
 
-  val selectedLanguage = (info as? HintInfo.MethodInfo)?.language ?: fileLanguage
+  val selectedLanguage = (info as? MethodInfo)?.language ?: fileLanguage
 
-  val dialog = ParameterNameHintsConfigurable(selectedLanguage, getPattern(info))
-  dialog.show()
+  when (val pattern = getPattern(info)) {
+    null -> InlayHintsConfigurable.showSettingsDialogForLanguage(file.project, fileLanguage)
+    else -> BlackListDialog(selectedLanguage, pattern).show()
+  }
 }
 
 class BlacklistCurrentMethodIntention : IntentionAction, LowPriorityAction {
@@ -137,8 +139,7 @@ class BlacklistCurrentMethodIntention : IntentionAction, LowPriorityAction {
   }
   
   private fun showSettings(language: Language) {
-    val dialog = ParameterNameHintsConfigurable(language, null)
-    dialog.show()
+    BlackListDialog(language).show()
   }
   
   private fun undo(language: Language, info: MethodInfo) {
@@ -235,7 +236,7 @@ class EnableCustomHintsOption: IntentionAction, HighPriorityAction {
     val element = file.findElementAt(offset) ?: return null
     val provider = InlayParameterHintsExtension.forLanguage(file.language) ?: return null
 
-    val target = PsiTreeUtil.findFirstParent(element, { provider.hasDisabledOptionHintInfo(it) }) ?: return null
+    val target = PsiTreeUtil.findFirstParent(element) { provider.hasDisabledOptionHintInfo(it) } ?: return null
     return provider.getHintInfo(target) as? HintInfo.OptionInfo
   }
 
@@ -293,19 +294,19 @@ private fun hasEditorParameterHintAtOffset(editor: Editor, file: PsiFile): Boole
   val startOffset = element?.textRange?.startOffset ?: offset
   val endOffset = element?.textRange?.endOffset ?: offset
   
-  return !ParameterHintsPresentationManager.getInstance().getParameterHintsInRange(editor, startOffset, endOffset).isEmpty()
+  return ParameterHintsPresentationManager.getInstance().getParameterHintsInRange(editor, startOffset, endOffset).isNotEmpty()
 }
 
 
 private fun refreshAllOpenEditors() {
-  ParameterHintsPassFactory.forceHintsUpdateOnNextPass();
-  ProjectManager.getInstance().openProjects.forEach {
-    val psiManager = PsiManager.getInstance(it)
-    val daemonCodeAnalyzer = DaemonCodeAnalyzer.getInstance(it)
-    val fileEditorManager = FileEditorManager.getInstance(it)
+  ParameterHintsPassFactory.forceHintsUpdateOnNextPass()
+  ProjectManager.getInstance().openProjects.forEach { project ->
+    val psiManager = PsiManager.getInstance(project)
+    val daemonCodeAnalyzer = DaemonCodeAnalyzer.getInstance(project)
+    val fileEditorManager = FileEditorManager.getInstance(project)
 
-    fileEditorManager.selectedFiles.forEach {
-      psiManager.findFile(it)?.let { daemonCodeAnalyzer.restart(it) }
+    fileEditorManager.selectedFiles.forEach { file ->
+      psiManager.findFile(file)?.let { daemonCodeAnalyzer.restart(it) }
     }
   }
 }

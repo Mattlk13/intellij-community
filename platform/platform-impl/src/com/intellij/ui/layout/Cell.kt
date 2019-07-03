@@ -247,6 +247,12 @@ abstract class Cell {
     return builder.withTextBinding(prop.toBinding())
   }
 
+  fun textField(getter: () -> String, setter: (String) -> Unit, columns: Int? = null): CellBuilder<JTextField> {
+    val component = JTextField(getter(),columns ?: 0)
+    val builder = component()
+    return builder.withTextBinding(PropertyBinding(getter, setter))
+  }
+
   fun intTextField(prop: KMutableProperty0<Int>, columns: Int? = null, range: UINumericRange? = null): CellBuilder<JTextField> {
     return textField(
       { prop.get().toString() },
@@ -255,10 +261,12 @@ abstract class Cell {
     )
   }
 
-  fun textField(getter: () -> String, setter: (String) -> Unit, columns: Int? = null): CellBuilder<JTextField> {
-    val component = JTextField(getter(),columns ?: 0)
-    val builder = component()
-    return builder.withTextBinding(PropertyBinding(getter, setter))
+  fun intTextField(getter: () -> Int, setter: (Int) -> Unit, columns: Int? = null, range: UINumericRange? = null): CellBuilder<JTextField> {
+    return textField(
+      { getter().toString() },
+      { value -> value.toIntOrNull()?.let { setter(range?.fit(it) ?: it) } },
+      columns
+    )
   }
 
   fun spinner(prop: KMutableProperty0<Int>, minValue: Int, maxValue: Int, step: Int = 1): CellBuilder<JBIntSpinner> {
@@ -284,7 +292,7 @@ abstract class Cell {
     return component
   }
 
-  fun textFieldWithBrowseButton(browseDialogTitle: String,
+  fun textFieldWithBrowseButton(browseDialogTitle: String? = null,
                                 value: String? = null,
                                 project: Project? = null,
                                 fileChooserDescriptor: FileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor(),
@@ -294,6 +302,33 @@ abstract class Cell {
     value?.let { component.text = it }
     component(comment = comment)
     return component
+  }
+
+  fun textFieldWithBrowseButton(
+    prop: KMutableProperty0<String>,
+    browseDialogTitle: String? = null,
+    project: Project? = null,
+    fileChooserDescriptor: FileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor(),
+    fileChosen: ((chosenFile: VirtualFile) -> String)? = null,
+    comment: String? = null
+  ): CellBuilder<TextFieldWithBrowseButton> {
+    val component = textFieldWithBrowseButton(project, browseDialogTitle, fileChooserDescriptor, fileChosen)
+    component.text = prop.get()
+    return component(comment = comment).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, prop.toBinding())
+  }
+
+  fun textFieldWithBrowseButton(
+    getter: () -> String,
+    setter: (String) -> Unit,
+    browseDialogTitle: String? = null,
+    project: Project? = null,
+    fileChooserDescriptor: FileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor(),
+    fileChosen: ((chosenFile: VirtualFile) -> String)? = null,
+    comment: String? = null
+  ): CellBuilder<TextFieldWithBrowseButton> {
+    val component = textFieldWithBrowseButton(project, browseDialogTitle, fileChooserDescriptor, fileChosen)
+    component.text = getter()
+    return component(comment = comment).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, PropertyBinding(getter, setter))
   }
 
   fun gearButton(vararg actions: AnAction) {
