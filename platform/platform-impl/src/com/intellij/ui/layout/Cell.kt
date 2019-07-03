@@ -69,6 +69,7 @@ inline fun <reified T : Any> KMutableProperty0<T>.toBinding(): PropertyBinding<T
 interface CellBuilder<T : JComponent> {
   val component: T
 
+  fun comment(text: String, maxLineLength: Int = 70): CellBuilder<T>
   fun focused(): CellBuilder<T>
   fun withValidation(callback: (T) -> ValidationInfo?): CellBuilder<T>
   fun onApply(callback: () -> Unit): CellBuilder<T>
@@ -310,11 +311,11 @@ abstract class Cell {
     project: Project? = null,
     fileChooserDescriptor: FileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor(),
     fileChosen: ((chosenFile: VirtualFile) -> String)? = null,
-    comment: String? = null
+    growPolicy: GrowPolicy? = null
   ): CellBuilder<TextFieldWithBrowseButton> {
     val component = textFieldWithBrowseButton(project, browseDialogTitle, fileChooserDescriptor, fileChosen)
     component.text = prop.get()
-    return component(comment = comment).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, prop.toBinding())
+    return component(growX, growPolicy = growPolicy).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, prop.toBinding())
   }
 
   fun textFieldWithBrowseButton(
@@ -324,11 +325,11 @@ abstract class Cell {
     project: Project? = null,
     fileChooserDescriptor: FileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor(),
     fileChosen: ((chosenFile: VirtualFile) -> String)? = null,
-    comment: String? = null
+    growPolicy: GrowPolicy? = null
   ): CellBuilder<TextFieldWithBrowseButton> {
     val component = textFieldWithBrowseButton(project, browseDialogTitle, fileChooserDescriptor, fileChosen)
     component.text = getter()
-    return component(comment = comment).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, PropertyBinding(getter, setter))
+    return component(growX, growPolicy = growPolicy).withBinding(TextFieldWithBrowseButton::getText, TextFieldWithBrowseButton::setText, PropertyBinding(getter, setter))
   }
 
   fun gearButton(vararg actions: AnAction) {
