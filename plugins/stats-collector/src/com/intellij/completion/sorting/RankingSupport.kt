@@ -2,6 +2,7 @@
 package com.intellij.completion.sorting
 
 import com.intellij.lang.Language
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.stats.personalization.session.SessionFactorsUtils
 import com.jetbrains.completion.feature.Feature
 import com.jetbrains.completion.feature.ModelMetadataEx
@@ -10,23 +11,25 @@ import com.jetbrains.completion.ranker.JavaCompletionRanker
 import com.jetbrains.completion.ranker.KotlinCompletionRanker
 import com.jetbrains.completion.ranker.LanguageCompletionRanker
 import com.jetbrains.completion.ranker.PythonCompletionRanker
+import java.io.IOException
 
 
 object RankingSupport {
-  private val rankers: Map<String, LanguageRanker> = mapOf(
-    "java" to LanguageRanker(JavaCompletionRanker()),
-    "kotlin" to LanguageRanker(KotlinCompletionRanker()),
-    "python" to LanguageRanker(PythonCompletionRanker())
-  )
+  private val LOG = logger<RankingSupport>()
+  private val language2ranker: Map<String, LanguageRanker> = buildRankerMap()
 
   fun getRanker(language: Language?): LanguageRanker? {
     if (language == null) return null
-    return rankers[language.key()]
+    return language2ranker[language.key()]
+  }
+
+  fun availableLanguages(): List<String> {
+    return language2ranker.values.map { it.displayName }
   }
 
   private fun Language.key(): String = displayName.toLowerCase()
 
-  class LanguageRanker(private val ranker: LanguageCompletionRanker) {
+  class LanguageRanker(val displayName: String, private val ranker: LanguageCompletionRanker) {
     private val transformer: FeatureTransformer = ranker.modelMetadata.createTransformer()
     private val useSessionFactors: Boolean = ranker.modelMetadata.hasSessionFactors()
 
@@ -46,5 +49,25 @@ object RankingSupport {
       fun isSessionFeature(feature: Feature) = feature.name.startsWith(SessionFactorsUtils.SESSION_FACTOR_PREFIX)
       return float.any { isSessionFeature(it) } || binary.any { isSessionFeature(it) } || categorical.any { isSessionFeature(it) }
     }
+  }
+
+  private fun registerRanker(rankerMap: MutableMap<String, LanguageRanker>, builder: () -> LanguageRanker) {
+    try {
+      val ranker = builder()
+      rankerMap[ranker.displayName.toLowerCase()] = ranker
+    }
+    catch (e: IOException) {
+      LOG.error("Could not initialize language ranker", e)
+    }
+  }
+
+  private fun buildRankerMap(): Map<String, LanguageRanker> {
+    val result = mutableMapOf<String, LanguageRanker>()
+
+    registerRanker(result) { LanguageRanker("Java", JavaCompletionRanker()) }
+    registerRanker(result) { LanguageRanker("Kotlin", KotlinCompletionRanker()) }
+    registerRanker(result) { LanguageRanker("Python", PythonCompletionRanker()) }
+
+    return result
   }
 }
