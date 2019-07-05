@@ -5,6 +5,10 @@ import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Getter;
 import com.intellij.openapi.util.Setter;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.ui.IdeBorderFactory;
+import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UI;
+import com.intellij.util.ui.components.BorderLayoutPanel;
 import kotlin.reflect.KMutableProperty0;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -22,6 +26,7 @@ import java.util.List;
  */
 public abstract class BeanConfigurable<T> implements UnnamedConfigurable {
   private final T myInstance;
+  private String myTitle;
 
   private abstract static class BeanPropertyAccessor {
     abstract Object getBeanValue(Object instance);
@@ -202,6 +207,10 @@ public abstract class BeanConfigurable<T> implements UnnamedConfigurable {
     myInstance = null;
   }
 
+  protected void setTitle(String title) {
+    myTitle = title;
+  }
+
   @Nullable
   protected T getInstance() {
     return myInstance;
@@ -259,11 +268,15 @@ public abstract class BeanConfigurable<T> implements UnnamedConfigurable {
 
   @Override
   public JComponent createComponent() {
-    final JPanel panel = new JPanel(new GridLayout(myFields.size(), 1));
+    final JPanel panel = new JPanel(new GridLayout(myFields.size(), 1, 0, JBUI.scale(5)));
     for (BeanField field: myFields) {
       panel.add(field.getComponent());
     }
-    return panel;
+    BorderLayoutPanel result = UI.Panels.simplePanel().addToTop(panel);
+    if (myTitle != null) {
+      result.setBorder(IdeBorderFactory.createTitledBorder(myTitle));
+    }
+    return result;
   }
 
   @Override

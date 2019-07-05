@@ -103,6 +103,8 @@
 
     <extensionPoint name="html.codestyle.panel" interface="com.intellij.application.options.HtmlCodeStylePanelExtension"/>
     <extensionPoint name="html.scriptDocumentationProvider" interface="com.intellij.lang.documentation.DocumentationProvider"/>
+
+    <extensionPoint name="webSmartKeysConfigurable" beanClass="com.intellij.application.options.editor.WebSmartKeysConfigurableEP"/>
   </extensionPoints>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -159,7 +161,7 @@
     <codeInsight.lineMarkerProvider language="XHTML" implementationClass="com.intellij.html.HtmlLineMarkerProvider"/>
 
     <breadcrumbsInfoProvider implementation="com.intellij.xml.breadcrumbs.XmlLanguageBreadcrumbsInfoProvider"/>
-    <editorSmartKeysConfigurable instance="com.intellij.application.options.editor.WebEditorOptionsProvider"
+    <editorSmartKeysConfigurable instance="com.intellij.application.options.editor.WebSmartKeysConfigurable"
                                  id="editor.preferences.webOptions"
                                  key="web.editor.configuration.title"
                                  bundle="messages.XmlBundle"/>
