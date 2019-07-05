@@ -16,9 +16,7 @@ import com.intellij.ide.IdeEventQueue;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.editor.event.EditorMouseEvent;
-import com.intellij.openapi.editor.event.EditorMouseEventArea;
-import com.intellij.openapi.editor.event.EditorMouseMotionListener;
+import com.intellij.openapi.editor.event.*;
 import com.intellij.openapi.editor.ex.*;
 import com.intellij.openapi.editor.ex.util.EditorUtil;
 import com.intellij.openapi.editor.impl.EditorMouseHoverPopupControl;
@@ -57,7 +55,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
+public class EditorMouseHoverPopupManager implements EditorMouseMotionListener, CaretListener {
   private static final Logger LOG = Logger.getInstance(EditorMouseHoverPopupManager.class);
   private static final TooltipGroup EDITOR_INFO_GROUP = new TooltipGroup("EDITOR_INFO_GROUP", 0);
 
@@ -72,12 +70,23 @@ public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
   public EditorMouseHoverPopupManager(Application application, EditorFactory editorFactory, EditorMouseHoverPopupControl control) {
     myAlarm = new Alarm(Alarm.ThreadToUse.POOLED_THREAD, application);
     editorFactory.getEventMulticaster().addEditorMouseMotionListener(this);
+    editorFactory.getEventMulticaster().addCaretListener(this);
     control.addListener(() -> {
       Editor editor = SoftReference.dereference(myCurrentEditor);
       if (editor != null && EditorMouseHoverPopupControl.arePopupsDisabled(editor)) {
         closeHint();
       }
     });
+  }
+
+  @Override
+  public void caretPositionChanged(@NotNull CaretEvent event) {
+    if (!Registry.is("editor.new.mouse.hover.popups")) return;
+
+    Editor editor = event.getEditor();
+    if (editor == SoftReference.dereference(myCurrentEditor)) {
+      DocumentationManager.getInstance(editor.getProject()).setAllowContentUpdateFromContext(true);
+    }
   }
 
   @Override
@@ -232,21 +241,17 @@ public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
 
   private static int getTargetOffset(EditorMouseEvent event) {
     Editor editor = event.getEditor();
+    Point point = event.getMouseEvent().getPoint();
     if (editor instanceof EditorEx &&
         editor.getProject() != null &&
         event.getArea() == EditorMouseEventArea.EDITING_AREA &&
         event.getMouseEvent().getModifiers() == 0 &&
         !EditorMouseHoverPopupControl.arePopupsDisabled(editor) &&
-        LookupManager.getActiveLookup(editor) == null) {
-      Point point = event.getMouseEvent().getPoint();
-      VisualPosition visualPosition = editor.xyToVisualPosition(point);
-      LogicalPosition logicalPosition = editor.visualToLogicalPosition(visualPosition);
-      int offset = editor.logicalPositionToOffset(logicalPosition);
-      if (editor.offsetToLogicalPosition(offset).equals(logicalPosition) && // not virtual space
-          ((EditorEx)editor).getFoldingModel().getFoldingPlaceholderAt(point) == null &&
-          editor.getInlayModel().getElementAt(point) == null) {
-        return offset;
-      }
+        LookupManager.getActiveLookup(editor) == null &&
+        EditorUtil.isPointOverText(editor, point) &&
+        ((EditorEx)editor).getFoldingModel().getFoldingPlaceholderAt(point) == null) {
+      LogicalPosition logicalPosition = editor.xyToLogicalPosition(point);
+      return editor.logicalPositionToOffset(logicalPosition);
     }
     return -1;
   }
@@ -382,7 +387,8 @@ public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
             quickDocMessage = documentationManager.generateDocumentation(targetElementRef.get(), element);
           }
         }
-        catch (IndexNotReadyException ignored) {}
+        catch (IndexNotReadyException ignored) {
+        }
         catch (Exception e) {
           LOG.warn(e);
         }
@@ -488,11 +494,20 @@ public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
 
     @Nullable
     private DocumentationComponent createQuickDocComponent(Editor editor,
-                                               boolean deEmphasize,
-                                               PopupBridge popupBridge) {
+                                                           boolean deEmphasize,
+                                                           PopupBridge popupBridge) {
       if (quickDocMessage == null) return null;
+      PsiElement element = quickDocElement.get();
       Project project = Objects.requireNonNull(editor.getProject());
       DocumentationManager documentationManager = DocumentationManager.getInstance(project);
+      ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DOCUMENTATION);
+      if (toolWindow != null) {
+        if (element != null) {
+          documentationManager.showJavaDocInfo(editor, element, extractOriginalElement(element), null, quickDocMessage, true, false);
+          documentationManager.setAllowContentUpdateFromContext(false);
+        }
+        return null;
+      }
       DocumentationComponent component = new DocumentationComponent(documentationManager, false) {
         @Override
         protected void showHint() {
@@ -508,13 +523,12 @@ public class EditorMouseHoverPopupManager implements EditorMouseMotionListener {
           component.setBorder(IdeBorderFactory.createBorder(SideBorder.TOP));
         }
       }
-      PsiElement element = quickDocElement.get();
       component.setData(element, quickDocMessage, null, null, null);
       component.setToolwindowCallback(() -> {
         documentationManager.createToolWindow(element, extractOriginalElement(element));
-        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DOCUMENTATION);
-        if (toolWindow != null) {
-          toolWindow.setAutoHide(false);
+        ToolWindow createdToolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DOCUMENTATION);
+        if (createdToolWindow != null) {
+          createdToolWindow.setAutoHide(false);
         }
         AbstractPopup popup = popupBridge.getPopup();
         if (popup != null) {
