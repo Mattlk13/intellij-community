@@ -70,15 +70,14 @@ class VcsIntegrationEnablerTest : VcsRootBaseTest() {
                      mock_init: String?,
                      vararg vcs_roots: String) {
     for (vcsRoot in vcsRoots) {
-      assertTrue(File(vcsRoot.path!!.path, DOT_MOCK).mkdirs())
+      assertTrue(File(vcsRoot.path.path, DOT_MOCK).mkdirs())
     }
 
     val vcsRootsList = mutableListOf(*vcs_roots)
     //default
     if (vcsRootsList.isEmpty()) {
       vcsRootsList.addAll(ContainerUtil.map(vcsRoots) { root ->
-        assert(root.path != null)
-        root.path!!.path
+        root.path.path
       })
     }
     TestIntegrationEnabler(vcs).enable(vcsRoots)
@@ -103,7 +102,7 @@ class VcsIntegrationEnablerTest : VcsRootBaseTest() {
     return ContainerUtil.map(roots) { s ->
       val path = VcsTestUtil.toAbsolute(s, myProject)
       LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
-      VcsRoot(vcs, VcsUtil.getVirtualFile(path))
+      VcsRoot(vcs, VcsUtil.getVirtualFile(path)!!)
     }
   }
 
