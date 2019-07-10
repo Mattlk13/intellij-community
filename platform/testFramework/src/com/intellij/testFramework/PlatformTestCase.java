@@ -31,8 +31,10 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleType;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.project.ex.ProjectManagerEx;
 import com.intellij.openapi.project.impl.ProjectImpl;
+import com.intellij.openapi.project.impl.ProjectManagerImpl;
 import com.intellij.openapi.project.impl.TooManyProjectLeakedException;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
@@ -58,7 +60,10 @@ import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.impl.PsiDocumentManagerBase;
 import com.intellij.psi.impl.PsiManagerImpl;
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageManagerImpl;
-import com.intellij.util.*;
+import com.intellij.util.MemoryDumpHelper;
+import com.intellij.util.PathUtil;
+import com.intellij.util.PlatformUtils;
+import com.intellij.util.ThrowableRunnable;
 import com.intellij.util.indexing.FileBasedIndex;
 import com.intellij.util.indexing.FileBasedIndexImpl;
 import com.intellij.util.indexing.IndexableSetContributor;
@@ -147,6 +152,14 @@ public abstract class PlatformTestCase extends UsefulTestCase implements DataPro
   public static void synchronizeTempDirVfs(@NotNull VirtualFile tempDir) {
     tempDir.getChildren();
     tempDir.refresh(false, true);
+  }
+
+  public static void synchronizeTempDirVfs(@NotNull Path tempDir) {
+    VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(FileUtil.toSystemIndependentName(tempDir.toString()));
+    // null is ok, because Path can be only generated, but not created
+    if (virtualFile != null) {
+      synchronizeTempDirVfs(Objects.requireNonNull(virtualFile));
+    }
   }
 
   protected void initApplication() throws Exception {
@@ -271,21 +284,15 @@ public abstract class PlatformTestCase extends UsefulTestCase implements DataPro
 
   @NotNull
   protected Project doCreateProject(@NotNull Path projectFile) throws Exception {
-    return createProject(projectFile.toFile(), getClass().getName() + "." + getName());
+    return createProject(projectFile);
   }
 
   @NotNull
-  public static Project createProject(@NotNull File projectFile, @NotNull String creationPlace) {
-    return createProject(projectFile.getPath(), creationPlace);
-  }
-
-  @NotNull
-  public static Project createProject(@NotNull String path, @NotNull String creationPlace) {
-    String fileName = PathUtilRt.getFileName(path);
-
+  public static Project createProject(@NotNull Path file) {
     try {
-      String projectName = FileUtilRt.getNameWithoutExtension(fileName);
-      return ProjectManagerEx.getInstanceEx().newProject(projectName, path);
+      ProjectManagerImpl projectManager = (ProjectManagerImpl)ProjectManager.getInstance();
+      // in tests it is caller responsibility to refresh VFS (because often not only the project file must be refreshed, but the whole dir - so, no need to refresh several times)
+      return Objects.requireNonNull(projectManager.newProject(file, null, /* useDefaultProjectSettings = */ false, /* isRefreshVfsNeeded = */ false));
     }
     catch (TooManyProjectLeakedException e) {
       if (ourReportedLeakedProjects) {
@@ -385,9 +392,7 @@ public abstract class PlatformTestCase extends UsefulTestCase implements DataPro
       }
     }
 
-    Path tempFile = TemporaryDirectoryKt
-      .generateTemporaryPath(
-        FileUtil.sanitizeFileName(getName(), false) + (isDirectoryBasedProject ? "" : ProjectFileType.DOT_DEFAULT_EXTENSION));
+    Path tempFile = TemporaryDirectory.generateTemporaryPath(FileUtil.sanitizeFileName(getName(), false) + (isDirectoryBasedProject ? "" : ProjectFileType.DOT_DEFAULT_EXTENSION));
     myFilesToDelete.add(tempFile.toFile());
     return tempFile;
   }
@@ -986,7 +991,7 @@ public abstract class PlatformTestCase extends UsefulTestCase implements DataPro
   protected static VirtualFile getOrCreateModuleDir(@NotNull Module module) throws IOException {
     File moduleDir = new File(PathUtil.getParentPath(module.getModuleFilePath()));
     FileUtil.ensureExists(moduleDir);
-    return LocalFileSystem.getInstance().refreshAndFindFileByIoFile(moduleDir);
+    return Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByIoFile(moduleDir));
   }
 
   public static void waitForProjectLeakingThreads(@NotNull Project project, long timeout, @NotNull TimeUnit timeUnit) throws Exception {
