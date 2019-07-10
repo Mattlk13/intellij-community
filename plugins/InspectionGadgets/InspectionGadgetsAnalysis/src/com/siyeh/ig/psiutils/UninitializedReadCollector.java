@@ -73,7 +73,6 @@ public class UninitializedReadCollector {
     if (statement instanceof PsiBreakStatement ||
         statement instanceof PsiContinueStatement ||
         statement instanceof PsiAssertStatement ||
-        statement instanceof PsiYieldStatement ||
         statement instanceof PsiEmptyStatement) {
       return false;
     }
@@ -157,6 +156,11 @@ public class UninitializedReadCollector {
       final PsiSwitchLabeledRuleStatement switchLabeledRuleStatement = (PsiSwitchLabeledRuleStatement)statement;
       final PsiStatement body = switchLabeledRuleStatement.getBody();
       return statementAssignsVariable(body, variable, stamp, checkedMethods);
+    }
+    else if (statement instanceof PsiYieldStatement) {
+      final PsiYieldStatement yieldStatement = (PsiYieldStatement)statement;
+      final PsiExpression expression = yieldStatement.getExpression();
+      return expressionAssignsVariable(expression, variable, stamp, checkedMethods);
     }
     else {
       assert false : "unknown statement: " + statement;
