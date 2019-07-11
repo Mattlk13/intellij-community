@@ -135,15 +135,13 @@ public class RecentProjectsManagerBase extends RecentProjectsManager implements 
     }
   }
 
-  @NotNull
-  protected final State getStateInner() {
-    synchronized (myStateLock) {
-      return myState;
-    }
+  @Nullable
+  public RecentProjectMetaInfo getProjectMetaInfo(@NotNull Path file) {
+    return myState.additionalInfo.get(FileUtil.toSystemIndependentName(file.toString()));
   }
 
   @Override
-  public void loadState(@NotNull final State state) {
+  public void loadState(@NotNull State state) {
     synchronized (myStateLock) {
       myState = state;
       myState.pid = null;
@@ -430,7 +428,7 @@ public class RecentProjectsManagerBase extends RecentProjectsManager implements 
       return existing;
     }
 
-    if (Files.isDirectory(projectFile.resolve(Project.DIRECTORY_STORE_FOLDER))) {
+    if (ProjectUtil.isValidProjectPath(projectFile)) {
       return PlatformProjectOpenProcessor.openExistingProject(projectFile, projectFile, openProjectOptions, null);
     }
     else {
