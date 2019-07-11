@@ -3,9 +3,12 @@ package org.jetbrains.plugins.textmate.language.syntax;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.ArrayUtil;
+import com.intellij.util.containers.StringInterner;
 import gnu.trove.THashMap;
+import gnu.trove.TIntObjectHashMap;
 import gnu.trove.TObjectIntHashMap;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.textmate.Constants;
 import org.jetbrains.plugins.textmate.plist.PListValue;
 import org.jetbrains.plugins.textmate.plist.Plist;
@@ -28,6 +31,13 @@ import java.util.Map;
 public class TextMateSyntaxTable {
   private static final Logger LOG = Logger.getInstance(TextMateSyntaxTable.class);
   private final Map<String, SyntaxNodeDescriptor> rulesMap = new THashMap<>();
+  private final TObjectIntHashMap<String> ruleIds = new TObjectIntHashMap<>();
+  private final StringInterner interner = new StringInterner();
+
+  public void compact() {
+    ruleIds.clear();
+    interner.clear();
+  }
 
   /**
    * Append table with new syntax rules in order to support new language.
@@ -73,7 +83,7 @@ public class TextMateSyntaxTable {
     for (Map.Entry<String, PListValue> entry : plist.entries()) {
       PListValue pListValue = entry.getValue();
       if (pListValue != null) {
-        String key = entry.getKey();
+        String key = interner.intern(entry.getKey());
         if (ArrayUtil.contains(key, Constants.REGEX_KEY_NAMES)) {
           try {
             String pattern = pListValue.getString();
@@ -86,10 +96,15 @@ public class TextMateSyntaxTable {
           }
         }
         else if (ArrayUtil.contains(key, Constants.STRING_KEY_NAMES)) {
-          result.setStringAttribute(key, pListValue.getString());
+          if (key.equals(Constants.WHILE_KEY) || key.equals(Constants.END_KEY)) {
+            result.setStringAttribute(key, pListValue.getString());
+          }
+          else {
+            result.setStringAttribute(key, interner.intern(pListValue.getString()));
+          }
         }
-        else if (ArrayUtil.contains(key, Constants.DICT_KEY_NAMES)) {
-          result.setPlistAttribute(key, pListValue.getPlist());
+        else if (ArrayUtil.contains(key, Constants.CAPTURES_KEY_NAMES)) {
+          result.setCaptures(key, loadCaptures(pListValue.getPlist()));
         }
         else if (Constants.REPOSITORY_KEY.equalsIgnoreCase(key)) {
           loadRepository(result, pListValue);
@@ -111,11 +126,30 @@ public class TextMateSyntaxTable {
     return result;
   }
 
+  @Nullable
+  private TIntObjectHashMap<String> loadCaptures(Plist captures) {
+    TIntObjectHashMap<String> result = new TIntObjectHashMap<>();
+    for (Map.Entry<String, PListValue> capture : captures.entries()) {
+      try {
+        int index = Integer.parseInt(capture.getKey());
+        Plist captureDict = capture.getValue().getPlist();
+        String captureName = captureDict.getPlistValue(Constants.NAME_KEY, "").getString();
+        result.put(index, interner.intern(captureName));
+      }
+      catch (NumberFormatException ignore) {
+      }
+    }
+    if (result.isEmpty()) {
+      return null;
+    }
+    result.trimToSize();
+    return result;
+  }
+
   private SyntaxNodeDescriptor loadProxyNode(@NotNull Plist plist, @NotNull SyntaxNodeDescriptor result) {
     String include = plist.getPlistValue(Constants.INCLUDE_KEY, "").getString();
     if (StringUtil.startsWithChar(include, '#')) {
-      // todo: convert to int
-      return new SyntaxRuleProxyDescriptor(include.substring(1), result);
+      return new SyntaxRuleProxyDescriptor(getRuleId(include.substring(1)), result);
     }
     else if (Constants.INCLUDE_SELF_VALUE.equalsIgnoreCase(include) || Constants.INCLUDE_BASE_VALUE.equalsIgnoreCase(include)) {
       return new SyntaxRootProxyDescriptor(result);
@@ -133,10 +167,19 @@ public class TextMateSyntaxTable {
     for (Map.Entry<String, PListValue> repoEntry : pListValue.getPlist().entries()) {
       PListValue repoEntryValue = repoEntry.getValue();
       if (repoEntryValue != null) {
-        // todo: convert to int
-        result.appendRepository(repoEntry.getKey(), loadNestedSyntax(repoEntryValue.getPlist(), result));
+        result.appendRepository(getRuleId(repoEntry.getKey()), loadNestedSyntax(repoEntryValue.getPlist(), result));
       }
     }
+  }
+
+  private int getRuleId(@NotNull String ruleName) {
+    int id = ruleIds.get(ruleName);
+    if (id > 0) {
+      return id;
+    }
+    int newId = ruleIds.size() + 1;
+    ruleIds.put(ruleName, newId);
+    return newId;
   }
 
   private void loadInjections(MutableSyntaxNodeDescriptor result, PListValue pListValue) {

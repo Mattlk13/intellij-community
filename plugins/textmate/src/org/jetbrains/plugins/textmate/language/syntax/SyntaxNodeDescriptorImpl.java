@@ -1,10 +1,10 @@
 package org.jetbrains.plugins.textmate.language.syntax;
 
 import com.intellij.openapi.diagnostic.Logger;
+import gnu.trove.TIntObjectHashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.textmate.Constants;
-import org.jetbrains.plugins.textmate.plist.Plist;
 import org.jetbrains.plugins.textmate.regex.RegexFacade;
 
 import java.util.*;
@@ -12,10 +12,10 @@ import java.util.*;
 class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   private static final Logger LOG = Logger.getInstance(SyntaxNodeDescriptor.class);
 
+  private TIntObjectHashMap<SyntaxNodeDescriptor> myRepository = new TIntObjectHashMap<>();
   private Map<String, String> myStringAttributes = new HashMap<>();
   private Map<String, RegexFacade> myRegexAttributes = new HashMap<>();
-  private Map<String, Plist> myPlistAttributes = new HashMap<>();
-  private Map<String, SyntaxNodeDescriptor> myRepository = new HashMap<>();
+  private Map<String, TIntObjectHashMap<String>> myCaptures = new HashMap<>();
 
   private List<SyntaxNodeDescriptor> myChildren = new ArrayList<>();
   private List<InjectionNodeDescriptor> myInjections = new ArrayList<>();
@@ -39,14 +39,14 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   }
 
   @Override
-  public void setPlistAttribute(String key, Plist value) {
-    myPlistAttributes.put(key, value);
+  public void setCaptures(@NotNull String key, @Nullable TIntObjectHashMap<String> captures) {
+    myCaptures.put(key, captures);
   }
 
   @Nullable
   @Override
-  public Plist getPlistAttribute(String key) {
-    return myPlistAttributes.get(key);
+  public TIntObjectHashMap<String> getCaptures(String key) {
+    return myCaptures.get(key);
   }
 
   @Override
@@ -72,8 +72,8 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   }
 
   @Override
-  public void appendRepository(String key, SyntaxNodeDescriptor descriptor) {
-    myRepository.put(key, descriptor);
+  public void appendRepository(int ruleId, SyntaxNodeDescriptor descriptor) {
+    myRepository.put(ruleId, descriptor);
   }
 
   @Override
@@ -85,10 +85,18 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   public void compact() {
     myStringAttributes = compactMap(myStringAttributes);
     myRegexAttributes = compactMap(myRegexAttributes);
-    myPlistAttributes = compactMap(myPlistAttributes);
-    myRepository = compactMap(myRepository);
+    myCaptures = compactMap(myCaptures);
     myChildren = compactList(myChildren);
     myInjections = compactList(myInjections);
+    myRepository = compactMap(myRepository);
+  }
+
+  private static TIntObjectHashMap<SyntaxNodeDescriptor> compactMap(TIntObjectHashMap<SyntaxNodeDescriptor> map) {
+    if (map.isEmpty()) {
+      return null;
+    }
+    map.trimToSize();
+    return map;
   }
 
   private static <T> List<T> compactList(List<T> list) {
@@ -112,9 +120,9 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
       Map.Entry<String, T> singleEntry = map.entrySet().iterator().next();
       return Collections.singletonMap(singleEntry.getKey(), singleEntry.getValue());
     }
-    return new HashMap<String, T>(map.size()) {{
-      putAll(map);
-    }};
+    HashMap<String, T> result = new HashMap<>(map.size());
+    result.putAll(map);
+    return result;
   }
 
   @NotNull
@@ -130,13 +138,13 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
 
   @NotNull
   @Override
-  public SyntaxNodeDescriptor findInRepository(String key) {
-    SyntaxNodeDescriptor syntaxNodeDescriptor = myRepository.get(key);
+  public SyntaxNodeDescriptor findInRepository(int ruleId) {
+    SyntaxNodeDescriptor syntaxNodeDescriptor = myRepository != null ? myRepository.get(ruleId) : null;
     if (syntaxNodeDescriptor == null && myParentNode != null) {
-      return myParentNode.findInRepository(key);
+      return myParentNode.findInRepository(ruleId);
     }
     if (syntaxNodeDescriptor == null) {
-      LOG.warn("Can't find repository '" + key + "'");
+      LOG.warn("Can't find repository " + ruleId);
       return EMPTY_NODE;
     }
     return syntaxNodeDescriptor;
