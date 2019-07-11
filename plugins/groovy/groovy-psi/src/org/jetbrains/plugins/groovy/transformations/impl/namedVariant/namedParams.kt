@@ -1,16 +1,19 @@
-// Copyright 2000-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 @file:JvmName("NamedParamsUtil")
 
 package org.jetbrains.plugins.groovy.transformations.impl.namedVariant
 
+import com.intellij.codeInsight.AnnotationUtil
 import com.intellij.psi.*
 import com.intellij.psi.util.PropertyUtilBase
+import org.jetbrains.plugins.groovy.lang.psi.api.auxiliary.modifiers.annotation.GrAnnotation
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrExpression
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals.GrLiteral
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.params.GrParameter
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.typedef.GrTypeDefinition
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.typedef.members.GrMethod
 import org.jetbrains.plugins.groovy.lang.psi.impl.PsiImplUtil
+import org.jetbrains.plugins.groovy.lang.psi.impl.getArrayValue
 import org.jetbrains.plugins.groovy.lang.psi.util.GroovyPropertyUtils
 import org.jetbrains.plugins.groovy.lang.resolve.ResolveUtil
 
@@ -18,11 +21,21 @@ const val NAMED_VARIANT_ORIGIN_INFO: String = "via @NamedVariant"
 const val NAMED_ARGS_PARAMETER_NAME = "__namedArgs"
 const val GROOVY_TRANSFORM_NAMED_VARIANT = "groovy.transform.NamedVariant"
 const val GROOVY_TRANSFORM_NAMED_PARAM = "groovy.transform.NamedParam"
+const val GROOVY_TRANSFORM_NAMED_PARAMS = "groovy.transform.NamedParams"
 const val GROOVY_TRANSFORM_NAMED_DELEGATE = "groovy.transform.NamedDelegate"
 
 
 fun collectNamedParams(mapParameter: PsiParameter): List<Pair<String, PsiType>> {
   if (!mapParameter.type.equalsToText(CommonClassNames.JAVA_UTIL_MAP)) return emptyList()
+
+  val annotations = mapParameter
+    .getAnnotation(GROOVY_TRANSFORM_NAMED_PARAMS)
+    ?.findDeclaredAttributeValue("value")
+    ?.getArrayValue { it as? GrAnnotation }
+
+  if (annotations != null) {
+    return annotations.mapNotNull(::constructNamedParameter)
+  }
 
   return mapParameter.annotations.mapNotNull(::constructNamedParameter)
 }
@@ -54,18 +67,18 @@ fun collectAllParamsFromNamedVariantMethod(method: GrMethod): List<Pair<String, 
 internal fun collectNamedParamsFromNamedVariantMethod(method: GrMethod): List<NamedParamData> {
   val result = mutableListOf<NamedParamData>()
   for (parameter in method.parameterList.parameters) {
-    val name = parameter.name
     val type = parameter.type
 
     val namedParamsAnn = PsiImplUtil.getAnnotation(parameter, GROOVY_TRANSFORM_NAMED_PARAM)
     if (namedParamsAnn != null) {
+      val name = AnnotationUtil.getDeclaredStringAttributeValue(namedParamsAnn, "value") ?: parameter.name
       result.add(NamedParamData(name, type, parameter))
       continue
     }
 
     PsiImplUtil.getAnnotation(parameter, GROOVY_TRANSFORM_NAMED_DELEGATE) ?: continue
     val parameterClass = (type as? PsiClassType)?.resolve() ?: continue
-    getProperties(parameterClass).forEach { propertyName, propertyType ->
+    getProperties(parameterClass).forEach { (propertyName, propertyType) ->
       result.add(NamedParamData(propertyName, propertyType, parameter))
     }
   }
