@@ -41,6 +41,8 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.ExternalChangeAction;
 import com.intellij.testFramework.LightVirtualFile;
+import com.intellij.ui.SimpleColoredComponent;
+import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.io.EnumeratorLongDescriptor;
 import com.intellij.util.io.EnumeratorStringDescriptor;
@@ -48,11 +50,13 @@ import com.intellij.util.io.PersistentHashMap;
 import com.intellij.util.messages.MessageBus;
 import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.messages.Topic;
+import com.intellij.util.text.DateFormatUtil;
 import gnu.trove.THashSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -68,9 +72,6 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
   private static final int BACK_QUEUE_LIMIT = Registry.intValue("editor.navigation.history.stack.size");
   private static final int CHANGE_QUEUE_LIMIT = Registry.intValue("editor.navigation.history.stack.size");
 
-  public static String LAST_VISITED_TIMESTAMP_OPTION = "LAST_VISITED_TIMESTAMP_OPTION_FIELD";
-
-  public boolean LAST_VISITED_TIMESTAMP_OPTION_FIELD = true;
   private final Project myProject;
 
   private FileDocumentManager myFileDocumentManager;
@@ -166,12 +167,19 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
   }
 
   public void initRecentFilesTimestampMap(@NotNull Project project) {
+    File file = ProjectUtil.getProjectCachePath(project, "recentFilesTimeStamps.dat").toFile();
     try {
-      myRecentFilesTimestampsMap = new PersistentHashMap<>(ProjectUtil.getProjectCachePath(project, "recentFilesTimeStamps.dat").toFile(),
-                                                           EnumeratorStringDescriptor.INSTANCE, EnumeratorLongDescriptor.INSTANCE);
+      myRecentFilesTimestampsMap = new PersistentHashMap<>(file, EnumeratorStringDescriptor.INSTANCE, EnumeratorLongDescriptor.INSTANCE);
     }
     catch (IOException e) {
-      LOG.error("Cannot create persistent hash map for storing viewed files timestamps", e);
+      LOG.info("Cannot create persistent hash map for storing viewed files timestamps, let's try to clear cash", e);
+      PersistentHashMap.deleteFilesStartingWith(file);
+      try {
+        myRecentFilesTimestampsMap = new PersistentHashMap<>(file, EnumeratorStringDescriptor.INSTANCE, EnumeratorLongDescriptor.INSTANCE);
+      }
+      catch (IOException e1) {
+        LOG.error("Cannot create persistent hash map for storing viewed files timestamps even after deleting old files", e1);
+      }
     }
 
     Disposer.register(this, () -> {
@@ -202,6 +210,20 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
     }
     catch (IOException e) {
       LOG.info("Cannot put a timestamp from a persistent hash map", e);
+    }
+  }
+
+  public static void appendTimestamp(@NotNull Project project,
+                                     @NotNull SimpleColoredComponent component,
+                                     @NotNull VirtualFile file) {
+    try {
+      Long timestamp = getInstance(project).getRecentFilesTimestamps().get(file.getPath());
+      if (timestamp != null) {
+        component.append(" ").append(DateFormatUtil.formatPrettyDateTime(timestamp), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      }
+    }
+    catch (IOException e) {
+      LOG.info("Cannot get a timestamp from a persistent hash map", e);
     }
   }
 
