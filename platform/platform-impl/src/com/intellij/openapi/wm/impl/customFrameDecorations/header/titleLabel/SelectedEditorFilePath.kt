@@ -32,6 +32,8 @@ open class SelectedEditorFilePath {
   private val productVersion = DefaultPartTitle(" ")
   private val superUserSuffix = DefaultPartTitle(" ")
 
+  private var infoLevel = 4
+
   protected val components = listOf(projectTitle, classTitle, productTitle, productVersion, superUserSuffix)
 
   private val pane = object : JPanel(MigLayout("ins 0, gap 0", "[min!][pref][pref][pref][pref]push")){
@@ -56,6 +58,14 @@ open class SelectedEditorFilePath {
     add(productTitle.component)
     add(productVersion.component)
     add(superUserSuffix.component)
+  }
+
+  init {
+    projectTitle.active = infoLevel > 0
+    classTitle.active = infoLevel > 1
+    productTitle.active = infoLevel > 2
+    productVersion.active = infoLevel > 3
+    superUserSuffix.active = infoLevel > 4
   }
 
   open fun getView(): JComponent {
@@ -147,9 +157,8 @@ open class SelectedEditorFilePath {
   }
 
   protected fun updateProjectName() {
-    if (!SystemInfo.isMac && !SystemInfo.isGNOME) productTitle.longText = ApplicationNamesInfo.getInstance().fullProductName else productTitle.ignore()
-
-    if(java.lang.Boolean.getBoolean("ide.ui.version.in.title")) productVersion.longText = ApplicationInfo.getInstance().fullVersion else productVersion.ignore()
+    productTitle.longText = ApplicationNamesInfo.getInstance().fullProductName
+    productVersion.longText = if(java.lang.Boolean.getBoolean("ide.ui.version.in.title")) ApplicationInfo.getInstance().fullVersion else ""
 
     superUserSuffix.longText = IdeFrameImpl.getSuperUserSuffix() ?: ""
 

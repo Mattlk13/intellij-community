@@ -281,101 +281,25 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     HTMLEditorKit editorKit = new JBHtmlEditorKit(true) {
       @Override
       public ViewFactory getViewFactory() {
-        return new HTMLFactory() {
+        return new JBHtmlFactory() {
           @Override
           public View create(Element elem) {
+            AttributeSet attrs = elem.getAttributes();
             if ("icon".equals(elem.getName())) {
-              Object src = elem.getAttributes().getAttribute(HTML.Attribute.SRC);
+              Object src = attrs.getAttribute(HTML.Attribute.SRC);
               Icon icon = src != null ? IconLoader.findIcon((String)src, false) : null;
               if (icon == null) {
                 ModuleType id = ModuleTypeManager.getInstance().findByID((String)src);
                 if (id != null) icon = id.getIcon();
               }
               if (icon != null) {
-                Icon viewIcon = icon;
-                return new View(elem) {
-                  @Override
-                  public float getPreferredSpan(int axis) {
-                    switch (axis) {
-                      case View.X_AXIS:
-                        return viewIcon.getIconWidth();
-                      case View.Y_AXIS:
-                        return viewIcon.getIconHeight();
-                      default:
-                        throw new IllegalArgumentException("Invalid axis: " + axis);
-                    }
-                  }
-
-                  @Override
-                  public String getToolTipText(float x, float y, Shape allocation) {
-                     return (String)getElement().getAttributes().getAttribute(HTML.Attribute.ALT);
-                  }
-
-                  @Override
-                  public void paint(Graphics g, Shape allocation) {
-                    viewIcon.paintIcon(null, g, allocation.getBounds().x, allocation.getBounds().y - 4);
-                  }
-
-                  @Override
-                  public Shape modelToView(int pos, Shape a, Position.Bias b) throws BadLocationException {
-                    int p0 = getStartOffset();
-                    int p1 = getEndOffset();
-                    if ((pos >= p0) && (pos <= p1)) {
-                      Rectangle r = a.getBounds();
-                      if (pos == p1) {
-                        r.x += r.width;
-                      }
-                      r.width = 0;
-                      return r;
-                    }
-                    throw new BadLocationException(pos + " not in range " + p0 + "," + p1, pos);
-                  }
-
-                  @Override
-                  public int viewToModel(float x, float y, Shape a, Position.Bias[] bias) {
-                    Rectangle alloc = (Rectangle)a;
-                    if (x < alloc.x + (alloc.width / 2f)) {
-                      bias[0] = Position.Bias.Forward;
-                      return getStartOffset();
-                    }
-                    bias[0] = Position.Bias.Backward;
-                    return getEndOffset();
-                  }
-                };
+                return new MyIconView(elem, icon);
               }
             }
             View view = super.create(elem);
             if (view instanceof ImageView) {
               // we have to work with raw image, apply scaling manually
-              return new ImageView(elem) {
-                @Override
-                public float getMaximumSpan(int axis) {
-                  return super.getMaximumSpan(axis) / JBUIScale.sysScale(myEditorPane);
-                }
-
-                @Override
-                public float getMinimumSpan(int axis) {
-                  return super.getMinimumSpan(axis) / JBUIScale.sysScale(myEditorPane);
-                }
-
-                @Override
-                public float getPreferredSpan(int axis) {
-                  return super.getPreferredSpan(axis) / JBUIScale.sysScale(myEditorPane);
-                }
-
-                @Override
-                public void paint(Graphics g, Shape a) {
-                  Rectangle bounds = a.getBounds();
-                  int width = (int)super.getPreferredSpan(View.X_AXIS);
-                  int height = (int)super.getPreferredSpan(View.Y_AXIS);
-                  if (width <= 0 || height <= 0) return;
-                  @SuppressWarnings("UndesirableClassUsage")
-                  BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-                  Graphics2D graphics = image.createGraphics();
-                  super.paint(graphics, new Rectangle(image.getWidth(), image.getHeight()));
-                  UIUtil.drawImage(g, ImageUtil.ensureHiDPI(image, ScaleContext.create(myEditorPane)), bounds.x, bounds.y, null);
-                }
-              };
+              return new MyScalingImageView(elem);
             }
             return view;
           }
@@ -1877,6 +1801,95 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
         myHint.setDimensionServiceKey(null);
       }
       showHint();
+    }
+  }
+
+  private class MyScalingImageView extends ImageView {
+    private MyScalingImageView(Element elem) {super(elem);}
+
+    @Override
+    public float getMaximumSpan(int axis) {
+      return super.getMaximumSpan(axis) / JBUIScale.sysScale(myEditorPane);
+    }
+
+    @Override
+    public float getMinimumSpan(int axis) {
+      return super.getMinimumSpan(axis) / JBUIScale.sysScale(myEditorPane);
+    }
+
+    @Override
+    public float getPreferredSpan(int axis) {
+      return super.getPreferredSpan(axis) / JBUIScale.sysScale(myEditorPane);
+    }
+
+    @Override
+    public void paint(Graphics g, Shape a) {
+      Rectangle bounds = a.getBounds();
+      int width = (int)super.getPreferredSpan(View.X_AXIS);
+      int height = (int)super.getPreferredSpan(View.Y_AXIS);
+      if (width <= 0 || height <= 0) return;
+      @SuppressWarnings("UndesirableClassUsage")
+      BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+      Graphics2D graphics = image.createGraphics();
+      super.paint(graphics, new Rectangle(image.getWidth(), image.getHeight()));
+      UIUtil.drawImage(g, ImageUtil.ensureHiDPI(image, ScaleContext.create(myEditorPane)), bounds.x, bounds.y, null);
+    }
+  }
+
+  private static class MyIconView extends View {
+    private final Icon myViewIcon;
+
+    private MyIconView(Element elem, Icon viewIcon) {
+      super(elem);
+      myViewIcon = viewIcon;
+    }
+
+    @Override
+    public float getPreferredSpan(int axis) {
+      switch (axis) {
+        case View.X_AXIS:
+          return myViewIcon.getIconWidth();
+        case View.Y_AXIS:
+          return myViewIcon.getIconHeight();
+        default:
+          throw new IllegalArgumentException("Invalid axis: " + axis);
+      }
+    }
+
+    @Override
+    public String getToolTipText(float x, float y, Shape allocation) {
+      return (String)super.getElement().getAttributes().getAttribute(HTML.Attribute.ALT);
+    }
+
+    @Override
+    public void paint(Graphics g, Shape allocation) {
+      myViewIcon.paintIcon(null, g, allocation.getBounds().x, allocation.getBounds().y - 4);
+    }
+
+    @Override
+    public Shape modelToView(int pos, Shape a, Position.Bias b) throws BadLocationException {
+      int p0 = getStartOffset();
+      int p1 = getEndOffset();
+      if ((pos >= p0) && (pos <= p1)) {
+        Rectangle r = a.getBounds();
+        if (pos == p1) {
+          r.x += r.width;
+        }
+        r.width = 0;
+        return r;
+      }
+      throw new BadLocationException(pos + " not in range " + p0 + "," + p1, pos);
+    }
+
+    @Override
+    public int viewToModel(float x, float y, Shape a, Position.Bias[] bias) {
+      Rectangle alloc = (Rectangle)a;
+      if (x < alloc.x + (alloc.width / 2f)) {
+        bias[0] = Position.Bias.Forward;
+        return getStartOffset();
+      }
+      bias[0] = Position.Bias.Backward;
+      return getEndOffset();
     }
   }
 }
