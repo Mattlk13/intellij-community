@@ -3,7 +3,7 @@ package org.jetbrains.plugins.textmate.language.syntax;
 import gnu.trove.TIntObjectHashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.textmate.regex.RegexFacade;
+import org.jetbrains.plugins.textmate.Constants;
 
 import java.util.HashSet;
 import java.util.List;
@@ -26,20 +26,14 @@ abstract class SyntaxProxyDescriptor implements SyntaxNodeDescriptor {
 
   @Nullable
   @Override
-  public String getStringAttribute(String key) {
+  public CharSequence getStringAttribute(@NotNull Constants.StringKey key) {
     return getTargetNode().getStringAttribute(key);
   }
 
   @Nullable
   @Override
-  public TIntObjectHashMap<String> getCaptures(String key) {
+  public TIntObjectHashMap<CharSequence> getCaptures(@NotNull Constants.CaptureKey key) {
     return getTargetNode().getCaptures(key);
-  }
-
-  @Nullable
-  @Override
-  public RegexFacade getRegexAttribute(String key) {
-    return getTargetNode().getRegexAttribute(key);
   }
 
   @NotNull
@@ -62,7 +56,7 @@ abstract class SyntaxProxyDescriptor implements SyntaxNodeDescriptor {
 
   @NotNull
   @Override
-  public String getScopeName() {
+  public CharSequence getScopeName() {
     return getTargetNode().getScopeName();
   }
 

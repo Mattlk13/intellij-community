@@ -5,7 +5,7 @@ import gnu.trove.TIntObjectHashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.textmate.Constants;
-import org.jetbrains.plugins.textmate.regex.RegexFacade;
+import org.jetbrains.plugins.textmate.editor.TextMateEditorUtils;
 
 import java.util.*;
 
@@ -13,51 +13,39 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   private static final Logger LOG = Logger.getInstance(SyntaxNodeDescriptor.class);
 
   private TIntObjectHashMap<SyntaxNodeDescriptor> myRepository = new TIntObjectHashMap<>();
-  private Map<String, String> myStringAttributes = new HashMap<>();
-  private Map<String, RegexFacade> myRegexAttributes = new HashMap<>();
-  private Map<String, TIntObjectHashMap<String>> myCaptures = new HashMap<>();
+  private Map<Constants.StringKey, CharSequence> myStringAttributes = new EnumMap<>(Constants.StringKey.class);
+  private Map<Constants.CaptureKey, TIntObjectHashMap<CharSequence>> myCaptures = new EnumMap<>(Constants.CaptureKey.class);
 
   private List<SyntaxNodeDescriptor> myChildren = new ArrayList<>();
   private List<InjectionNodeDescriptor> myInjections = new ArrayList<>();
 
   private final SyntaxNodeDescriptor myParentNode;
-  private String myScopeName = null;
+  private CharSequence myScopeName = null;
 
   SyntaxNodeDescriptorImpl(@Nullable SyntaxNodeDescriptor parentNode) {
     myParentNode = parentNode;
   }
 
   @Override
-  public void setStringAttribute(String key, String value) {
+  public void setStringAttribute(@NotNull Constants.StringKey key, @Nullable CharSequence value) {
     myStringAttributes.put(key, value);
   }
 
   @Nullable
   @Override
-  public String getStringAttribute(String key) {
+  public CharSequence getStringAttribute(@NotNull Constants.StringKey key) {
     return myStringAttributes.get(key);
   }
 
   @Override
-  public void setCaptures(@NotNull String key, @Nullable TIntObjectHashMap<String> captures) {
+  public void setCaptures(@NotNull Constants.CaptureKey key, @Nullable TIntObjectHashMap<CharSequence> captures) {
     myCaptures.put(key, captures);
   }
 
   @Nullable
   @Override
-  public TIntObjectHashMap<String> getCaptures(String key) {
+  public TIntObjectHashMap<CharSequence> getCaptures(@NotNull Constants.CaptureKey key) {
     return myCaptures.get(key);
-  }
-
-  @Override
-  public void setRegexAttribute(String key, RegexFacade value) {
-    myRegexAttributes.put(key, value);
-  }
-
-  @Nullable
-  @Override
-  public RegexFacade getRegexAttribute(String key) {
-    return myRegexAttributes.get(key);
   }
 
   @Override
@@ -77,15 +65,14 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
   }
 
   @Override
-  public void setScopeName(@NotNull String scopeName) {
+  public void setScopeName(@NotNull CharSequence scopeName) {
     myScopeName = scopeName;
   }
 
   @Override
   public void compact() {
-    myStringAttributes = compactMap(myStringAttributes);
-    myRegexAttributes = compactMap(myRegexAttributes);
-    myCaptures = compactMap(myCaptures);
+    myStringAttributes = TextMateEditorUtils.compactMap(myStringAttributes);
+    myCaptures = TextMateEditorUtils.compactMap(myCaptures);
     myChildren = compactList(myChildren);
     myInjections = compactList(myInjections);
     myRepository = compactMap(myRepository);
@@ -110,19 +97,6 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
       ((ArrayList<T>)list).trimToSize();
     }
     return list;
-  }
-
-  private static <T> Map<String, T> compactMap(Map<String, T> map) {
-    if (map.isEmpty()) {
-      return Collections.emptyMap();
-    }
-    if (map.size() == 1) {
-      Map.Entry<String, T> singleEntry = map.entrySet().iterator().next();
-      return Collections.singletonMap(singleEntry.getKey(), singleEntry.getValue());
-    }
-    HashMap<String, T> result = new HashMap<>(map.size());
-    result.putAll(map);
-    return result;
   }
 
   @NotNull
@@ -152,7 +126,7 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
 
   @NotNull
   @Override
-  public String getScopeName() {
+  public CharSequence getScopeName() {
     return myScopeName;
   }
 
@@ -164,7 +138,7 @@ class SyntaxNodeDescriptorImpl implements MutableSyntaxNodeDescriptor {
 
   @Override
   public String toString() {
-    String name = myStringAttributes.get(Constants.NAME_KEY);
+    CharSequence name = myStringAttributes.get(Constants.StringKey.NAME);
     return name != null ? "Syntax rule: " + name : super.toString();
   }
 }

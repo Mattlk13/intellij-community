@@ -3,20 +3,17 @@ package org.jetbrains.plugins.textmate.language.syntax;
 import gnu.trove.TIntObjectHashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.textmate.regex.RegexFacade;
+import org.jetbrains.plugins.textmate.Constants;
 
 /**
  * Syntax rule of languages from TextMate bundle.
  * Consists of:
  * <ul>
  * <li>
- * String attributes - string attributes of syntax node {@link org.jetbrains.plugins.textmate.Constants#STRING_KEY_NAMES}
+ * String attributes - string attributes of syntax node {@link Constants.StringKey}
  * </li>
  * <li>
- * Regex attributes - regex attributes of syntax node {@link org.jetbrains.plugins.textmate.Constants#REGEX_KEY_NAMES}
- * </li>
- * <li>
- * Captures attributes - captures attributes of syntax node {@link org.jetbrains.plugins.textmate.Constants#CAPTURES_KEY_NAMES}
+ * Captures attributes - captures attributes of syntax node {@link Constants.CaptureKey}
  * </li>
  * <li>
  * Repository - set of named syntax rules (nodes) which can be included from other places in the grammar.
@@ -33,15 +30,13 @@ public interface MutableSyntaxNodeDescriptor extends SyntaxNodeDescriptor {
 
   void addInjection(@NotNull InjectionNodeDescriptor injection);
 
-  void setStringAttribute(String key, String value);
+  void setStringAttribute(@NotNull Constants.StringKey key, @Nullable CharSequence value);
 
-  void setCaptures(@NotNull String key, @Nullable TIntObjectHashMap<String> captures);
-
-  void setRegexAttribute(String key, RegexFacade value);
+  void setCaptures(@NotNull Constants.CaptureKey key, @Nullable TIntObjectHashMap<CharSequence> captures);
 
   void appendRepository(int ruleId, SyntaxNodeDescriptor descriptor);
 
-  void setScopeName(@NotNull String scopeName);
+  void setScopeName(@NotNull CharSequence scopeName);
 
   void compact();
 }

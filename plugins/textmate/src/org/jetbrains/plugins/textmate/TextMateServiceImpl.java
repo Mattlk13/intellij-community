@@ -23,6 +23,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.ArrayUtilRt;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.containers.Interner;
+import com.intellij.util.containers.PathInterner;
 import gnu.trove.THashMap;
 import gnu.trove.THashSet;
 import org.jetbrains.annotations.NonNls;
@@ -55,16 +57,16 @@ import java.io.IOException;
 import java.util.*;
 
 public class TextMateServiceImpl extends TextMateService {
-  private final Map<String, TextMateCustomTextAttributes> myCustomHighlightingColors = new HashMap<>();
+  private final THashMap<CharSequence, TextMateCustomTextAttributes> myCustomHighlightingColors = new THashMap<>();
+  private final THashMap<String, TextMateTheme> myThemeHashMap = new THashMap<>();
+  private final THashMap<String, CharSequence> myExtensionsMapping = new THashMap<>();
 
   private final PlistReader myPlistReader = new CompositePlistReader();
   private final BundleFactory myBundleFactory = new BundleFactory(myPlistReader);
   private final TextMateSyntaxTable mySyntaxTable = new TextMateSyntaxTable();
-  private final Map<String, TextMateTheme> myThemeHashMap = new HashMap<>();
   private final SnippetsRegistry mySnippetsRegistry = new SnippetsRegistry();
   private final PreferencesRegistry myPreferencesRegistry = new PreferencesRegistry();
   private final ShellVariablesRegistry myShellVariablesRegistry = new ShellVariablesRegistry();
-  private final Map<String, String> myExtensionsMapping = new THashMap<>();
   @NonNls private static final String PREINSTALLED_THEMES_PATH =
     FileUtil.join(PathManager.getCommunityHomePath(), "plugins", "textmate", "lib", "themes");
   @NonNls private static final String INSTALLED_THEMES_PATH = FileUtil.join(PathManager.getPluginsPath(), "textmate", "lib", "themes");
@@ -72,6 +74,7 @@ public class TextMateServiceImpl extends TextMateService {
     FileUtil.toSystemIndependentName(FileUtil.join(PathManager.getCommunityHomePath(), "plugins", "textmate", "lib", "bundles"));
   @NonNls public static final String INSTALLED_BUNDLES_PATH = FileUtil.toSystemIndependentName(FileUtil.join(PathManager.getPluginsPath(), "textmate", "lib", "bundles"));
   private final Set<TextMateBundleListener> myListeners = new HashSet<>();
+  private final Interner<CharSequence> myInterner = new PathInterner.PathEnumerator();
 
   @Override
   public void registerEnabledBundles(boolean loadBuiltin) {
@@ -93,7 +96,7 @@ public class TextMateServiceImpl extends TextMateService {
       return;
     }
 
-    List<FileNameMatcher> matchers = new ArrayList<>();
+    Set<FileNameMatcher> matchers = new HashSet<>();
     if (loadBuiltin) {
       loadBuiltinBundles(settings);
     }
@@ -108,6 +111,9 @@ public class TextMateServiceImpl extends TextMateService {
       }
     }
     mySyntaxTable.compact();
+    myThemeHashMap.trimToSize();
+    myExtensionsMapping.trimToSize();
+    myCustomHighlightingColors.trimToSize();
     updateAssociations(matchers);
   }
 
@@ -180,13 +186,13 @@ public class TextMateServiceImpl extends TextMateService {
 
   @NotNull
   @Override
-  public Map<String, TextMateCustomTextAttributes> getCustomHighlightingColors() {
+  public Map<CharSequence, TextMateCustomTextAttributes> getCustomHighlightingColors() {
     return myCustomHighlightingColors;
   }
 
   @NotNull
   @Override
-  public List<Preferences> getPreferencesForSelector(@NotNull String selector) {
+  public List<Preferences> getPreferencesForSelector(@NotNull CharSequence selector) {
     return myPreferencesRegistry.getPreferences(selector);
   }
 
@@ -217,8 +223,8 @@ public class TextMateServiceImpl extends TextMateService {
   @Override
   @Nullable
   public TextMateLanguageDescriptor getLanguageDescriptorByExtension(String extension) {
-    final String scopeName = myExtensionsMapping.get(extension);
-    return StringUtil.isNotEmpty(scopeName) ? new TextMateLanguageDescriptor(scopeName, mySyntaxTable.getSyntax(scopeName)) : null;
+    CharSequence scopeName = myExtensionsMapping.get(extension);
+    return !StringUtil.isEmpty(scopeName) ? new TextMateLanguageDescriptor(scopeName, mySyntaxTable.getSyntax(scopeName)) : null;
   }
 
   @Override
@@ -228,7 +234,7 @@ public class TextMateServiceImpl extends TextMateService {
     }
     synchronized (myThemeHashMap) {
       try {
-        final TextMateTheme theme = TextMateTheme.load(myPlistReader.read(themeFile.getInputStream()));
+        final TextMateTheme theme = TextMateTheme.load(myPlistReader.read(themeFile.getInputStream()), myInterner);
         if (theme != TextMateTheme.EMPTY_THEME) {
           myThemeHashMap.put(theme.getName(), theme);
           for (TextMateBundleListener listener : myListeners) {
@@ -312,7 +318,7 @@ public class TextMateServiceImpl extends TextMateService {
     return null;
   }
 
-  private boolean registerBundle(VirtualFile directory, List<FileNameMatcher> matchers) {
+  private boolean registerBundle(@Nullable VirtualFile directory, @NotNull Collection<FileNameMatcher> matchers) {
     final Bundle bundle = createBundle(directory);
     if (bundle != null) {
       registerLanguageSupport(bundle, matchers);
@@ -336,7 +342,7 @@ public class TextMateServiceImpl extends TextMateService {
   private void registerSnippets(@NotNull Bundle bundle) {
     for (File snippetFile : bundle.getSnippetFiles()) {
       try {
-        TextMateSnippet snippet = PreferencesReadUtil.loadSnippet(snippetFile, myPlistReader.read(snippetFile));
+        TextMateSnippet snippet = PreferencesReadUtil.loadSnippet(snippetFile, myPlistReader.read(snippetFile), myInterner);
         if (snippet != null) {
           mySnippetsRegistry.register(snippet);
         }
@@ -352,9 +358,10 @@ public class TextMateServiceImpl extends TextMateService {
       try {
         for (Pair<String, Plist> settingsPair : bundle.loadPreferenceFile(preferenceFile)) {
           if (settingsPair != null) {
-            myPreferencesRegistry.fillFromPList(settingsPair.first, settingsPair.second);
-            myShellVariablesRegistry.fillVariablesFromPlist(settingsPair.first, settingsPair.second);
-            readCustomHighlightingColors(settingsPair.first, settingsPair.second);
+            CharSequence scopeName = myInterner.intern(settingsPair.first);
+            myPreferencesRegistry.fillFromPList(scopeName, settingsPair.second);
+            myShellVariablesRegistry.fillVariablesFromPlist(scopeName, settingsPair.second);
+            readCustomHighlightingColors(scopeName, settingsPair.second);
           }
         }
       }
@@ -364,7 +371,7 @@ public class TextMateServiceImpl extends TextMateService {
     }
   }
 
-  private void readCustomHighlightingColors(@NotNull String scopeName, @NotNull Plist preferencesPList) {
+  private void readCustomHighlightingColors(@NotNull CharSequence scopeName, @NotNull Plist preferencesPList) {
     final TextAttributes textAttributes = new TextAttributes();
     final boolean hasHighlightingSettings = PreferencesReadUtil.fillTextAttributes(textAttributes, preferencesPList, null);
     if (hasHighlightingSettings) {
@@ -373,12 +380,12 @@ public class TextMateServiceImpl extends TextMateService {
     }
   }
 
-  private void registerLanguageSupport(@NotNull Bundle bundle, List<FileNameMatcher> matchers) {
+  private void registerLanguageSupport(@NotNull Bundle bundle, @NotNull Collection<FileNameMatcher> matchers) {
     Set<String> newExtensions = new THashSet<>();
     for (File grammarFile : bundle.getGrammarFiles()) {
       try {
         Plist plist = myPlistReader.read(grammarFile);
-        String rootScopeName = mySyntaxTable.loadSyntax(plist);
+        CharSequence rootScopeName = mySyntaxTable.loadSyntax(plist, myInterner);
         Collection<String> extensions = bundle.getExtensions(grammarFile, plist);
         for (final String extension : extensions) {
           myExtensionsMapping.put(extension, rootScopeName);
@@ -392,7 +399,7 @@ public class TextMateServiceImpl extends TextMateService {
     registerTextMateExtensions(newExtensions, matchers);
   }
 
-  private void updateAssociations(List<FileNameMatcher> matchers) {
+  private void updateAssociations(@NotNull Collection<FileNameMatcher> matchers) {
     TransactionGuard.getInstance().submitTransactionLater(ApplicationManager.getApplication(), () -> {
       Set<FileNameMatcher> associationsToDelete = new THashSet<>();
       final FileTypeManagerImpl fileTypeManager = (FileTypeManagerImpl)FileTypeManager.getInstance();
@@ -428,7 +435,7 @@ public class TextMateServiceImpl extends TextMateService {
     });
   }
 
-  private static void registerTextMateExtensions(@NotNull final Collection<String> extensions, List<FileNameMatcher> matchers) {
+  private static void registerTextMateExtensions(@NotNull final Collection<String> extensions, @NotNull Collection<FileNameMatcher> matchers) {
     FileTypeManagerImpl fileTypeManager = (FileTypeManagerImpl)FileTypeManager.getInstance();
     for (String extension : extensions) {
       FileType registeredType = fileTypeManager.getFileTypeByFileName(extension);
