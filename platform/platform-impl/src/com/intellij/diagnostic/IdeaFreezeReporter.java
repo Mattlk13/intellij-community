@@ -44,6 +44,9 @@ public class IdeaFreezeReporter {
       @Override
       public void uiFreezeStarted() {
         if (Registry.is("freeze.reporter.enabled") && !DebugAttachDetector.isAttached()) {
+          if (myDumpTask != null) {
+            myDumpTask.cancel();
+          }
           myDumpTask = new DumpTask();
         }
       }
@@ -71,9 +74,12 @@ public class IdeaFreezeReporter {
         }
         myDumpTask.cancel();
         int lengthInSeconds = (int)(durationMs / 1000);
+        long dumpingDuration = durationMs - PerformanceWatcher.getUnresponsiveInterval();
         if (lengthInSeconds > FREEZE_THRESHOLD &&
             // check that we have at least half of the dumps required
-            myCurrentDumps.size() >= Math.max(3, lengthInSeconds * 500 / Registry.intValue("performance.watcher.unresponsive.interval.ms")) &&
+            (myDumpTask.isValid(dumpingDuration) ||
+             myCurrentDumps.size() >=
+             Math.max(3, Math.min(PerformanceWatcher.getMaxDumpDuration(), dumpingDuration / 2) / PerformanceWatcher.getDumpInterval())) &&
             !ContainerUtil.isEmpty(myStacktraceCommonPart)) {
           int size = Math.min(myCurrentDumps.size(), 20); // report up to 20 dumps
           int step = myCurrentDumps.size() / size;
@@ -91,6 +97,7 @@ public class IdeaFreezeReporter {
             }
           }
         }
+        myDumpTask = null;
         myCurrentDumps.clear();
         myStacktraceCommonPart = null;
       }
@@ -295,6 +302,10 @@ public class IdeaFreezeReporter {
       if (myThreadInfos.size() >= myMaxDumps) {
         cancel();
       }
+    }
+
+    boolean isValid(long dumpingDuration) {
+      return myThreadInfos.size() >= Math.max(10, Math.min(myMaxDumps, dumpingDuration / myDumpInterval / 2));
     }
 
     void cancel() {
