@@ -48,7 +48,6 @@ public class PerformanceWatcher implements Disposable {
   private static final String THREAD_DUMPS_PREFIX = "threadDumps-";
   private ScheduledFuture<?> myThread;
   private ScheduledFuture<?> myDumpTask;
-  private final ThreadMXBean myThreadMXBean = ManagementFactory.getThreadMXBean();
   private final File myLogDir = new File(PathManager.getLogPath());
   private List<StackTraceElement> myStacktraceCommonPart;
   private final IdePerformanceListener myPublisher =
@@ -70,7 +69,7 @@ public class PerformanceWatcher implements Disposable {
   private static final boolean PRECISE_MODE = shouldWatch() && Registry.is("performance.watcher.precise");
 
   public static PerformanceWatcher getInstance() {
-    if (LoadingPhase.isComplete(LoadingPhase.CONFIGURATION_STORE_INITIALIZED)) {
+    if (LoadingPhase.CONFIGURATION_STORE_INITIALIZED.isComplete()) {
       return ApplicationManager.getApplication().getComponent(PerformanceWatcher.class);
     }
     else {
@@ -200,12 +199,13 @@ public class PerformanceWatcher implements Disposable {
   @NotNull
   public static String printStacktrace(@NotNull String headerMsg, @NotNull Thread thread, @NotNull StackTraceElement[] stackTrace) {
     @SuppressWarnings("NonConstantStringShouldBeStringBuffer")
-    String trace = headerMsg + thread + " (" + (thread.isAlive() ? "alive" : "dead") + ") " + thread.getState() + "\n--- its stacktrace:\n";
+    StringBuilder trace = new StringBuilder(
+      headerMsg + thread + " (" + (thread.isAlive() ? "alive" : "dead") + ") " + thread.getState() + "\n--- its stacktrace:\n");
     for (final StackTraceElement stackTraceElement : stackTrace) {
-      trace += " at " + stackTraceElement + "\n";
+      trace.append(" at ").append(stackTraceElement).append("\n");
     }
-    trace += "---\n";
-    return trace;
+    trace.append("---\n");
+    return trace.toString();
   }
 
   private static int getSamplingInterval() {
@@ -343,7 +343,7 @@ public class PerformanceWatcher implements Disposable {
 
     checkMemoryUsage(file);
 
-    ThreadDump threadDump = ThreadDumper.getThreadDumpInfo(myThreadMXBean);
+    ThreadDump threadDump = ThreadDumper.getThreadDumpInfo(ManagementFactory.getThreadMXBean());
     try {
       FileUtil.writeToFile(file, threadDump.getRawDump());
       StackTraceElement[] edtStack = threadDump.getEDTStackTrace();

@@ -18,6 +18,7 @@ public enum LoadingPhase {
   BOOTSTRAP,
   SPLASH,
   CONFIGURATION_STORE_INITIALIZED,
+  COMPONENT_LOADED,
   FRAME_SHOWN,
   PROJECT_OPENED,
   INDEXING_FINISHED;
@@ -27,10 +28,13 @@ public enum LoadingPhase {
     return Logger.getInstance(LoadingPhase.class);
   }
 
-  private final static boolean KEEP_IN_MIND_LOADING_PHASE = Boolean.parseBoolean("idea.keep.in.mind.loading.phase");
+  private final static boolean SKIP_LOADING_PHASE = Boolean.parseBoolean("idea.skip.loading.phase");
 
   public static void setCurrentPhase(@NotNull LoadingPhase phase) {
-    currentPhase.set(phase);
+    LoadingPhase old = currentPhase.getAndSet(phase);
+    if (old.ordinal() > phase.ordinal()) {
+      getLogger().error("New phase " + phase + " cannot be earlier then old " + old);
+    }
     logPhaseSet(phase);
   }
 
@@ -64,24 +68,20 @@ public enum LoadingPhase {
   }
 
   private static void logPhaseSet(@NotNull LoadingPhase phase) {
-    getLogger().info("Reached " + phase + " loading phase");
+    if (phase.ordinal() >= CONFIGURATION_STORE_INITIALIZED.ordinal()) {
+      getLogger().info("Reached " + phase + " loading phase");
+    }
   }
 
   public static void assertAtLeast(@NotNull LoadingPhase phase) {
-    if (!KEEP_IN_MIND_LOADING_PHASE) {
-      return;
-    }
+    if (SKIP_LOADING_PHASE) return;
 
     LoadingPhase currentPhase = LoadingPhase.currentPhase.get();
-    if (currentPhase.ordinal() >= phase.ordinal() || isKnownViolator()) {
-      return;
-    }
+    if (currentPhase.ordinal() >= phase.ordinal()) return;
 
     Throwable t = new Throwable();
     synchronized (stackTraces) {
-      if (!stackTraces.add(t)) {
-        return;
-      }
+      if (!stackTraces.add(t)) return;
 
       getLogger().warn("Should be called at least at phase " + phase + ", the current phase is: " + currentPhase + "\n" +
                        "Current violators count: " + stackTraces.size() + "\n\n",
@@ -89,20 +89,11 @@ public enum LoadingPhase {
     }
   }
 
-  private static boolean isKnownViolator() {
-    return Arrays.stream(Thread.currentThread().getStackTrace())
-      .anyMatch(element -> {
-        String className = element.getClassName();
-        return className.equals("com.intellij.openapi.application.Preloader") ||
-               className.contains("com.intellij.util.indexing.IndexInfrastructure");
-      });
-  }
-
   public static boolean isStartupComplete() {
-    return isComplete(INDEXING_FINISHED);
+    return INDEXING_FINISHED.isComplete();
   }
 
-  public static boolean isComplete(@NotNull LoadingPhase phase) {
-    return currentPhase.get().ordinal() >= phase.ordinal();
+  public boolean isComplete() {
+    return currentPhase.get().ordinal() >= ordinal();
   }
 }
