@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.test
 
@@ -23,6 +20,7 @@ import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.konan.util.KlibMetadataFactories
 import org.jetbrains.kotlin.library.*
 import org.jetbrains.kotlin.library.impl.BuiltInsPlatform
+import org.jetbrains.kotlin.library.impl.KotlinLibraryLayoutForWriter
 import org.jetbrains.kotlin.library.impl.KotlinLibraryWriterImpl
 import org.jetbrains.kotlin.library.metadata.NativeTypeTransformer
 import org.jetbrains.kotlin.library.metadata.NullFlexibleTypeDeserializer
@@ -78,8 +76,10 @@ object KlibTestUtil {
 
         val serializedMetadata = serializer.serializeModule(module)
 
+        val unzippedDir = org.jetbrains.kotlin.konan.file.createTempDir(libraryName)
+        val layout = KotlinLibraryLayoutForWriter(KFile(klibFile.path), unzippedDir)
+
         val library = KotlinLibraryWriterImpl(
-            libDir = KFile(klibFile.path.removeSuffix(KLIB_FILE_EXTENSION_WITH_DOT)),
             moduleName = libraryName,
             versions = KotlinLibraryVersioning(
                 libraryVersion = null,
@@ -91,7 +91,8 @@ object KlibTestUtil {
             builtInsPlatform = BuiltInsPlatform.COMMON,
             nativeTargets = emptyList(),
             nopack = false,
-            shortName = libraryName
+            shortName = libraryName,
+            layout = layout
         )
 
         library.addMetadata(serializedMetadata)

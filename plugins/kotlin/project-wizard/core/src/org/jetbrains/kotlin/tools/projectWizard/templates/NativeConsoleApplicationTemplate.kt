@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.templates
 
@@ -24,7 +21,7 @@ class NativeConsoleApplicationTemplate : Template() {
     override val title: String = KotlinNewProjectWizardBundle.message("module.template.native.console.title")
     override val description: String = KotlinNewProjectWizardBundle.message("module.template.native.console.description")
 
-    override fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean =
+    override fun isApplicableTo(module: Module, projectKind: ProjectKind): Boolean =
         module.configurator.moduleType == ModuleType.native
 
     override val id: String = "nativeConsoleApp"
@@ -39,6 +36,6 @@ class NativeConsoleApplicationTemplate : Template() {
         targetConfigurationIR.withIrs(NativeTargetInternalIR("main"))
 
     override fun Reader.getFileTemplates(module: ModuleIR): List<FileTemplateDescriptorWithPath> = buildList {
-        +(FileTemplateDescriptor("$id/main.kt.vm", "main.kt".asPath()) asSrcOf SourcesetType.main)
+        +(FileTemplateDescriptor("$id/main.kt.vm", "Main.kt".asPath()) asSrcOf SourcesetType.main)
     }
 }

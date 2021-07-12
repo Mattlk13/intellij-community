@@ -18,10 +18,13 @@ package com.siyeh.ig.psiutils;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingFeature;
 import com.intellij.pom.java.LanguageLevel;
 import com.intellij.psi.*;
+import com.intellij.psi.codeStyle.VariableKind;
 import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.util.JavaPsiPatternUtil;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.psi.util.TypeConversionUtil;
+import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -64,15 +67,39 @@ public final class SwitchUtils {
         defaultFound = true;
       }
       else {
-        branches++;
+        PsiCaseLabelElementList labelElementList = child.getCaseLabelElementList();
+        if (labelElementList == null) continue;
+        for (PsiCaseLabelElement labelElement : labelElementList.getElements()) {
+          if (labelElement instanceof PsiDefaultCaseLabelElement) {
+            defaultFound = true;
+          }
+          else {
+            branches++;
+          }
+        }
       }
     }
     return defaultFound ? -branches - 1 : branches;
   }
 
   public static boolean canBeSwitchCase(PsiExpression expression, PsiExpression switchExpression, LanguageLevel languageLevel,
-                                        Set<Object> existingCaseValues) {
+                                        Set<Object> existingCaseValues, boolean isPatternMatch) {
     expression = PsiUtil.skipParenthesizedExprDown(expression);
+    if (isPatternMatch) {
+      if(canBePatternSwitchCase(expression, switchExpression)) {
+        final PsiPattern pattern = createPatternFromExpression(expression);
+        if (pattern == null) return true;
+        for (Object caseValue : existingCaseValues) {
+          if (caseValue instanceof PsiPattern && JavaPsiPatternUtil.dominates((PsiPattern) caseValue, pattern)) {
+            return false;
+          }
+        }
+        existingCaseValues.add(pattern);
+        return true;
+      } else {
+        return false;
+      }
+    }
     if (languageLevel.isAtLeast(LanguageLevel.JDK_1_7)) {
       final PsiExpression stringSwitchExpression = determinePossibleJdk17SwitchExpression(expression, existingCaseValues);
       if (EquivalenceChecker.getCanonicalPsiEquivalence().expressionsAreEquivalent(switchExpression, stringSwitchExpression)) {
@@ -98,7 +125,7 @@ public final class SwitchUtils {
     final PsiExpression[] operands = polyadicExpression.getOperands();
     if (operation.equals(JavaTokenType.OROR)) {
       for (PsiExpression operand : operands) {
-        if (!canBeSwitchCase(operand, switchExpression, languageLevel, existingCaseValues)) {
+        if (!canBeSwitchCase(operand, switchExpression, languageLevel, existingCaseValues, false)) {
           return false;
         }
       }
@@ -115,18 +142,45 @@ public final class SwitchUtils {
     }
   }
 
+  public static @Nullable PsiPattern createPatternFromExpression(@NotNull PsiExpression expression) {
+    PsiElementFactory factory = PsiElementFactory.getInstance(expression.getProject());
+    final String switchText = "switch(o) { case " + createPatternCaseText(expression) + ": break; }";
+    final PsiElement switchStatement = factory.createStatementFromText(switchText, expression.getContext());
+    return PsiTreeUtil.findChildOfType(switchStatement, PsiPattern.class);
+  }
+
   /**
    * Returns true if given switch block has a rule-based format (like 'case 0 ->')
-   * @param block block to test
+   * @param block a switch block to test
    * @return true if given switch block has a rule-based format; false if it has conventional label-based format (like 'case 0:')
-   * If switch body has no labels yet and language level permits, rule-based format is assumed.
+   * If switch body has no labels yet and language level permits,
+   * the rule-based format is assumed if the switch block is of the {@link PsiSwitchExpression} type.
    */
   public static boolean isRuleFormatSwitch(@NotNull PsiSwitchBlock block) {
     if (!HighlightingFeature.ENHANCED_SWITCH.isAvailable(block)) {
       return false;
     }
+
     final PsiSwitchLabelStatementBase label = PsiTreeUtil.getChildOfType(block.getBody(), PsiSwitchLabelStatementBase.class);
-    return label == null || label instanceof PsiSwitchLabeledRuleStatement;
+
+    if (label == null || isBeingCompletedSwitchLabel(label)) {
+      return block instanceof PsiSwitchExpression;
+    }
+
+    return label instanceof PsiSwitchLabeledRuleStatement;
+  }
+
+  /**
+   * Checks if the passed switch label is the one that is being completed
+   * (see {@link com.intellij.codeInsight.completion.CompletionProvider}).
+   * A switch label that is being completed is distinct from the other switch labels
+   * by the fact that the very last child of the label is a {@link PsiErrorElement}
+   * which notifies that the colon character <code>":"</code> is expected.
+   * @param label a case label to check
+   * @return true if the passed case label is the one that is being completed right now.
+   */
+  private static boolean isBeingCompletedSwitchLabel(@NotNull PsiSwitchLabelStatementBase label) {
+    return label.getLastChild() instanceof PsiErrorElement;
   }
 
   public static boolean canBeSwitchSelectorExpression(PsiExpression expression, LanguageLevel languageLevel) {
@@ -138,9 +192,6 @@ public final class SwitchUtils {
       return true;
     }
     else if (type instanceof PsiClassType && languageLevel.isAtLeast(LanguageLevel.JDK_1_5)) {
-      if (ExpressionUtils.isAnnotatedNullable(expression)) {
-        return false;
-      }
       if (type.equalsToText(CommonClassNames.JAVA_LANG_CHARACTER) || type.equalsToText(CommonClassNames.JAVA_LANG_BYTE) ||
           type.equalsToText(CommonClassNames.JAVA_LANG_SHORT) || type.equalsToText(CommonClassNames.JAVA_LANG_INTEGER)) {
         return true;
@@ -149,6 +200,9 @@ public final class SwitchUtils {
         return true;
       }
       if (languageLevel.isAtLeast(LanguageLevel.JDK_1_7) && type.equalsToText(CommonClassNames.JAVA_LANG_STRING)) {
+        return true;
+      }
+      if (HighlightingFeature.PATTERNS_IN_SWITCH.isAvailable(expression)) {
         return true;
       }
     }
@@ -186,6 +240,10 @@ public final class SwitchUtils {
         return left;
       }
     }
+    if (HighlightingFeature.PATTERNS_IN_SWITCH.isAvailable(expression)) {
+      final PsiExpression patternSwitchExpression = findPatternSwitchExpression(expression);
+      if (patternSwitchExpression != null) return patternSwitchExpression;
+    }
     if (!(expression instanceof PsiPolyadicExpression)) {
       return null;
     }
@@ -203,6 +261,109 @@ public final class SwitchUtils {
       }
       else if (canBeCaseLabel(rhs, languageLevel, null)) {
         return lhs;
+      }
+    }
+    return null;
+  }
+
+  private static @Nullable PsiExpression findPossiblePatternOperand(@Nullable PsiExpression expression) {
+    if (expression instanceof PsiInstanceOfExpression) {
+      return ((PsiInstanceOfExpression)expression).getOperand();
+    }
+    if (expression instanceof PsiPolyadicExpression) {
+      final PsiPolyadicExpression polyadicExpression = (PsiPolyadicExpression)expression;
+      final IElementType operationToken = polyadicExpression.getOperationTokenType();
+      final PsiExpression[] operands = polyadicExpression.getOperands();
+      if (JavaTokenType.ANDAND.equals(operationToken)) {
+        final PsiExpression patternOperand = findPossiblePatternOperand(operands[0]);
+        if (patternOperand != null) return patternOperand;
+        for (PsiExpression operand : operands) {
+          final PsiExpression pattern = findPossiblePatternOperand(operand);
+          if (pattern != null) return pattern;
+          if (SideEffectChecker.mayHaveSideEffects(operand)) break;
+        }
+      }
+    }
+    return null;
+  }
+
+  public static @Nullable PsiExpression findPatternSwitchExpression(@Nullable PsiExpression expression){
+    expression = PsiUtil.skipParenthesizedExprDown(expression);
+    final PsiExpression patternOperand = findPossiblePatternOperand(expression);
+    if (patternOperand != null) return patternOperand;
+    final PsiExpression nullCheckedOperand = findNullCheckedOperand(expression);
+    if (nullCheckedOperand != null) return nullCheckedOperand;
+    if (expression instanceof PsiPolyadicExpression) {
+      final PsiPolyadicExpression polyadicExpression = (PsiPolyadicExpression)expression;
+      final IElementType operationToken = polyadicExpression.getOperationTokenType();
+      if (JavaTokenType.OROR.equals(operationToken)) {
+        final PsiExpression[] operands = polyadicExpression.getOperands();
+        if (operands.length == 2) {
+          PsiExpression firstOperand = findNullCheckedOperand(operands[0]);
+          PsiExpression secondOperand = findPossiblePatternOperand(operands[1]);
+          if (firstOperand == null || secondOperand == null) {
+            firstOperand = findPossiblePatternOperand(operands[0]);
+            secondOperand = findNullCheckedOperand(operands[1]);
+          }
+          if (firstOperand == null || secondOperand == null) {
+            return null;
+          }
+          if (EquivalenceChecker.getCanonicalPsiEquivalence().expressionsAreEquivalent(firstOperand, secondOperand)){
+            return firstOperand;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  @Contract("null, _ -> false")
+  public static boolean canBePatternSwitchCase(@Nullable PsiExpression expression, @NotNull PsiExpression switchExpression) {
+    if (expression == null) return false;
+    final PsiExpression localSwitchExpression = findPatternSwitchExpression(expression);
+    return EquivalenceChecker.getCanonicalPsiEquivalence().expressionsAreEquivalent(localSwitchExpression, switchExpression);
+  }
+
+  public static @Nullable PsiExpression findNullCheckedOperand(PsiExpression expression){
+    if (!(expression instanceof PsiBinaryExpression)) return null;
+    final PsiBinaryExpression binaryExpression = (PsiBinaryExpression)expression;
+    if (! JavaTokenType.EQEQ.equals(binaryExpression.getOperationTokenType())) return null;
+    if (ExpressionUtils.isNullLiteral(binaryExpression.getLOperand())) {
+      return binaryExpression.getROperand();
+    } else if(ExpressionUtils.isNullLiteral(binaryExpression.getROperand())) {
+      return binaryExpression.getLOperand();
+    } else {
+      return null;
+    }
+  }
+
+  public static @Nullable @NonNls String createPatternCaseText(PsiExpression expression){
+    expression = PsiUtil.skipParenthesizedExprDown(expression);
+    if (expression instanceof PsiInstanceOfExpression) {
+      final PsiInstanceOfExpression instanceOf = (PsiInstanceOfExpression)expression;
+      final PsiPrimaryPattern pattern = instanceOf.getPattern();
+      if (pattern != null) return pattern.getText();
+      final PsiTypeElement typeElement = instanceOf.getCheckType();
+      final PsiType type = typeElement != null ? typeElement.getType() : null;
+      String typeText = typeElement != null ? typeElement.getText() : CommonClassNames.JAVA_LANG_OBJECT;
+      VariableNameGenerator nameGenerator = new VariableNameGenerator(expression, VariableKind.LOCAL_VARIABLE);
+      String variableName = nameGenerator.byName(typeText.substring(0, 1)).byType(type).generate(true);
+      return typeText + " " + variableName;
+    }
+    if (expression instanceof PsiPolyadicExpression) {
+      final PsiPolyadicExpression polyadicExpression = (PsiPolyadicExpression)expression;
+      final IElementType operationToken = polyadicExpression.getOperationTokenType();
+      if (JavaTokenType.ANDAND.equals(operationToken)){
+        final PsiExpression[] operands = polyadicExpression.getOperands();
+        final PsiExpression instanceOf = ContainerUtil.find(operands, (operand) -> operand instanceof PsiInstanceOfExpression);
+        StringBuilder builder = new StringBuilder();
+        builder.append(createPatternCaseText(instanceOf));
+        for (PsiExpression operand : operands) {
+          if (operand != instanceOf) {
+            builder.append(" && ").append(operand.getText());
+          }
+        }
+        return builder.toString();
       }
     }
     return null;

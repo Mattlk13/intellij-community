@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 final class RemovedMappingTracker {
   private static final Logger LOG = Logger.getInstance(RemovedMappingTracker.class);
+
   static final class RemovedMapping {
     private final FileNameMatcher myFileNameMatcher;
     private final String myFileTypeName;
@@ -99,12 +100,11 @@ final class RemovedMappingTracker {
   }
 
   void load(@NotNull Element e) {
-    myRemovedMappings.clear();
     List<RemovedMapping> removedMappings = readRemovedMappings(e);
     Set<RemovedMapping> uniques = new LinkedHashSet<>(removedMappings.size());
     for (RemovedMapping mapping : removedMappings) {
       if (!uniques.add(mapping)) {
-        LOG.error(new InvalidDataException("Duplicate <removed_mapping> tag for " + mapping));
+        LOG.warn(new InvalidDataException("Duplicate <removed_mapping> tag for " + mapping));
       }
     }
     for (RemovedMapping mapping : uniques) {
@@ -201,9 +201,13 @@ final class RemovedMappingTracker {
     return result;
   }
 
-  @NotNull
-  List<RemovedMapping> deleteUnapprovedMappings() {
-    return removeIf(mapping -> !mapping.isApproved());
+  void approveUnapprovedMappings() {
+    for (RemovedMapping mapping : new ArrayList<>(myRemovedMappings.values())) {
+      if (!mapping.isApproved()) {
+        myRemovedMappings.remove(mapping.getFileNameMatcher(), mapping);
+        myRemovedMappings.putValue(mapping.getFileNameMatcher(), new RemovedMapping(mapping.getFileNameMatcher(), mapping.getFileTypeName(), true));
+      }
+    }
   }
 
   private static Element writeRemovedMapping(@NotNull String fileTypeName,

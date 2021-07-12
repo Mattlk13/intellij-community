@@ -11,10 +11,9 @@ import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.compiler.CompilerPaths;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.externalSystem.model.DataNode;
 import com.intellij.openapi.externalSystem.model.ProjectKeys;
 import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExecutionSettings;
-import com.intellij.openapi.externalSystem.model.project.ModuleData;
+import com.intellij.openapi.externalSystem.model.task.TaskData;
 import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode;
 import com.intellij.openapi.externalSystem.task.TaskCallback;
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil;
@@ -40,7 +39,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
-import org.jetbrains.plugins.gradle.service.project.GradleBuildSrcProjectsResolver;
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverUtil;
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManager;
 import org.jetbrains.plugins.gradle.service.task.VersionSpecificInitScript;
@@ -48,6 +46,7 @@ import org.jetbrains.plugins.gradle.settings.GradleProjectSettings;
 import org.jetbrains.plugins.gradle.settings.GradleSettings;
 import org.jetbrains.plugins.gradle.util.GradleBundle;
 import org.jetbrains.plugins.gradle.util.GradleConstants;
+import org.jetbrains.plugins.gradle.util.GradleModuleData;
 
 import java.io.File;
 import java.io.IOException;
@@ -165,8 +164,13 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
     List<Module> modulesOfFiles = addModulesBuildTasks(taskMap.get(ModuleFilesBuildTask.class), buildTasksMap, initScripts);
     addArtifactsBuildTasks(taskMap.get(ProjectModelBuildTask.class), cleanTasksMap, buildTasksMap);
 
-    // TODO send a message if nothing to build
     Set<String> rootPaths = buildTasksMap.keySet();
+    if (rootPaths.isEmpty()) {
+      LOG.warn("Nothing will be run for: " + Arrays.toString(tasks));
+      resultPromise.setResult(TaskRunnerResults.SUCCESS);
+      return resultPromise;
+    }
+
     AtomicInteger successCounter = new AtomicInteger();
     AtomicInteger errorCounter = new AtomicInteger();
 
@@ -188,15 +192,19 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
         if (successes + errors == rootPaths.size()) {
           if (!project.isDisposed()) {
             try {
-              Set<String> affectedRoots = getAffectedOutputRoots(
-                outputPathsFile, context, modulesToBuild, modulesOfResourcesToBuild, modulesOfFiles);
-              if (!affectedRoots.isEmpty()) {
-                if (context.isCollectionOfGeneratedFilesEnabled()) {
-                  context.addDirtyOutputPathsProvider(() -> affectedRoots);
+              if (GradleImprovedHotswapDetection.isEnabled()) {
+                GradleImprovedHotswapDetection.processInitScriptOutput(context, outputPathsFile);
+              } else {
+                Set<String> affectedRoots = getAffectedOutputRoots(
+                  outputPathsFile, context, modulesToBuild, modulesOfResourcesToBuild, modulesOfFiles);
+                if (!affectedRoots.isEmpty()) {
+                  if (context.isCollectionOfGeneratedFilesEnabled()) {
+                    context.addDirtyOutputPathsProvider(() -> affectedRoots);
+                  }
+                  // refresh on output roots is required in order for the order enumerator to see all roots via VFS
+                  // have to refresh in case of errors too, because run configuration may be set to ignore errors
+                  CompilerUtil.refreshOutputRoots(affectedRoots);
                 }
-                // refresh on output roots is required in order for the order enumerator to see all roots via VFS
-                // have to refresh in case of errors too, because run configuration may be set to ignore errors
-                CompilerUtil.refreshOutputRoots(affectedRoots);
               }
             }
             finally {
@@ -207,14 +215,23 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
           }
           resultPromise.setResult(errors > 0 ? TaskRunnerResults.FAILURE : TaskRunnerResults.SUCCESS);
         }
+        else {
+          if (successes + errors > rootPaths.size()) {
+            LOG.error("Unexpected callback!");
+          }
+        }
       }
     };
 
     String gradleVmOptions = GradleSettings.getInstance(project).getGradleVmOptions();
     for (String rootProjectPath : rootPaths) {
       Collection<String> buildTasks = buildTasksMap.get(rootProjectPath);
-      if (buildTasks.isEmpty()) continue;
       Collection<String> cleanTasks = cleanTasksMap.get(rootProjectPath);
+      if (buildTasks.isEmpty() && cleanTasks.isEmpty()) {
+        taskCallback.onSuccess();
+        LOG.warn("Nothing will be run for: " + Arrays.toString(tasks) + " at '" + rootProjectPath + "'");
+        continue;
+      }
 
       ExternalSystemTaskExecutionSettings settings = new ExternalSystemTaskExecutionSettings();
 
@@ -230,7 +247,6 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
       settings.setExecutionName(executionName);
       settings.setExternalProjectPath(rootProjectPath);
       settings.setTaskNames(ContainerUtil.collect(ContainerUtil.concat(cleanTasks, buildTasks).iterator()));
-      //settings.setScriptParameters(scriptParameters);
       settings.setVmOptions(gradleVmOptions);
       settings.setExternalSystemIdString(GradleConstants.SYSTEM_ID.getId());
 
@@ -242,13 +258,19 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
         String outputFilePath = FileUtil.toCanonicalPath(outputPathsFile.getAbsolutePath());
         GradleVersion v68 = GradleVersion.version("6.8");
 
-        VersionSpecificInitScript simple =
-          new VersionSpecificInitScript(String.format(COLLECT_OUTPUT_PATHS_INIT_SCRIPT_TEMPLATE, outputFilePath),
-                                        "ijpathcollect", (v) -> v.compareTo(v68) < 0);
+        String initScript;
+        String initScriptUsingService;
 
-        VersionSpecificInitScript services =
-          new VersionSpecificInitScript(String.format(COLLECT_OUTPUT_PATHS_USING_SERVICES_INIT_SCRIPT_TEMPLATE, outputFilePath),
-                                        "ijpathcollect", (v) -> v.compareTo(v68) >= 0);
+        if (GradleImprovedHotswapDetection.isEnabled()) {
+          initScript = GradleImprovedHotswapDetection.getInitScript(outputPathsFile);
+          initScriptUsingService = GradleImprovedHotswapDetection.getInitScriptUsingService(outputPathsFile);
+        } else {
+          initScript = String.format(COLLECT_OUTPUT_PATHS_INIT_SCRIPT_TEMPLATE, outputFilePath);
+          initScriptUsingService = String.format(COLLECT_OUTPUT_PATHS_USING_SERVICES_INIT_SCRIPT_TEMPLATE, outputFilePath);
+        }
+
+        var simple = new VersionSpecificInitScript(initScript, "ijpathcollect", v -> v.compareTo(v68) < 0);
+        var services = new VersionSpecificInitScript(initScriptUsingService, "ijpathcollect", v -> v.compareTo(v68) >= 0);
 
         userData.putUserData(GradleTaskManager.VERSION_SPECIFIC_SCRIPTS_KEY, Arrays.asList(simple, services));
       }
@@ -359,7 +381,6 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
 
     List<Module> affectedModules = new SmartList<>();
     Map<Module, String> rootPathsMap = FactoryMap.create(module -> notNullize(resolveProjectPath(module)));
-    final CachedModuleDataFinder moduleDataFinder = new CachedModuleDataFinder();
     for (ProjectTask projectTask : projectTasks) {
       if (!(projectTask instanceof ModuleBuildTask)) continue;
 
@@ -367,29 +388,34 @@ public class GradleProjectTaskRunner extends ProjectTaskRunner {
       collectAffectedModules(affectedModules, moduleBuildTask);
 
       Module module = moduleBuildTask.getModule();
-      final String rootProjectPath = rootPathsMap.get(module);
+      String rootProjectPath = rootPathsMap.get(module);
       if (isEmpty(rootProjectPath)) continue;
 
       final String projectId = getExternalProjectId(module);
       if (projectId == null) continue;
-      final String externalProjectPath = getExternalProjectPath(module);
-      if (externalProjectPath == null || endsWith(externalProjectPath, "buildSrc")) continue;
+      String externalProjectPath = getExternalProjectPath(module);
+      if (externalProjectPath == null) continue;
 
-      final DataNode<? extends ModuleData> moduleDataNode = moduleDataFinder.findMainModuleData(module);
-      if (moduleDataNode == null) continue;
+      GradleModuleData gradleModuleData = CachedModuleDataFinder.getGradleModuleData(module);
+      if (gradleModuleData == null) continue;
+
+      boolean isGradleProjectDirUsedToRunTasks = gradleModuleData.getDirectoryToRunTask().equals(gradleModuleData.getGradleProjectDir());
+      if (!isGradleProjectDirUsedToRunTasks) {
+        rootProjectPath = gradleModuleData.getDirectoryToRunTask();
+      }
 
       // all buildSrc runtime projects will be built by gradle implicitly
-      if (Boolean.parseBoolean(moduleDataNode.getData().getProperty(GradleBuildSrcProjectsResolver.BUILD_SRC_MODULE_PROPERTY))) {
+      if (gradleModuleData.isBuildSrcModule()) {
         continue;
       }
 
-      String gradlePath = GradleProjectResolverUtil.getGradlePath(module);
-      if (gradlePath == null) continue;
-      String taskPathPrefix = endsWithChar(gradlePath, ':') ? gradlePath : (gradlePath + ':');
+      String gradlePath = gradleModuleData.getGradlePath();
+      List<TaskData> taskDataList =
+        ContainerUtil.mapNotNull(gradleModuleData.findAll(ProjectKeys.TASK), taskData -> taskData.isInherited() ? null : taskData);
+      if (projectTasks.isEmpty()) continue;
 
-      List<String> gradleModuleTasks = ContainerUtil.mapNotNull(
-        findAll(moduleDataNode, ProjectKeys.TASK), node ->
-          node.getData().isInherited() ? null : trimStart(node.getData().getName(), taskPathPrefix));
+      String taskPathPrefix = trimEnd(gradleModuleData.getFullGradlePath(), ":") + ":";
+      List<String> gradleModuleTasks = ContainerUtil.map(taskDataList, data -> trimStart(data.getName(), taskPathPrefix));
 
       Collection<String> projectInitScripts = initScripts.getModifiable(rootProjectPath);
       Collection<String> buildRootTasks = buildTasksMap.getModifiable(rootProjectPath);

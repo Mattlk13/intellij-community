@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.findUsages
 
@@ -10,7 +7,7 @@ import com.intellij.lang.findUsages.FindUsagesProvider
 import com.intellij.lang.java.JavaFindUsagesProvider
 import com.intellij.psi.*
 import org.jetbrains.kotlin.asJava.elements.KtLightElement
-import org.jetbrains.kotlin.idea.KotlinBundleIndependent
+import org.jetbrains.kotlin.idea.KotlinIndependentBundle
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.psi.psiUtil.isPropertyParameter
@@ -27,22 +24,22 @@ open class KotlinFindUsagesProviderBase : FindUsagesProvider {
 
     override fun getType(element: PsiElement): String {
         return when (element) {
-            is KtNamedFunction -> KotlinBundleIndependent.message("find.usages.function")
-            is KtClass -> KotlinBundleIndependent.message("find.usages.class")
-            is KtParameter -> KotlinBundleIndependent.message("find.usages.parameter")
+            is KtNamedFunction -> KotlinIndependentBundle.message("find.usages.function")
+            is KtClass -> KotlinIndependentBundle.message("find.usages.class")
+            is KtParameter -> KotlinIndependentBundle.message("find.usages.parameter")
             is KtProperty -> if (element.isLocal)
-                KotlinBundleIndependent.message("find.usages.variable")
+                KotlinIndependentBundle.message("find.usages.variable")
             else
-                KotlinBundleIndependent.message("find.usages.property")
-            is KtDestructuringDeclarationEntry -> KotlinBundleIndependent.message("find.usages.variable")
-            is KtTypeParameter -> KotlinBundleIndependent.message("find.usages.type.parameter")
-            is KtSecondaryConstructor -> KotlinBundleIndependent.message("find.usages.constructor")
-            is KtObjectDeclaration -> KotlinBundleIndependent.message("find.usages.object")
+                KotlinIndependentBundle.message("find.usages.property")
+            is KtDestructuringDeclarationEntry -> KotlinIndependentBundle.message("find.usages.variable")
+            is KtTypeParameter -> KotlinIndependentBundle.message("find.usages.type.parameter")
+            is KtSecondaryConstructor -> KotlinIndependentBundle.message("find.usages.constructor")
+            is KtObjectDeclaration -> KotlinIndependentBundle.message("find.usages.object")
             else -> ""
         }
     }
 
-    protected val KtDeclaration.containerDescription: String?
+    val KtDeclaration.containerDescription: String?
         get() {
             containingClassOrObject?.let { return getDescriptiveName(it) }
             (parent as? KtFile)?.parent?.let { return getDescriptiveName(it) }

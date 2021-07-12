@@ -21,7 +21,6 @@ import com.jetbrains.env.PyProcessWithConsoleTestTask;
 import com.jetbrains.env.python.testing.CreateConfigurationTestTask.PyConfigurationValidationTask;
 import com.jetbrains.env.ut.PyTestTestProcessRunner;
 import com.jetbrains.python.PyBundle;
-import com.jetbrains.python.PyNames;
 import com.jetbrains.python.psi.PyFile;
 import com.jetbrains.python.psi.PyFunction;
 import com.jetbrains.python.run.targetBasedConfiguration.PyRunTargetVariant;
@@ -54,8 +53,6 @@ import static org.junit.Assert.*;
  */
 @EnvTestTagsRequired(tags = "pytest")
 public final class PythonPyTestingTest extends PyEnvTestCase {
-
-  private final String myFrameworkName = PyTestFrameworkService.getSdkReadableNameByFramework(PyNames.PY_TEST);
 
 
   // Ensures setup/teardown does not break anything
@@ -153,7 +150,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
         final CharBuffer data = Charset.defaultCharset().decode(ByteBuffer.wrap(file.contentsToByteArray()));
         final Element element = builder.build(new StringReader(data.toString())).getRootElement();
 
-        final PyTestConfiguration configuration = new PyTestConfiguration(myFixture.getProject(), new PyTestFactory());
+        final PyTestConfiguration configuration = new PyTestConfiguration(myFixture.getProject(), new PyTestFactory(PythonTestConfigurationType.getInstance()));
         configuration.readExternal(element);
         return configuration;
       }
@@ -514,7 +511,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   @Test
   public void testClosestSrcIsWorkDirOnNewConfig() {
     runPythonTest(
-      new CreateConfigurationTestTask<>(myFrameworkName,
+      new CreateConfigurationTestTask<>(getFrameworkId(),
                                         PyTestConfiguration.class) {
         @NotNull
         @Override
@@ -582,7 +579,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   @Test
   public void testConfigurationProducer() {
     runPythonTest(
-      new CreateConfigurationByFileTask<>(myFrameworkName, PyTestConfiguration.class));
+      new CreateConfigurationByFileTask<>(getFrameworkId(), PyTestConfiguration.class));
   }
 
   @Test
@@ -592,7 +589,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
       @NotNull
       @Override
       protected PyAbstractTestFactory<PyTestConfiguration> createFactory() {
-        return new PyTestFactory();
+        return new PyTestFactory(PythonTestConfigurationType.getInstance());
       }
 
       @Override
@@ -614,7 +611,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   @Test
   public void testMultipleCases() {
     runPythonTest(
-      new CreateConfigurationMultipleCasesTask<>(myFrameworkName, PyTestConfiguration.class));
+      new CreateConfigurationMultipleCasesTask<>(getFrameworkId(), PyTestConfiguration.class));
   }
 
   /**
@@ -624,7 +621,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   @Test
   public void testConfigurationByContext() {
     runPythonTest(
-      new CreateConfigurationTestTask<>(myFrameworkName, PyTestConfiguration.class) {
+      new CreateConfigurationTestTask<>(getFrameworkId(), PyTestConfiguration.class) {
 
 
         @NotNull
@@ -655,7 +652,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
           try {
             // Test "custom symbol" mode: instead of QN we must get custom with additional arguments pointing to file and symbol
             ((PyTestConfiguration)RunManager.getInstance(getProject())
-              .getConfigurationTemplate(new PyTestFactory())
+              .getConfigurationTemplate(new PyTestFactory(PythonTestConfigurationType.getInstance()))
               .getConfiguration())
               .setWorkingDirectory(bar.getContainingFile().getParent().getVirtualFile().getPath());
             PyTestConfiguration customConfiguration = createConfigurationByElement(foo, PyTestConfiguration.class);
@@ -664,7 +661,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
           }
           finally {
             ((PyTestConfiguration)RunManager.getInstance(getProject())
-              .getConfigurationTemplate(new PyTestFactory())
+              .getConfigurationTemplate(new PyTestFactory(PythonTestConfigurationType.getInstance()))
               .getConfiguration())
               .setWorkingDirectory(null);
           }
@@ -728,7 +725,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
         @NotNull
         @Override
         protected PyTestFactory createFactory() {
-          return new PyTestFactory();
+          return new PyTestFactory(PythonTestConfigurationType.getInstance());
         }
       });
   }
@@ -736,14 +733,14 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   @Test
   public void testConfigurationProducerOnDirectory() {
     runPythonTest(
-      new CreateConfigurationByFileTask.CreateConfigurationTestAndRenameFolderTask<>(myFrameworkName,
+      new CreateConfigurationByFileTask.CreateConfigurationTestAndRenameFolderTask<>(getFrameworkId(),
                                                                                      PyTestConfiguration.class));
   }
 
   @Test
   public void testProduceConfigurationOnFile() {
     runPythonTest(
-      new CreateConfigurationByFileTask<>(myFrameworkName,
+      new CreateConfigurationByFileTask<>(getFrameworkId(),
                                           PyTestConfiguration.class, "spam.py") {
         @NotNull
         @Override
@@ -757,7 +754,7 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
   public void testRenameClass() {
     runPythonTest(
       new CreateConfigurationByFileTask.CreateConfigurationTestAndRenameClassTask<>(
-        myFrameworkName,
+        getFrameworkId(),
         PyTestConfiguration.class));
   }
 
@@ -1033,5 +1030,10 @@ public final class PythonPyTestingTest extends PyEnvTestCase {
         assertTrue("Failed test not marked", fileNames.contains("reference_tests.py"));
       }
     });
+  }
+
+  @NotNull
+  private static String getFrameworkId() {
+    return PyTestFactory.id;
   }
 }

@@ -58,7 +58,7 @@ public class IdeFocusTraversalPolicy extends LayoutFocusTraversalPolicy {
       }
     }
 
-    return siblingComponent.isFocusable() ? siblingComponent : findFocusableComponentIn((JComponent)siblingComponent, null);
+    return siblingComponent.isFocusable() ? siblingComponent : findFocusableComponentIn(siblingComponent, null);
   }
 
   /**
@@ -155,6 +155,7 @@ public class IdeFocusTraversalPolicy extends LayoutFocusTraversalPolicy {
     }
 
     return
+      component instanceof JLabel ||
       component instanceof AbstractButton ||
       component instanceof JList ||
       component instanceof JTree ||

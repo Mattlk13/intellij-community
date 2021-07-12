@@ -1,10 +1,12 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.plugins;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.intellij.ide.IdeBundle;
 import com.intellij.ide.plugins.marketplace.MarketplaceRequests;
+import com.intellij.ide.plugins.marketplace.statistics.PluginManagerUsageCollector;
+import com.intellij.ide.plugins.marketplace.statistics.enums.InstallationSourceEnum;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationGroup;
 import com.intellij.notification.NotificationType;
@@ -239,6 +241,14 @@ public final class PluginInstallOperation {
 
     PluginDownloader downloader = PluginDownloader.createDownloader(pluginNode, pluginNode.getRepositoryName(), null);
 
+    IdeaPluginDescriptor previousDescriptor = PluginManagerCore.getPlugin(pluginNode.getPluginId());
+    String previousVersion = (previousDescriptor == null) ? null : previousDescriptor.getVersion();
+    PluginManagerUsageCollector.pluginInstallationStarted(
+      pluginNode,
+      downloader.isFromMarketplace() ? InstallationSourceEnum.MARKETPLACE : InstallationSourceEnum.CUSTOM_REPOSITORY,
+      previousVersion
+    );
+
     IdeaPluginDescriptorImpl descriptor = downloader.prepareToInstallAndLoadDescriptor(myIndicator);
     if (descriptor != null) {
       if (pluginNode.getDependencies().isEmpty() && !descriptor.getDependencies().isEmpty()) {  // installing from custom plugins repo
@@ -318,7 +328,7 @@ public final class PluginInstallOperation {
         PluginId depPluginId = dependency.getPluginId();
 
         if (PluginManagerCore.isModuleDependency(depPluginId)) {
-          IdeaPluginDescriptor descriptorByModule = PluginManagerCore.findPluginByModuleDependency(depPluginId);
+          IdeaPluginDescriptorImpl descriptorByModule = PluginManagerCore.findPluginByModuleDependency(depPluginId);
           PluginId pluginIdByModule = descriptorByModule != null ?
                                       descriptorByModule.getPluginId() :
                                       getCachedPluginId(depPluginId.getIdString());

@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -128,7 +125,8 @@ class RedundantSamConstructorInspection : AbstractKotlinInspection() {
             val qualifiedExpression = parentCall.getQualifiedExpressionForSelectorOrThis()
             val expectedType = context[BindingContext.EXPECTED_EXPRESSION_TYPE, qualifiedExpression] ?: TypeUtils.NO_EXPECTED_TYPE
 
-            val resolutionResults = callResolver.resolveFunctionCall(BindingTraceContext(), scope, newCall, expectedType, dataFlow, false)
+            val resolutionResults =
+                callResolver.resolveFunctionCall(BindingTraceContext(), scope, newCall, expectedType, dataFlow, false, null)
 
             if (!resolutionResults.isSuccess) return false
 

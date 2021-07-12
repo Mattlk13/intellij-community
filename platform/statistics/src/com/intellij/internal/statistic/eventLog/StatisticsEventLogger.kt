@@ -1,9 +1,10 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.internal.statistic.eventLog
 
 import com.intellij.internal.statistic.eventLog.logger.StatisticsEventLogThrottleWriter
 import com.intellij.internal.statistic.persistence.UsageStatisticsPersistenceComponent
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.util.Disposer
 import org.jetbrains.annotations.ApiStatus
 import java.nio.file.Path
@@ -38,6 +39,12 @@ abstract class StatisticsEventLoggerProvider(val recorderId: String,
                                              val version: Int,
                                              val sendFrequencyMs: Long = TimeUnit.HOURS.toMillis(1),
                                              private val maxFileSize: String = "200KB") {
+
+  companion object {
+    @JvmStatic
+    val EP_NAME = ExtensionPointName<StatisticsEventLoggerProvider>("com.intellij.statistic.eventLog.eventLoggerProvider")
+  }
+
   open val logger: StatisticsEventLogger by lazy { createLogger() }
 
   abstract fun isRecordEnabled() : Boolean
@@ -59,16 +66,17 @@ abstract class StatisticsEventLoggerProvider(val recorderId: String,
     val app = ApplicationManager.getApplication()
     val isEap = app != null && app.isEAP
     val isHeadless = app != null && app.isHeadlessEnvironment
-    val config = EventLogConfiguration.getOrCreate(recorderId)
-    val writer = StatisticsEventLogFileWriter(recorderId, maxFileSize, isEap, EventLogConfiguration.build)
+    val eventLogConfiguration = EventLogConfiguration.getInstance()
+    val config = eventLogConfiguration.getOrCreate(recorderId)
+    val writer = StatisticsEventLogFileWriter(recorderId, maxFileSize, isEap, eventLogConfiguration.build)
 
     val configService = EventLogConfigOptionsService.getInstance()
     val throttledWriter = StatisticsEventLogThrottleWriter(
-      configService, recorderId, version.toString(), EventLogNotificationProxy(writer, recorderId)
+      configService, recorderId, version.toString(), writer
     )
 
     val logger = StatisticsFileEventLogger(
-      recorderId, config.sessionId, isHeadless, EventLogConfiguration.build, config.bucket.toString(), version.toString(), throttledWriter,
+      recorderId, config.sessionId, isHeadless, eventLogConfiguration.build, config.bucket.toString(), version.toString(), throttledWriter,
       UsageStatisticsPersistenceComponent.getInstance()
     )
     Disposer.register(ApplicationManager.getApplication(), logger)
@@ -98,6 +106,7 @@ object EmptyEventLogFilesProvider: EventLogFilesProvider {
   override fun getLogFiles(): List<EventLogFile> = emptyList()
 }
 
+@ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
 @Deprecated("Use StatisticsEventLogProviderUtil.getEventLogProvider(String)",
             ReplaceWith("StatisticsEventLogProviderUtil.getEventLogProvider(recorderId)"))
 fun getEventLogProvider(recorderId: String): StatisticsEventLoggerProvider {

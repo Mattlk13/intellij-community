@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeMetaInfo
 
@@ -27,12 +24,12 @@ import com.intellij.psi.search.UsageSearchContext
 import com.intellij.testFramework.fixtures.impl.CodeInsightTestFixtureImpl
 import com.intellij.testFramework.runInEdtAndWait
 import com.intellij.util.io.exists
-import gnu.trove.TIntArrayList
 import org.jetbrains.kotlin.checkers.diagnostics.DebugInfoDiagnostic
 import org.jetbrains.kotlin.checkers.diagnostics.SyntaxErrorDiagnostic
 import org.jetbrains.kotlin.checkers.diagnostics.factories.DebugInfoDiagnosticFactory0
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
+import org.jetbrains.kotlin.codeMetaInfo.CodeMetaInfoRenderer
 import org.jetbrains.kotlin.daemon.common.OSKind
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diagnostics.AbstractDiagnostic
@@ -72,7 +69,7 @@ class CodeMetaInfoTestCase(
     ): List<CodeMetaInfo> {
         val tempSourceKtFile = PsiManager.getInstance(project).findFile(file.virtualFile) as KtFile
         val resolutionFacade = tempSourceKtFile.getResolutionFacade()
-        val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(tempSourceKtFile))
+        val (bindingContext, moduleDescriptor, _) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(tempSourceKtFile))
         val directives = KotlinTestUtils.parseDirectives(file.text)
         val diagnosticsFilter = AbstractMultiModuleIdeResolveTest.parseDiagnosticFilterDirective(directives, allowUnderscoreUsage = false)
         val diagnostics = CheckerTestUtil.getDiagnosticsIncludingSyntaxErrors(
@@ -96,7 +93,7 @@ class CodeMetaInfoTestCase(
         if ("!CHECK_HIGHLIGHTING" in file.text)
             return emptyList()
 
-        CodeInsightTestFixtureImpl.instantiateAndRun(file, editor, TIntArrayList().toNativeArray(), false)
+        CodeInsightTestFixtureImpl.instantiateAndRun(file, editor, intArrayOf(), false)
         val lineMarkers = DaemonCodeAnalyzerImpl.getLineMarkers(getDocument(file), project)
         return getCodeMetaInfo(lineMarkers, configuration)
     }
@@ -105,7 +102,7 @@ class CodeMetaInfoTestCase(
         if ("!CHECK_HIGHLIGHTING" in file.text)
             return emptyList()
 
-        val highlightingInfos = CodeInsightTestFixtureImpl.instantiateAndRun(file, editor, TIntArrayList().toNativeArray(), false)
+        val highlightingInfos = CodeInsightTestFixtureImpl.instantiateAndRun(file, editor, intArrayOf(), false)
             .filterNot { it.severity < configuration.severityLevel }
 
         if (configuration.checkNoError) {
@@ -178,13 +175,13 @@ class CodeMetaInfoTestCase(
             val correspondingParsed = parsedMetaInfo.firstOrNull { it == codeMetaInfo }
             if (correspondingParsed != null) {
                 parsedMetaInfo.remove(correspondingParsed)
-                codeMetaInfo.platforms.addAll(correspondingParsed.platforms)
-                if (correspondingParsed.platforms.isNotEmpty() && OSKind.current.toString() !in correspondingParsed.platforms)
-                    codeMetaInfo.platforms.add(OSKind.current.toString())
+                codeMetaInfo.attributes.addAll(correspondingParsed.attributes)
+                if (correspondingParsed.attributes.isNotEmpty() && OSKind.current.toString() !in correspondingParsed.attributes)
+                    codeMetaInfo.attributes.add(OSKind.current.toString())
             }
         }
         parsedMetaInfo.forEach {
-            if (it.platforms.isNotEmpty() && OSKind.current.toString() !in it.platforms)
+            if (it.attributes.isNotEmpty() && OSKind.current.toString() !in it.attributes)
                 codeMetaInfoForCheck.add(it)
         }
         val textWithCodeMetaInfo = CodeMetaInfoRenderer.renderTagsToText(codeMetaInfoForCheck, myEditor.document.text)
@@ -237,7 +234,8 @@ class CodeMetaInfoTestCase(
 
 abstract class AbstractDiagnosticCodeMetaInfoTest : AbstractCodeMetaInfoTest() {
     override fun getConfigurations() = listOf(
-        DiagnosticCodeMetaInfoConfiguration()
+        DiagnosticCodeMetaInfoConfiguration(),
+        LineMarkerConfiguration()
     )
 }
 

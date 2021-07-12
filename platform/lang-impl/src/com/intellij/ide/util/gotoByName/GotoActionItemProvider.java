@@ -12,7 +12,6 @@ import com.intellij.ide.ui.search.SearchableOptionsRegistrar;
 import com.intellij.ide.ui.search.SearchableOptionsRegistrarImpl;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.impl.ActionManagerImpl;
-import com.intellij.openapi.application.Experiments;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -59,24 +58,10 @@ public final class GotoActionItemProvider implements ChooseByNameWeightedItemPro
     myIntentions = ClearableLazyValue.create(() -> ReadAction.compute(() -> myModel.getAvailableIntentions()));
   }
 
-  @Override
-  public @NotNull List<String> filterNames(@NotNull ChooseByNameBase base, String @NotNull [] names, @NotNull String pattern) {
-    return filterNames((ChooseByNameViewModel)base, names, pattern);
-  }
-
   @NotNull
   @Override
   public List<String> filterNames(@NotNull ChooseByNameViewModel base, String @NotNull [] names, @NotNull String pattern) {
     return Collections.emptyList(); // no common prefix insertion in goto action
-  }
-
-  @Override
-  public boolean filterElements(@NotNull ChooseByNameBase base,
-                                @NotNull String pattern,
-                                boolean everywhere,
-                                @NotNull ProgressIndicator cancelled,
-                                @NotNull Processor<Object> consumer) {
-    return filterElements((ChooseByNameViewModel)base, pattern, everywhere, cancelled, consumer);
   }
 
   @Override
@@ -124,7 +109,7 @@ public final class GotoActionItemProvider implements ChooseByNameWeightedItemPro
 
         ActionWrapper wrapper = wrapAnAction(action);
         int degree = matcher.matchingDegree(pattern);
-        return new MatchedValue(wrapper, pattern, degree) {
+        return new MatchedValue(wrapper, pattern, degree, true) {
           @NotNull
           @Override
           public String getValueText() {
@@ -171,19 +156,18 @@ public final class GotoActionItemProvider implements ChooseByNameWeightedItemPro
     Set<OptionDescription> optionDescriptions = null;
     boolean filterOutInspections = Registry.is("go.to.action.filter.out.inspections", true);
     for (String word : words) {
-      final Set<OptionDescription> descriptions = registrar.getAcceptableDescriptions(word);
-      if (descriptions != null) {
-        descriptions.removeIf(description -> {
-          return "ActionManager".equals(description.getPath()) ||
-                 filterOutInspections && "Inspections".equals(description.getGroupName());
-        });
-        if (!descriptions.isEmpty()) {
-          if (optionDescriptions == null) {
-            optionDescriptions = descriptions;
-          }
-          else {
-            optionDescriptions.retainAll(descriptions);
-          }
+      final Set<OptionDescription> descriptions = Objects.requireNonNullElse(registrar.getAcceptableDescriptions(word), new HashSet<>());
+      descriptions.removeIf(description -> {
+        return "ActionManager".equals(description.getPath()) ||
+               filterOutInspections && "Inspections".equals(description.getGroupName());
+      });
+
+      if (!descriptions.isEmpty()) {
+        if (optionDescriptions == null) {
+          optionDescriptions = descriptions;
+        }
+        else {
+          optionDescriptions.retainAll(descriptions);
         }
       }
       else {
@@ -313,11 +297,9 @@ public final class GotoActionItemProvider implements ChooseByNameWeightedItemPro
     Integer degree = calculateDegree(matcher, getActionText(element));
     if (degree == null) return null;
 
-    if (Experiments.getInstance().isFeatureEnabled("i18n.match.actions")) {
-      if (degree == 0) {
-        degree = calculateDegree(matcher, DefaultBundleService.getInstance().compute(() -> getAnActionOriginalText(getAction(element))));
-        if (degree == null) return null;
-      }
+    if (degree == 0) {
+      degree = calculateDegree(matcher, DefaultBundleService.getInstance().compute(() -> getAnActionOriginalText(getAction(element))));
+      if (degree == null) return null;
     }
 
     if (pattern.trim().contains(" ")) degree += BONUS_FOR_SPACE_IN_PATTERN;

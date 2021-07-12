@@ -142,6 +142,7 @@ public abstract class EditorFactory {
    * </p>
    */
   @ApiStatus.Internal
+  @ApiStatus.Experimental
   public @NotNull Stream<Editor> editorsForCurrentClient(@NotNull Document document, @Nullable Project project) {
     return editors(document, project);
   }
@@ -178,6 +179,7 @@ public abstract class EditorFactory {
    * @deprecated use the {@link #addEditorFactoryListener(EditorFactoryListener, Disposable)} instead
    */
   @Deprecated
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   public abstract void addEditorFactoryListener(@NotNull EditorFactoryListener listener);
 
   /**
@@ -192,6 +194,7 @@ public abstract class EditorFactory {
    * @deprecated you should have used the {@link #addEditorFactoryListener(EditorFactoryListener, Disposable)} instead
    */
   @Deprecated
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   public abstract void removeEditorFactoryListener(@NotNull EditorFactoryListener listener);
 
   /**

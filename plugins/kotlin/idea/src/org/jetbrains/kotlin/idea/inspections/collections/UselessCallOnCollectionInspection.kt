@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections.collections
 
@@ -27,11 +24,17 @@ import org.jetbrains.kotlin.types.typeUtil.isSubtypeOf
 class UselessCallOnCollectionInspection : AbstractUselessCallInspection() {
     override val uselessFqNames = mapOf(
         "kotlin.collections.filterNotNull" to deleteConversion,
+        "kotlin.sequences.filterNotNull" to deleteConversion,
         "kotlin.collections.filterIsInstance" to deleteConversion,
+        "kotlin.sequences.filterIsInstance" to deleteConversion,
         "kotlin.collections.mapNotNull" to Conversion("map"),
+        "kotlin.sequences.mapNotNull" to Conversion("map"),
         "kotlin.collections.mapNotNullTo" to Conversion("mapTo"),
+        "kotlin.sequences.mapNotNullTo" to Conversion("mapTo"),
         "kotlin.collections.mapIndexedNotNull" to Conversion("mapIndexed"),
-        "kotlin.collections.mapIndexedNotNullTo" to Conversion("mapIndexedTo")
+        "kotlin.sequences.mapIndexedNotNull" to Conversion("mapIndexed"),
+        "kotlin.collections.mapIndexedNotNullTo" to Conversion("mapIndexedTo"),
+        "kotlin.sequences.mapIndexedNotNullTo" to Conversion("mapIndexedTo")
     )
 
     override val uselessNames = uselessFqNames.keys.toShortNames()

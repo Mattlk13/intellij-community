@@ -1,11 +1,10 @@
-/*
-* Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
-* Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
-*/
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger
 
+import com.intellij.debugger.JavaDebuggerBundle
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
+import com.intellij.debugger.engine.DebuggerUtils
 import com.intellij.debugger.engine.JVMNameUtil
 import com.intellij.debugger.engine.evaluation.EvaluationContext
 import com.intellij.debugger.impl.DebuggerUtilsAsync
@@ -19,10 +18,19 @@ import com.intellij.debugger.ui.tree.render.ClassRenderer
 import com.intellij.debugger.ui.tree.render.DescriptorLabelListener
 import com.intellij.openapi.project.Project
 import com.sun.jdi.*
-import org.jetbrains.kotlin.idea.debugger.KotlinSimpleGetterDetector.isSimpleGetter
-import java.util.*
+import java.util.concurrent.CompletableFuture
+import java.util.function.Function
 
 class KotlinClassRenderer : ClassRenderer() {
+    init {
+        setIsApplicableChecker(Function { type: Type? ->
+            if (type is ReferenceType && type !is ArrayType && !type.canBeRenderedBetterByPlatformRenderers()) {
+                return@Function type.isInKotlinSourcesAsync()
+            }
+            CompletableFuture.completedFuture(false)
+        })
+    }
+
     override fun buildChildren(value: Value?, builder: ChildrenBuilder, evaluationContext: EvaluationContext) {
         DebuggerManagerThreadImpl.assertIsManagerThread()
         if (value !is ObjectReference) {
@@ -45,8 +53,14 @@ class KotlinClassRenderer : ClassRenderer() {
             createNodesToShow(fields, evaluationContext, parentDescriptor, nodeManager, nodeDescriptorFactory, value)
                 .thenAccept { nodesToShow ->
                     if (nodesToShow.isEmpty()) {
-                        setClassHasNoFieldsToDisplayMessage(builder, nodeManager)
-                        builder.setChildren(getterNodes)
+                        val classHasNoFieldsToDisplayMessage =
+                            nodeManager.createMessageNode(
+                                JavaDebuggerBundle.message("message.node.class.no.fields.to.display")
+                            )
+                        builder.setChildren(
+                            listOf(classHasNoFieldsToDisplayMessage) +
+                            getterNodes
+                        )
                         return@thenAccept
                     }
                     builder.setChildren(mergeNodesLists(nodesToShow, getterNodes))
@@ -63,8 +77,7 @@ class KotlinClassRenderer : ClassRenderer() {
         return renderer.calcLabel(descriptor, evaluationContext, labelListener)
     }
 
-    override fun isApplicable(type: Type?): Boolean =
-        type is ReferenceType && type !is ArrayType && type.isInKotlinSources()
+    override fun isApplicable(type: Type?) = throw IllegalStateException("Should not be called")
 
     override fun shouldDisplay(context: EvaluationContext?, objInstance: ObjectReference, field: Field): Boolean {
         val referenceType = objInstance.referenceType()
@@ -104,7 +117,8 @@ class KotlinClassRenderer : ClassRenderer() {
             method.name() != "getClass" &&
             !method.name().endsWith("\$annotations") &&
             method.declaringType().isInKotlinSources() &&
-            !method.isSimpleGetter()
+            !method.isSimpleGetter() &&
+            !method.isLateinitVariableGetter()
         }
         .distinctBy { it.name() }
         .toList()
@@ -125,6 +139,25 @@ class KotlinClassRenderer : ClassRenderer() {
     private fun ReferenceType.hasPrivateConstructor(): Boolean {
         val constructor = methodsByName(JVMNameUtil.CONSTRUCTOR_NAME).singleOrNull() ?: return false
         return constructor.isPrivate && constructor.argumentTypeNames().isEmpty()
+    }
+
+    /**
+     * IntelliJ Platform has good collections' debugger renderers.
+     *
+     * We want to use them even when the collection is implemented completely in Kotlin
+     * (e.g. lists, sets and maps empty singletons; subclasses of `Abstract(List|Set|Map)`;
+     * collections, built by `build(List|Set|Map) { ... }` methods).
+     *
+     * Also we want to use platform renderer for Map entries.
+     */
+    private fun ReferenceType.canBeRenderedBetterByPlatformRenderers(): Boolean {
+        val typesWithGoodDefaultRenderers = listOf(
+            "java.util.Collection",
+            "java.util.Map",
+            "java.util.Map.Entry",
+        )
+
+        return typesWithGoodDefaultRenderers.any { superType -> DebuggerUtils.instanceOf(this, superType) }
     }
 
     private fun Field.isInstanceFieldOfType(type: Type) =

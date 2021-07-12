@@ -50,6 +50,7 @@ import com.intellij.util.PlatformIcons;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.io.PathKt;
 import com.intellij.util.ui.tree.TreeUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -471,6 +472,7 @@ public class ModuleStructureConfigurable extends BaseStructureConfigurable imple
   /**
    * @deprecated use {@link ProjectStructureConfigurable#getModulesConfig()} instead
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public static ModuleStructureConfigurable getInstance(final Project project) {
     return ProjectStructureConfigurable.getInstance(project).getModulesConfig();
@@ -708,14 +710,21 @@ public class ModuleStructureConfigurable extends BaseStructureConfigurable imple
     @NotNull
     @Override
     public String getDisplayName() {
+      List<String> parentGroupPath;
       if (parent instanceof ModuleGroupNode) {
         ModuleGroup parentGroup = ((ModuleGroupNode)parent).getModuleGroup();
-        List<String> groupPath = myModuleGroup.getGroupPathList();
-        if (parentGroup != null && ContainerUtil.startsWith(groupPath, parentGroup.getGroupPathList())) {
-          return StringUtil.join(groupPath.subList(parentGroup.getGroupPathList().size(), groupPath.size()), ".");
-        }
+        parentGroupPath = parentGroup != null ? parentGroup.getGroupPathList() : Collections.emptyList();
       }
-      return super.getDisplayName();
+      else {
+        parentGroupPath = Collections.emptyList();
+      }
+      List<String> groupPath = myModuleGroup.getGroupPathList();
+      if (ContainerUtil.startsWith(groupPath, parentGroupPath)) {
+        return StringUtil.join(groupPath.subList(parentGroupPath.size(), groupPath.size()), ".");
+      }
+      else {
+        return StringUtil.join(groupPath, ".");
+      }
     }
 
     @Override
@@ -1005,9 +1014,9 @@ public class ModuleStructureConfigurable extends BaseStructureConfigurable imple
   }
 
   static final class CopiedModuleBuilder extends ModuleBuilder {
-    @NotNull ModifiableRootModel myRootModel;
-    @NotNull Path myComponentPath;
-    @NotNull Project myProject;
+    @NotNull private final ModifiableRootModel myRootModel;
+    @NotNull private final Path myComponentPath;
+    @NotNull private final Project myProject;
 
     CopiedModuleBuilder(@NotNull ModifiableRootModel rootModel, @NotNull Path componentPath, @NotNull Project project) {
       this.myRootModel = rootModel;
@@ -1027,7 +1036,7 @@ public class ModuleStructureConfigurable extends BaseStructureConfigurable imple
       modifiableRootModel.getModuleExtension(CompilerModuleExtension.class).inheritCompilerOutputPath(true);
 
       modifiableRootModel.getModuleExtension(LanguageLevelModuleExtension.class)
-        .setLanguageLevel(LanguageLevelModuleExtensionImpl.getInstance(myRootModel.getModule()).getLanguageLevel());
+        .setLanguageLevel(LanguageLevelUtil.getCustomLanguageLevel(myRootModel.getModule()));
 
       for (OrderEntry entry : myRootModel.getOrderEntries()) {
         if (entry instanceof JdkOrderEntry) continue;

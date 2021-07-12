@@ -1,13 +1,9 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.configuration
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.extensions.ProjectExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -30,6 +26,7 @@ import org.jetbrains.kotlin.idea.core.script.configuration.utils.ScriptClassRoot
 import org.jetbrains.kotlin.idea.core.script.configuration.utils.*
 import org.jetbrains.kotlin.idea.core.script.settings.KotlinScriptingSettings
 import org.jetbrains.kotlin.idea.core.util.EDT
+import org.jetbrains.kotlin.idea.util.application.getServiceSafe
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.scripting.definitions.ScriptDefinition
 import org.jetbrains.kotlin.scripting.definitions.findScriptDefinition
@@ -323,7 +320,7 @@ class DefaultScriptingSupport(manager: CompositeScriptConfigurationManager) : De
         if (oldReports != newReports) {
             scriptingDebugLog(file) { "new script reports = $newReports" }
 
-            ServiceManager.getService(project, ScriptReportSink::class.java).attachReports(file, newReports)
+            project.getServiceSafe<ScriptReportSink>().attachReports(file, newReports)
 
             GlobalScope.launch(EDT(project)) {
                 if (project.isDisposed) return@launch
@@ -444,20 +441,21 @@ abstract class DefaultScriptingSupportBase(val manager: CompositeScriptConfigura
     /**
      * Load new configuration and suggest to apply it (only if it is changed)
      */
-    fun ensureUpToDatedConfigurationSuggested(file: KtFile, skipNotification: Boolean = false) {
-        reloadIfOutOfDate(file, skipNotification)
+    fun ensureUpToDatedConfigurationSuggested(file: KtFile, skipNotification: Boolean = false, forceSync: Boolean = false) {
+        reloadIfOutOfDate(file, skipNotification, forceSync)
     }
 
-    private fun reloadIfOutOfDate(file: KtFile, skipNotification: Boolean = false) {
+    private fun reloadIfOutOfDate(file: KtFile, skipNotification: Boolean = false, forceSync: Boolean = false) {
         if (!ScriptDefinitionsManager.getInstance(project).isReady()) return
 
         manager.updater.update {
             val virtualFile = file.originalFile.virtualFile
             if (virtualFile != null) {
                 val state = cache[virtualFile]
-                if (state == null || !state.isUpToDate(project, virtualFile, file)) {
+                if (state == null || forceSync || !state.isUpToDate(project, virtualFile, file)) {
                     reloadOutOfDateConfiguration(
                         file,
+                        forceSync = forceSync,
                         isFirstLoad = state == null,
                         skipNotification = skipNotification
                     )

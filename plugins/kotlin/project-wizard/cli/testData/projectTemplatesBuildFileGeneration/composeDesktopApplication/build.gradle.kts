@@ -13,14 +13,14 @@ version = "1.0"
 repositories {
     jcenter()
     mavenCentral()
-    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/compose/dev") }
+    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
 dependencies {
     implementation(compose.desktop.currentOs)
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "11"
 }
 

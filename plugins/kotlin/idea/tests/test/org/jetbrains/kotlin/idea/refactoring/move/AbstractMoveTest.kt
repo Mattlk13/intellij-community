@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.move
 
@@ -225,14 +222,13 @@ enum class MoveAction : AbstractMultifileRefactoringTest.RefactoringAction {
                 val moveDestination: MoveDestination = targetSourceRootPath?.let {
                     AutocreatingSingleSourceRootMoveDestination(packageWrapper, rootDir.findFileByRelativePath(it)!!)
                 } ?: MultipleRootsMoveDestination(packageWrapper)
-                val targetDir = moveDestination.getTargetIfExists(mainFile)
-                val targetVirtualFile = if (targetSourceRootPath != null) {
+                val destDirIfAny = moveDestination.getTargetIfExists(mainFile)
+                val targetDir = if (targetSourceRootPath != null) {
                     rootDir.findFileByRelativePath(targetSourceRootPath)!!
                 } else {
-                    targetDir?.virtualFile
+                    destDirIfAny?.virtualFile
                 }
-
-                KotlinMoveTargetForDeferredFile(FqName(packageName), targetDir, targetVirtualFile) {
+                KotlinMoveTargetForDeferredFile(FqName(packageName), targetDir) {
                     createKotlinFile(guessNewFileName(elementsToMove)!!, moveDestination.getTargetDirectory(mainFile))
                 }
             } ?: config.getString("targetFile").let { filePath ->
@@ -281,7 +277,7 @@ enum class MoveAction : AbstractMultifileRefactoringTest.RefactoringAction {
                     val fileName = (delegate.newClassName ?: elementToMove.name!!) + ".kt"
                     val targetPackageFqName = (mainFile as KtFile).packageFqName
                     val targetDir = mainFile.containingDirectory!!
-                    KotlinMoveTargetForDeferredFile(targetPackageFqName, targetDir, null) {
+                    KotlinMoveTargetForDeferredFile(targetPackageFqName, targetDir.virtualFile) {
                         createKotlinFile(fileName, targetDir, targetPackageFqName.asString())
                     }
                 }

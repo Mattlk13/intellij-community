@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.jps.build
 
@@ -29,6 +15,7 @@ import org.jetbrains.jps.incremental.ModuleLevelBuilder.ExitCode.*
 import org.jetbrains.jps.incremental.java.JavaBuilder
 import org.jetbrains.jps.model.JpsProject
 import org.jetbrains.kotlin.build.GeneratedFile
+import org.jetbrains.kotlin.build.GeneratedJvmClass
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
@@ -49,6 +36,7 @@ import org.jetbrains.kotlin.jps.incremental.JpsLookupStorageManager
 import org.jetbrains.kotlin.jps.model.kotlinKind
 import org.jetbrains.kotlin.jps.targets.KotlinJvmModuleBuildTarget
 import org.jetbrains.kotlin.jps.targets.KotlinModuleBuildTarget
+import org.jetbrains.kotlin.load.kotlin.header.KotlinClassHeader
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.preloading.ClassCondition
 import java.io.File
@@ -436,6 +424,9 @@ class KotlinBuilder : ModuleLevelBuilder(BuilderCategory.SOURCE_PROCESSOR) {
         }
 
         val generatedFiles = getGeneratedFiles(context, chunk, environment.outputItemsCollector)
+
+        markDirtyComplementaryMultifileClasses(generatedFiles, kotlinContext, incrementalCaches, fsOperations)
+
         val kotlinTargets = kotlinContext.targetsBinding
         for ((target, outputItems) in generatedFiles) {
             val kotlinTarget = kotlinTargets[target] ?: error("Could not find Kotlin target for JPS target $target")
@@ -523,14 +514,23 @@ class KotlinBuilder : ModuleLevelBuilder(BuilderCategory.SOURCE_PROCESSOR) {
             for (target in kotlinChunk.targets) {
                 val cache = incrementalCaches[target]
                 val jpsTarget = target.jpsModuleBuildTarget
+
                 val targetDirtyFiles = dirtyFilesHolder.byTarget[jpsTarget]
-
                 if (cache != null && targetDirtyFiles != null) {
-                    val complementaryFiles = cache.getComplementaryFilesRecursive(
-                        targetDirtyFiles.dirty.keys + targetDirtyFiles.removed
-                    )
+                    val dirtyFiles = targetDirtyFiles.dirty.keys + targetDirtyFiles.removed
+                    val complementaryFiles = cache.getComplementaryFilesRecursive(dirtyFiles)
 
-                    fsOperations.markFilesForCurrentRound(jpsTarget, complementaryFiles)
+                    // Get all parts of @JvmMultifileClass file for simultaneous rebuild
+                    var dirtyMultifileClassFiles: Collection<File> = emptyList()
+                    if (cache is IncrementalJvmCache) {
+                        dirtyMultifileClassFiles = cache.classesBySources(dirtyFiles)
+                            .filter { cache.isMultifileFacade(it) }
+                            .flatMap { cache.getAllPartsOfMultifileFacade(it).orEmpty() }
+                            .flatMap { cache.sourcesByInternalName(it) }
+                            .distinct()
+                            .filter { !dirtyFiles.contains(it) }
+                    }
+                    fsOperations.markFilesForCurrentRound(jpsTarget, complementaryFiles + dirtyMultifileClassFiles)
 
                     cache.markDirty(targetDirtyFiles.dirty.keys + targetDirtyFiles.removed)
                 }
@@ -630,6 +630,28 @@ class KotlinBuilder : ModuleLevelBuilder(BuilderCategory.SOURCE_PROCESSOR) {
         lookupStorageManager.withLookupStorage { lookupStorage ->
             lookupStorage.removeLookupsFrom(dirtyFilesHolder.allDirtyFiles.asSequence() + dirtyFilesHolder.allRemovedFilesFiles.asSequence())
             lookupStorage.addAll(lookupTracker.lookups, lookupTracker.pathInterner.values)
+        }
+    }
+
+    private fun markDirtyComplementaryMultifileClasses(
+        generatedFiles: Map<ModuleBuildTarget, List<GeneratedFile>>,
+        kotlinContext: KotlinCompileContext,
+        incrementalCaches: Map<KotlinModuleBuildTarget<*>, JpsIncrementalCache>,
+        fsOperations: FSOperationsHelper
+    ) {
+        for ((target, files) in generatedFiles) {
+            val kotlinModuleBuilderTarget = kotlinContext.targetsBinding[target] ?: continue
+            val cache = incrementalCaches[kotlinModuleBuilderTarget] as? IncrementalJvmCache ?: continue
+            val generated = files.filterIsInstance<GeneratedJvmClass>()
+            val multifileClasses = generated.filter { it.outputClass.classHeader.kind == KotlinClassHeader.Kind.MULTIFILE_CLASS }
+            val expectedAllParts = multifileClasses.flatMap { cache.getAllPartsOfMultifileFacade(it.outputClass.className).orEmpty() }
+            if (multifileClasses.isEmpty()) continue
+            val actualParts = generated.filter { it.outputClass.classHeader.kind == KotlinClassHeader.Kind.MULTIFILE_CLASS_PART }
+                .map { it.outputClass.className.toString() }
+            if (!actualParts.containsAll(expectedAllParts)) {
+                fsOperations.markFiles(expectedAllParts.flatMap { cache.sourcesByInternalName(it) }
+                                               + multifileClasses.flatMap { it.sourceFiles })
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.psi
 
 import com.intellij.lang.Language
@@ -82,9 +83,11 @@ class KotlinConcatenationInjectionTest : AbstractInjectionTest() {
     )
 
     fun testTempInjection(){
-        myFixture.configureByText("${getTestName(true)}.kt", """
+        myFixture.configureByText(
+            "${getTestName(true)}.kt", """
             fun bar(){ val reg = "\\d<caret>\\d" + "\\w\\w" }
-        """.trimIndent())
+        """.trimIndent()
+        )
 
         InjectLanguageAction.invokeImpl(project, editor, file, Injectable.fromLanguage(Language.findLanguageByID("RegExp")))
 
@@ -92,6 +95,21 @@ class KotlinConcatenationInjectionTest : AbstractInjectionTest() {
         val files = myInjectionFixture.getAllInjections().mapTo(mutableSetOf()) { it.second }.map { it.text }
 
         assertSameElements(files, "\\\\d\\\\d\\\\w\\\\w")
+    }
+
+    fun testConcatenationInEmpty() {
+        myFixture.configureByText("Test.java", TEST_FOO_TEXT)
+        myFixture.configureByText(
+            "${getTestName(true)}.kt", """
+            fun test() {
+                for (c in 'a'..'z') {
+                    val regex = Test.foo("" + c + c)
+                }
+            }
+        """.trimIndent()
+        )
+        val files = myInjectionFixture.getAllInjections().mapTo(mutableSetOf()) { it.second }.map { it.text }
+        assertSameElements(files, "cc")
     }
 
 }

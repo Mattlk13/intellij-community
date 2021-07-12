@@ -1,14 +1,15 @@
 package com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.models
 
 import com.intellij.buildsystem.model.unified.UnifiedDependency
-import com.jetbrains.packagesearch.intellij.plugin.api.model.StandardV2Package
+import com.jetbrains.packagesearch.api.v2.ApiStandardPackage
+import com.jetbrains.packagesearch.intellij.plugin.extensibility.ProjectModule
 import org.apache.commons.lang3.StringUtils
 import java.util.Locale
 
 internal sealed class PackageModel(
     val groupId: String,
     val artifactId: String,
-    val remoteInfo: StandardV2Package?
+    val remoteInfo: ApiStandardPackage?
 ) : Comparable<PackageModel> {
 
     val identifier = "$groupId:$artifactId".toLowerCase(Locale.ROOT)
@@ -39,16 +40,14 @@ internal sealed class PackageModel(
 
     protected abstract fun additionalAvailableVersions(): List<PackageVersion>
 
-    private val sortingKey: String = remoteInfo?.name ?: identifier
-
-    override fun compareTo(other: PackageModel): Int = sortingKey.compareTo(other.sortingKey)
+    override fun compareTo(other: PackageModel): Int = sortKey.compareTo(other.sortKey)
 
     abstract val searchableInfo: String
 
     class Installed(
         groupId: String,
         artifactId: String,
-        remoteInfo: StandardV2Package?,
+        remoteInfo: ApiStandardPackage?,
         val usageInfo: List<DependencyUsageInfo>
     ) : PackageModel(groupId, artifactId, remoteInfo) {
 
@@ -58,14 +57,17 @@ internal sealed class PackageModel(
 
         override fun additionalAvailableVersions(): List<PackageVersion> = usageInfo.map { it.version }
 
-        fun findUsagesIn(modules: List<ModuleModel>): List<DependencyUsageInfo> {
-            if (modules.isEmpty()) return emptyList()
-            return usageInfo.filter { usageInfo -> modules.any { it.projectModule == usageInfo.projectModule } }
+        fun findUsagesIn(moduleModels: List<ModuleModel>): List<DependencyUsageInfo> =
+            findUsagesIn(moduleModels.map { it.projectModule })
+
+        private fun findUsagesIn(projectModules: Collection<ProjectModule>): List<DependencyUsageInfo> {
+            if (projectModules.isEmpty()) return emptyList()
+            return usageInfo.filter { usageInfo -> projectModules.any { it == usageInfo.projectModule } }
         }
 
         fun canBeUpgraded(onlyStable: Boolean): Boolean {
             val latestVersion = getLatestAvailableVersion(onlyStable) ?: return false
-            return usageInfo.any { it.version < latestVersion }
+            return usageInfo.any { it.version !is PackageVersion.Missing && it.version < latestVersion }
         }
 
         fun canBeUpgraded(currentVersion: PackageVersion, onlyStable: Boolean): Boolean {
@@ -92,12 +94,28 @@ internal sealed class PackageModel(
                 appendLine(remoteInfo.name)
             }
         }.toLowerCase(Locale.ROOT)
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Installed) return false
+
+            if (usageInfo != other.usageInfo) return false
+            if (searchableInfo != other.searchableInfo) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = usageInfo.hashCode()
+            result = 31 * result + searchableInfo.hashCode()
+            return result
+        }
     }
 
     class SearchResult(
         groupId: String,
         artifactId: String,
-        remoteInfo: StandardV2Package
+        remoteInfo: ApiStandardPackage
     ) : PackageModel(groupId, artifactId, remoteInfo) {
 
         override fun additionalAvailableVersions(): List<PackageVersion> = emptyList()
@@ -107,11 +125,24 @@ internal sealed class PackageModel(
             appendLine(remoteInfo.description)
             appendLine(remoteInfo.name)
         }.toLowerCase(Locale.ROOT)
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is SearchResult) return false
+
+            if (searchableInfo != other.searchableInfo) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            return searchableInfo.hashCode()
+        }
     }
 
     companion object {
 
-        fun fromSearchResult(remoteInfo: StandardV2Package): SearchResult? {
+        fun fromSearchResult(remoteInfo: ApiStandardPackage): SearchResult? {
             if (remoteInfo.versions.isEmpty()) return null
 
             return SearchResult(
@@ -124,7 +155,7 @@ internal sealed class PackageModel(
         fun fromInstalledDependency(
             unifiedDependency: UnifiedDependency,
             usageInfo: List<DependencyUsageInfo>,
-            remoteInfo: StandardV2Package?
+            remoteInfo: ApiStandardPackage?
         ): Installed? {
             val groupId = unifiedDependency.coordinates.groupId ?: return null
             val artifactId = unifiedDependency.coordinates.artifactId ?: return null

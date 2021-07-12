@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -60,12 +57,12 @@ abstract class AbstractMultiFileLocalInspectionTest : AbstractLocalInspectionTes
     }
 
     protected fun doTest(path: String, action: (VirtualFile) -> Unit) {
-        val beforeDir = path.removePrefix(testDataPath).substringBeforeLast('/') + "/before"
+        val beforeDir = FileUtil.toSystemIndependentName(FileUtil.getRelativePath(testDataDirectory, File(path).parentFile)!!) + "/before"
         val beforeVFile = myFixture.copyDirectoryToProject(beforeDir, "")
         PsiDocumentManager.getInstance(myFixture.project).commitAllDocuments()
 
         val afterDir = beforeDir.substringBeforeLast("/") + "/after"
-        val afterDirIOFile = File(testDataPath, afterDir)
+        val afterDirIOFile = File(testDataDirectory, afterDir)
         val afterVFile = LocalFileSystem.getInstance().findFileByIoFile(afterDirIOFile)!!
         UsefulTestCase.refreshRecursively(afterVFile)
 

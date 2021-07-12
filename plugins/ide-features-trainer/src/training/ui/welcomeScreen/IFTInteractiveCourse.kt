@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package training.ui.welcomeScreen
 
 import com.intellij.openapi.actionSystem.ActionManager
@@ -13,7 +13,7 @@ import com.intellij.openapi.wm.impl.welcomeScreen.learnIde.HeightLimitedPane
 import com.intellij.openapi.wm.impl.welcomeScreen.learnIde.LearnIdeContentColorsAndFonts
 import com.intellij.ui.components.labels.LinkLabel
 import com.intellij.ui.scale.JBUIScale
-import icons.FeaturesTrainerIcons.Img.PluginIcon
+import training.FeaturesTrainerIcons
 import training.learn.CourseManager
 import training.learn.LearnBundle
 import training.learn.OpenLessonActivities
@@ -26,11 +26,11 @@ import javax.swing.*
 import javax.swing.plaf.FontUIResource
 import javax.swing.plaf.LabelUI
 
-class IFTInteractiveCourse : InteractiveCourseFactory {
+internal class IFTInteractiveCourse : InteractiveCourseFactory {
   override fun getInteractiveCourseData(): InteractiveCourseData = IFTInteractiveCourseData()
 }
 
-class IFTInteractiveCourseData : InteractiveCourseData {
+private class IFTInteractiveCourseData : InteractiveCourseData {
 
   override fun getName(): String {
     return LearnBundle.message("welcome.tab.header.learn.ide.features")
@@ -41,7 +41,7 @@ class IFTInteractiveCourseData : InteractiveCourseData {
   }
 
   override fun getIcon(): Icon {
-    return PluginIcon
+    return FeaturesTrainerIcons.Img.PluginIcon
   }
 
   override fun getActionButtonName(): String {
@@ -75,7 +75,7 @@ class IFTInteractiveCourseData : InteractiveCourseData {
   }
 
   private fun moduleDescription(module: IftModule): HeightLimitedPane {
-    return HeightLimitedPane(module.description ?: "", -1, LearnIdeContentColorsAndFonts.ModuleDescriptionColor)
+    return HeightLimitedPane(module.description, -1, LearnIdeContentColorsAndFonts.ModuleDescriptionColor)
   }
 
   private fun moduleHeader(module: IftModule): LinkLabel<Any> {
@@ -106,7 +106,7 @@ class IFTInteractiveCourseData : InteractiveCourseData {
     else {
       CourseManager.instance.unfoldModuleOnInit = module ?: CourseManager.instance.modules.firstOrNull()
       val anActionEvent = AnActionEvent.createFromAnAction(action, null, ActionPlaces.WELCOME_SCREEN, DataContext.EMPTY_CONTEXT)
-      ActionUtil.performActionDumbAware(action, anActionEvent)
+      ActionUtil.performActionDumbAwareWithCallbacks(action, anActionEvent)
     }
   }
 

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.lightClasses;
 
@@ -11,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.asJava.classes.KtLightClass;
 import org.jetbrains.kotlin.asJava.classes.KtLightClassForSourceDeclaration;
+import org.jetbrains.kotlin.config.JvmDefaultMode;
 import org.jetbrains.kotlin.idea.caches.lightClasses.KtLightClassForDecompiledDeclaration;
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase;
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor;
@@ -49,8 +47,8 @@ public class LightClassEqualsTest extends KotlinLightCodeInsightFixtureTestCase 
     static void doTestEquals(@Nullable KtClassOrObject origin) {
         assertNotNull(origin);
 
-        PsiClass lightClass1 = KtLightClassForSourceDeclaration.Companion.createNoCache(origin, true);
-        PsiClass lightClass2 = KtLightClassForSourceDeclaration.Companion.createNoCache(origin, true);
+        PsiClass lightClass1 = KtLightClassForSourceDeclaration.Companion.createNoCache(origin, JvmDefaultMode.DEFAULT, true);
+        PsiClass lightClass2 = KtLightClassForSourceDeclaration.Companion.createNoCache(origin, JvmDefaultMode.DEFAULT, true);
         assertNotNull(lightClass1);
         assertNotNull(lightClass2);
 

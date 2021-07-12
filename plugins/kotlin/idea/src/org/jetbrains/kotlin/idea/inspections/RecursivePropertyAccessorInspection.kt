@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -21,6 +18,7 @@ import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.BindingContext.DECLARATION_TO_DESCRIPTOR
 import org.jetbrains.kotlin.resolve.BindingContext.REFERENCE_TARGET
 import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 
 class RecursivePropertyAccessorInspection : AbstractKotlinInspection() {
 
@@ -98,7 +96,7 @@ class RecursivePropertyAccessorInspection : AbstractKotlinInspection() {
             if (element !is KtSimpleNameExpression) return false
             val namedFunction = element.getParentOfType<KtDeclarationWithBody>(true) as? KtNamedFunction ?: return false
             val name = namedFunction.name ?: return false
-            val referencedName = element.text.capitalize()
+            val referencedName = element.text.capitalizeAsciiOnly()
             val isGetter = name == "get$referencedName"
             val isSetter = name == "set$referencedName"
             if (!isGetter && !isSetter) return false

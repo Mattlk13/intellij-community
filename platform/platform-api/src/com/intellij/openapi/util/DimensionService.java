@@ -2,10 +2,7 @@
 package com.intellij.openapi.util;
 
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.components.PersistentStateComponent;
-import com.intellij.openapi.components.RoamingType;
-import com.intellij.openapi.components.State;
-import com.intellij.openapi.components.Storage;
+import com.intellij.openapi.components.*;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
@@ -21,6 +18,7 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.jdom.Element;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -35,6 +33,7 @@ import java.util.Map;
  * sizes of window, dialogs, etc.
  */
 @State(name = "DimensionService", storages = @Storage(value = "window.state.xml", roamingType = RoamingType.DISABLED))
+@Service(Service.Level.APP)
 public final class DimensionService extends SimpleModificationTracker implements PersistentStateComponent<Element> {
   private static final Logger LOG = Logger.getInstance(DimensionService.class);
 
@@ -65,6 +64,7 @@ public final class DimensionService extends SimpleModificationTracker implements
    *
    * @deprecated use {@link #getLocation(String, Project)} instead.
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   @Nullable
   public synchronized Point getLocation(String key) {
@@ -99,6 +99,7 @@ public final class DimensionService extends SimpleModificationTracker implements
    *
    * @deprecated use {@link #setLocation(String, Point, Project)} instead.
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public synchronized void setLocation(String key, Point point) {
     setLocation(key, point, guessProject());
@@ -127,6 +128,7 @@ public final class DimensionService extends SimpleModificationTracker implements
    *
    * @deprecated use {@link #getSize(String, Project)} instead.
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   @Nullable
   public synchronized Dimension getSize(@NotNull @NonNls String key) {
@@ -158,6 +160,7 @@ public final class DimensionService extends SimpleModificationTracker implements
    *
    * @deprecated use {@link #setSize(String, Dimension, Project)} instead.
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public synchronized void setSize(@NotNull @NonNls String key, Dimension size) {
     setSize(key, size, guessProject());

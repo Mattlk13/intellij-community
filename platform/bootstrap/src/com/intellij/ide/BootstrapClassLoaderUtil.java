@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide;
 
 import com.intellij.idea.Main;
@@ -18,6 +18,7 @@ import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
+import java.security.ProtectionDomain;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -51,9 +52,7 @@ public final class BootstrapClassLoaderUtil {
       return result;
     }
 
-    Collection<Path> classpath = new LinkedHashSet<>();
-    parseClassPathString(System.getProperty("java.class.path"), classpath);
-    addIdeaLibraries(distDir.resolve("lib"), classpath);
+    Collection<Path> classpath = computeClassPath(distDir.resolve("lib"));
     parseClassPathString(System.getProperty(PROPERTY_ADDITIONAL_CLASSPATH), classpath);
 
     Path pluginDir = Path.of(PathManager.getPreInstalledPluginsPath());
@@ -89,7 +88,13 @@ public final class BootstrapClassLoaderUtil {
                                                           .files(Collections.singletonList(mpBoot))
                                                           .parent(BootstrapClassLoaderUtil.class.getClassLoader()));
         Iterator<BytecodeTransformer> transformers = ServiceLoader.load(BytecodeTransformer.class, spiLoader).iterator();
-        return new PathClassLoader(builder, transformers.hasNext() ? transformers.next() : null);
+        if (transformers.hasNext()) {
+          BytecodeTransformer impl = transformers.next();
+          return new PathClassLoader(builder, new BytecodeTransformerAdapter(impl));
+        }
+        else {
+          return new PathClassLoader(builder);
+        }
       }
       catch (Throwable e) {
         // at this point logging is not initialized yet, so reporting the error directly
@@ -162,7 +167,7 @@ public final class BootstrapClassLoaderUtil {
       if (ideVersion != null) {
         SimpleVersion sinceVersion = null;
         SimpleVersion untilVersion = null;
-        try (BufferedReader reader = Files.newBufferedReader(Paths.get(PathManager.getPluginsPath()).resolve(MARKETPLACE_PLUGIN_DIR).resolve("platform-build.txt"))) {
+        try (BufferedReader reader = Files.newBufferedReader(Path.of(PathManager.getPluginsPath()).resolve(MARKETPLACE_PLUGIN_DIR).resolve("platform-build.txt"))) {
           sinceVersion = SimpleVersion.parse(reader.readLine());
           untilVersion = SimpleVersion.parse(reader.readLine());
         }
@@ -176,7 +181,9 @@ public final class BootstrapClassLoaderUtil {
     return true;
   }
 
-  private static void addIdeaLibraries(@NotNull Path libDir, @NotNull Collection<Path> classpath) throws IOException {
+  private static @NotNull Collection<Path> computeClassPath(@NotNull Path libDir) throws IOException {
+    Collection<Path> classpath = new LinkedHashSet<>();
+
     Path classPathFile = libDir.resolve("classpath.txt");
     try (Stream<String> stream = Files.lines(classPathFile)) {
       stream.forEach(jarName -> {
@@ -184,7 +191,7 @@ public final class BootstrapClassLoaderUtil {
           classpath.add(libDir.resolve(jarName));
         }
       });
-      return;
+      return classpath;
     }
     catch (NoSuchFileException ignored) {
     }
@@ -193,14 +200,17 @@ public final class BootstrapClassLoaderUtil {
     }
 
     // no classpath file - compute classpath
+    parseClassPathString(System.getProperty("java.class.path"), classpath);
+
     Class<BootstrapClassLoaderUtil> aClass = BootstrapClassLoaderUtil.class;
     String selfRootPath = PathManager.getResourceRoot(aClass, "/" + aClass.getName().replace('.', '/') + ".class");
     assert selfRootPath != null;
-    Path selfRoot = Paths.get(selfRootPath);
+    Path selfRoot = Path.of(selfRootPath);
     classpath.add(selfRoot);
-    Path libFolder = Paths.get(PathManager.getLibPath());
+    Path libFolder = Path.of(PathManager.getLibPath());
     addLibraries(classpath, libFolder, selfRoot);
     addLibraries(classpath, libFolder.resolve("ant/lib"), null);
+    return classpath;
   }
 
   private static void addLibraries(Collection<Path> classPath, Path fromDir, @Nullable Path selfRoot) throws IOException {
@@ -226,14 +236,9 @@ public final class BootstrapClassLoaderUtil {
       return;
     }
 
-    String libPath = PathManager.getLibPath();
     StringTokenizer tokenizer = new StringTokenizer(pathString, File.pathSeparator + ',', false);
     while (tokenizer.hasMoreTokens()) {
-      String pathItem = tokenizer.nextToken();
-      if (!pathItem.startsWith(libPath)) {
-        // we need to add paths from lib directory in the order specified in order.txt, so don't add them at this stage
-        classpath.add(Paths.get(pathItem));
-      }
+      classpath.add(Path.of(tokenizer.nextToken()));
     }
   }
 
@@ -315,6 +320,28 @@ public final class BootstrapClassLoaderUtil {
       catch (NumberFormatException ignored) {
       }
       return 0;
+    }
+  }
+
+  private static final class BytecodeTransformerAdapter implements PathClassLoader.BytecodeTransformer {
+    private final BytecodeTransformer impl;
+
+    private BytecodeTransformerAdapter(BytecodeTransformer impl) {
+      this.impl = impl;
+    }
+
+    @Override
+    public boolean isApplicable(String className,
+                                ClassLoader loader,
+                                @Nullable ProtectionDomain protectionDomain) {
+      return impl.isApplicable(className, loader, protectionDomain);
+    }
+
+    @Override
+    public byte[] transform(ClassLoader loader,
+                            String className,
+                            @Nullable ProtectionDomain protectionDomain, byte[] classBytes) {
+      return impl.transform(loader, className, protectionDomain, classBytes);
     }
   }
 }

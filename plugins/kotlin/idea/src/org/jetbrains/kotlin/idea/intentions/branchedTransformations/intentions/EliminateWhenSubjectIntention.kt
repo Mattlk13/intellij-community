@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions.branchedTransformations.intentions
 
@@ -21,7 +18,7 @@ import org.jetbrains.kotlin.resolve.bindingContextUtil.isUsedAsExpression
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 
 class EliminateWhenSubjectIntention :
-    SelfTargetingIntention<KtWhenExpression>(KtWhenExpression::class.java, KotlinBundle.lazyMessage("eliminate.argument.of.when")),
+    SelfTargetingIntention<KtWhenExpression>(KtWhenExpression::class.java, KotlinBundle.lazyMessage("inline.when.argument")),
     LowPriorityAction {
     override fun isApplicableTo(element: KtWhenExpression, caretOffset: Int): Boolean {
         if (element.subjectExpression !is KtNameReferenceExpression) return false

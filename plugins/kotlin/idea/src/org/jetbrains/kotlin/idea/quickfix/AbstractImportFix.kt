@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -258,7 +255,16 @@ internal abstract class OrdinaryImportFixBase<T : KtExpression>(expression: T, f
             }
         }
 
-        result.addAll(indicesHelper.getCallableTopLevelExtensions(callTypeAndReceiver, expression, bindingContext) { it == name })
+        val receiverFromDiagnostic = if (callTypeAndReceiver.callType == CallType.DELEGATE) getReceiverTypeFromDiagnostic() else null
+        result.addAll(
+            indicesHelper.getCallableTopLevelExtensions(
+                callTypeAndReceiver,
+                expression,
+                bindingContext,
+                receiverFromDiagnostic
+            ) { it == name }
+        )
+
         return result
     }
 }
@@ -493,7 +499,8 @@ internal open class ArrayAccessorImportFix(
 internal class DelegateAccessorsImportFix(
     element: KtExpression,
     override val importNames: Collection<Name>,
-    private val solveSeveralProblems: Boolean
+    private val solveSeveralProblems: Boolean,
+    private val diagnostic: Diagnostic,
 ) : OrdinaryImportFixBase<KtExpression>(element, MyFactory) {
 
     override fun getCallTypeAndReceiver() = CallTypeAndReceiver.DELEGATE(element)
@@ -510,6 +517,9 @@ internal class DelegateAccessorsImportFix(
         return super.createAction(project, editor, element)
     }
 
+    override fun getReceiverTypeFromDiagnostic(): KotlinType? =
+        if (diagnostic.factory === Errors.DELEGATE_SPECIAL_FUNCTION_MISSING) Errors.DELEGATE_SPECIAL_FUNCTION_MISSING.cast(diagnostic).b else null
+
     companion object MyFactory : Factory() {
         private fun importNames(diagnostics: Collection<Diagnostic>): Collection<Name> {
             return diagnostics.map {
@@ -523,14 +533,15 @@ internal class DelegateAccessorsImportFix(
 
         override fun createImportAction(diagnostic: Diagnostic) =
             (diagnostic.psiElement as? KtExpression)?.let {
-                DelegateAccessorsImportFix(it, importNames(listOf(diagnostic)), false)
+                DelegateAccessorsImportFix(it, importNames(listOf(diagnostic)), false, diagnostic)
             }
 
 
         override fun createImportActionsForAllProblems(sameTypeDiagnostics: Collection<Diagnostic>): List<DelegateAccessorsImportFix> {
-            val element = sameTypeDiagnostics.first().psiElement
+            val diagnostic = sameTypeDiagnostics.first()
+            val element = diagnostic.psiElement
             val names = importNames(sameTypeDiagnostics)
-            return listOfNotNull((element as? KtExpression)?.let { DelegateAccessorsImportFix(it, names, true) })
+            return listOfNotNull((element as? KtExpression)?.let { DelegateAccessorsImportFix(it, names, true, diagnostic) })
         }
     }
 }
@@ -640,7 +651,7 @@ internal class ImportForMismatchingArgumentsFix(
         }
 
         indicesHelper
-            .getCallableTopLevelExtensions(callTypeAndReceiver, element, bindingContext) { it == name }
+            .getCallableTopLevelExtensions(callTypeAndReceiver, element, bindingContext, receiverTypeFromDiagnostic = null) { it == name }
             .forEach(::processDescriptor)
 
         if (!isSelectorInQualified(element)) {

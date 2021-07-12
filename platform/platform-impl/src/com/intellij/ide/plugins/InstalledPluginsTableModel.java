@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.plugins;
 
 import com.intellij.ide.IdeBundle;
@@ -7,10 +7,8 @@ import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
-import com.intellij.openapi.ui.OkCancelDialogBuilder;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.util.SystemProperties;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -19,11 +17,9 @@ import java.nio.file.FileVisitResult;
 import java.util.*;
 import java.util.function.BiConsumer;
 
-/**
- * @author stathik
- */
 public class InstalledPluginsTableModel {
 
+  private static final boolean HIDE_IMPLEMENTATION_DETAILS = !Boolean.getBoolean("startup.performance.framework");
   private static final InstalledPluginsState ourState = InstalledPluginsState.getInstance();
 
   protected final List<IdeaPluginDescriptor> view = new ArrayList<>();
@@ -60,13 +56,12 @@ public class InstalledPluginsTableModel {
     return myProject;
   }
 
-  protected @NotNull List<IdeaPluginDescriptor> getAllPlugins() {
+  protected final @NotNull List<IdeaPluginDescriptor> getAllPlugins() {
     return new ArrayList<>(view);
   }
 
-  @Nullable
-  public Set<PluginId> getRequiredPlugins(PluginId pluginId) {
-    return myDependentToRequiredListMap.get(pluginId);
+  protected final @NotNull Set<PluginId> getRequiredPluginIds(@NotNull PluginId pluginId) {
+    return myDependentToRequiredListMap.getOrDefault(pluginId, Set.of());
   }
 
   public final boolean isLoaded(@NotNull PluginId pluginId) {
@@ -94,8 +89,29 @@ public class InstalledPluginsTableModel {
     myEnabled.put(pluginId, enabled);
   }
 
-  public Map<PluginId, Set<PluginId>> getDependentToRequiredListMap() {
-    return myDependentToRequiredListMap;
+  protected final @NotNull Map<PluginId, ? extends IdeaPluginDescriptor> getDependentToRequiredListMap() {
+    HashMap<PluginId, IdeaPluginDescriptor> result = new HashMap<>();
+    for (Map.Entry<PluginId, Set<PluginId>> entry : myDependentToRequiredListMap.entrySet()) {
+      PluginId pluginId = entry.getKey();
+
+      if (!isLoaded(pluginId)) {
+        continue;
+      }
+
+      for (PluginId dependencyPluginId : entry.getValue()) {
+        if (PluginManagerCore.isModuleDependency(dependencyPluginId)) {
+          continue;
+        }
+
+        IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+        if (descriptor != null && !isHidden(descriptor)) {
+          result.put(pluginId, descriptor);
+        }
+        break;
+      }
+    }
+
+    return Collections.unmodifiableMap(result);
   }
 
   protected void updatePluginDependencies() {
@@ -105,7 +121,7 @@ public class InstalledPluginsTableModel {
     for (final IdeaPluginDescriptor rootDescriptor : view) {
       final PluginId pluginId = rootDescriptor.getPluginId();
       myDependentToRequiredListMap.remove(pluginId);
-      if (rootDescriptor instanceof IdeaPluginDescriptorImpl && ((IdeaPluginDescriptorImpl) rootDescriptor).isDeleted()) {
+      if (rootDescriptor instanceof IdeaPluginDescriptorImpl && ((IdeaPluginDescriptorImpl)rootDescriptor).isDeleted()) {
         continue;
       }
 
@@ -119,7 +135,7 @@ public class InstalledPluginsTableModel {
 
       boolean loaded = isLoaded(pluginId);
       if (rootDescriptor instanceof IdeaPluginDescriptorImpl) {
-        PluginManagerCore.processAllDependencies((IdeaPluginDescriptorImpl)rootDescriptor, false, pluginIdMap, (depId, descriptor) -> {
+        PluginManagerCore.processAllNonOptionalDependencies((IdeaPluginDescriptorImpl)rootDescriptor, pluginIdMap, (depId, __) -> {
           if (depId.equals(pluginId)) {
             return FileVisitResult.CONTINUE;
           }
@@ -160,16 +176,13 @@ public class InstalledPluginsTableModel {
                   });
 
     boolean enabled = action.isEnable();
-    Set<Pair<@Nullable ? extends IdeaPluginDescriptor, @NotNull String>> dependencies =
+    Set<Pair<? extends IdeaPluginDescriptor, @NotNull String>> dependencies =
       getDependenciesToUpdateState(descriptors,
                                    tempEnabled,
                                    enabled);
 
-    if (!dependencies.isEmpty() &&
-        !SystemProperties.getBooleanProperty("startup.performance.framework", false) &&
-        !createUpdateDependenciesDialog(action,
-                                        ContainerUtil.map(dependencies, pair -> pair.getSecond()))
-          .ask(getProject())) {
+    if (HIDE_IMPLEMENTATION_DETAILS &&
+        !createUpdateDependenciesDialog(ContainerUtil.map(dependencies, pair -> pair.getSecond()), action)) {
       return;
     }
 
@@ -180,7 +193,7 @@ public class InstalledPluginsTableModel {
     updatePluginDependencies();
   }
 
-  private void setNewEnabled(@NotNull Collection<@NotNull ? extends IdeaPluginDescriptor> descriptors,
+  private void setNewEnabled(@NotNull Collection<? extends IdeaPluginDescriptor> descriptors,
                              @NotNull PluginEnableDisableAction action) {
     setNewEnabled(descriptors,
                   myEnabled,
@@ -188,10 +201,10 @@ public class InstalledPluginsTableModel {
                   this::handleBeforeChangeEnableState);
   }
 
-  private static void setNewEnabled(@NotNull Collection<@NotNull ? extends IdeaPluginDescriptor> descriptors,
+  private static void setNewEnabled(@NotNull Collection<? extends IdeaPluginDescriptor> descriptors,
                                     @NotNull Map<PluginId, PluginEnabledState> enabledMap,
                                     @NotNull PluginEnableDisableAction action,
-                                    @NotNull BiConsumer<@NotNull ? super IdeaPluginDescriptor, @NotNull Pair<PluginEnableDisableAction, PluginEnabledState>> beforeHandler) {
+                                    @NotNull BiConsumer<? super IdeaPluginDescriptor, @NotNull Pair<PluginEnableDisableAction, PluginEnabledState>> beforeHandler) {
     for (IdeaPluginDescriptor descriptor : descriptors) {
       PluginId pluginId = descriptor.getPluginId();
       PluginEnabledState oldState = enabledMap.get(pluginId);
@@ -219,9 +232,9 @@ public class InstalledPluginsTableModel {
   }
 
   // todo to be defined static
-  private @NotNull Set<@NotNull Pair<@Nullable ? extends IdeaPluginDescriptor, @NotNull String>> getDependenciesToUpdateState(@NotNull Collection<? extends IdeaPluginDescriptor> descriptorsWithChangedEnabledState,
-                                                                                                                              @NotNull Map<PluginId, PluginEnabledState> enabledMap,
-                                                                                                                              boolean enabled) {
+  private @NotNull Set<@NotNull Pair<? extends IdeaPluginDescriptor, @NotNull String>> getDependenciesToUpdateState(@NotNull Collection<? extends IdeaPluginDescriptor> descriptorsWithChangedEnabledState,
+                                                                                                                    @NotNull Map<PluginId, PluginEnabledState> enabledMap,
+                                                                                                                    boolean enabled) {
     List<IdeaPluginDescriptor> descriptorsToCheckDependencies =
       new ArrayList<>(enabled ? descriptorsWithChangedEnabledState : getAllPlugins());
     if (!enabled) {
@@ -237,7 +250,7 @@ public class InstalledPluginsTableModel {
       }
       IdeaPluginDescriptorImpl pluginDescriptor = ((IdeaPluginDescriptorImpl)descriptorToCheckDependencies);
 
-      PluginManagerCore.processAllDependencies(pluginDescriptor, false, pluginIdMap, (depId, descriptor) -> {
+      PluginManagerCore.processAllNonOptionalDependencies(pluginDescriptor, pluginIdMap, (depId, descriptor) -> {
         if (depId.equals(pluginDescriptor.getPluginId())) {
           return FileVisitResult.CONTINUE;
         }
@@ -246,17 +259,13 @@ public class InstalledPluginsTableModel {
           return FileVisitResult.TERMINATE;
         }
 
-        if (enabled &&
-            isDisabled(depId, enabledMap)) {
-          String name = descriptor == null ?
-                        depId.getIdString() :
-                        descriptor.getName();
-          dependencies.add(Pair.create(descriptor, name));
+        if (enabled && isDisabled(depId, enabledMap)) {
+          String name = descriptor == null ? depId.getIdString() : descriptor.getName();
+          dependencies.add(new Pair<>(descriptor, name));
         }
 
         if (enabled ||
-            pluginDescriptor.isDeleted() ||
-            pluginDescriptor.isImplementationDetail()) {
+            isHidden(pluginDescriptor)) {
           return FileVisitResult.CONTINUE;
         }
 
@@ -274,9 +283,13 @@ public class InstalledPluginsTableModel {
     return dependencies;
   }
 
-  private static @NotNull OkCancelDialogBuilder createUpdateDependenciesDialog(@NotNull PluginEnableDisableAction action,
-                                                                               @NotNull List<String> dependencies) {
-    boolean hasOnlyOneDependency = dependencies.size() == 1;
+  private boolean createUpdateDependenciesDialog(@NotNull List<String> dependencies,
+                                                 @NotNull PluginEnableDisableAction action) {
+    int size = dependencies.size();
+    if (size == 0) {
+      return true;
+    }
+    boolean hasOnlyOneDependency = size == 1;
 
     String key;
     switch (action) {
@@ -325,8 +338,10 @@ public class InstalledPluginsTableModel {
       .okCancel(IdeBundle.message(enabled ? "dialog.title.enable.required.plugins" : "dialog.title.disable.dependent.plugins"),
                 IdeBundle.message(key, dependenciesText))
       .yesText(IdeBundle.message(enabled ? "button.enable" : "button.disable"))
-      .noText(Messages.getCancelButton());
+      .noText(Messages.getCancelButton())
+      .ask(getProject());
   }
+
   protected void handleBeforeChangeEnableState(@NotNull IdeaPluginDescriptor descriptor,
                                                @NotNull Pair<PluginEnableDisableAction, PluginEnabledState> pair) {
   }
@@ -346,5 +361,10 @@ public class InstalledPluginsTableModel {
   protected static boolean isLoaded(@NotNull PluginId pluginId,
                                     @NotNull Map<PluginId, PluginEnabledState> enabledMap) {
     return enabledMap.get(pluginId) != null;
+  }
+
+  protected static boolean isHidden(@NotNull IdeaPluginDescriptor descriptor) {
+    return (descriptor instanceof IdeaPluginDescriptorImpl) && ((IdeaPluginDescriptorImpl)descriptor).isDeleted() ||
+           HIDE_IMPLEMENTATION_DETAILS && descriptor.isImplementationDetail();
   }
 }

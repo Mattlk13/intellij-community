@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
@@ -18,6 +15,7 @@ import org.jetbrains.kotlin.analyzer.ResolverForProject
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.idea.FrontendInternals
+import org.jetbrains.kotlin.diagnostics.DiagnosticSink
 import org.jetbrains.kotlin.idea.caches.project.IdeaModuleInfo
 import org.jetbrains.kotlin.idea.caches.project.getNullableModuleInfo
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
@@ -52,9 +50,12 @@ private class ResolutionFacadeWithDebugInfo(
         }
     }
 
-    override fun analyzeWithAllCompilerChecks(elements: Collection<KtElement>): AnalysisResult {
+    override fun analyzeWithAllCompilerChecks(
+        elements: Collection<KtElement>,
+        callback: DiagnosticSink.DiagnosticsCallback?
+    ): AnalysisResult {
         return wrapExceptions({ ResolvingWhat(elements) }) {
-            delegate.analyzeWithAllCompilerChecks(elements)
+            delegate.analyzeWithAllCompilerChecks(elements, callback)
         }
     }
 

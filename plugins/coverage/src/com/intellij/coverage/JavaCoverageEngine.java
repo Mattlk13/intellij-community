@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.coverage;
 
 import com.intellij.CommonBundle;
@@ -13,6 +13,7 @@ import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.configurations.RunConfigurationBase;
 import com.intellij.execution.configurations.coverage.CoverageEnabledConfiguration;
 import com.intellij.execution.configurations.coverage.JavaCoverageEnabledConfiguration;
+import com.intellij.execution.target.RunTargetsEnabled;
 import com.intellij.execution.target.TargetEnvironmentAwareRunProfile;
 import com.intellij.execution.testframework.AbstractTestProxy;
 import com.intellij.execution.wsl.WslDistributionManager;
@@ -21,7 +22,6 @@ import com.intellij.ide.highlighter.JavaClassFileType;
 import com.intellij.java.coverage.JavaCoverageBundle;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.Experiments;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -81,7 +81,7 @@ public class JavaCoverageEngine extends CoverageEngine {
       return true;
     }
 
-    if (Experiments.getInstance().isFeatureEnabled("run.targets")
+    if (RunTargetsEnabled.get()
         && conf instanceof TargetEnvironmentAwareRunProfile
         && willRunOnTarget((TargetEnvironmentAwareRunProfile)conf)) {
       return false;
@@ -333,9 +333,13 @@ public class JavaCoverageEngine extends CoverageEngine {
       if (suite.isModuleChecked(module)) return false;
       suite.checkModule(module);
       final Runnable runnable = () -> {
-        if (Messages.showOkCancelDialog(
-          JavaCoverageBundle.message("project.class.files.are.out.of.date"),
-          JavaCoverageBundle.message("project.is.out.of.date"), Messages.getWarningIcon()) == Messages.OK) {
+        final int choice = Messages.showOkCancelDialog(project,
+                                                       JavaCoverageBundle.message("project.class.files.are.out.of.date"),
+                                                       JavaCoverageBundle.message("project.is.out.of.date"),
+                                                       JavaCoverageBundle.message("coverage.recompile"),
+                                                       JavaCoverageBundle.message("coverage.hide.report"),
+                                                       Messages.getWarningIcon());
+        if (choice == Messages.OK) {
           final CompilerManager compilerManager = CompilerManager.getInstance(project);
           compilerManager.make(compilerManager.createProjectCompileScope(project), (aborted, errors, warnings, compileContext) -> {
             if (aborted || errors != 0) return;

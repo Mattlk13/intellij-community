@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.editor.backspaceHandler;
 
@@ -24,6 +21,16 @@ import org.junit.runner.RunWith;
 public class BackspaceHandlerTestGenerated extends AbstractBackspaceHandlerTest {
     private void runTest(String testDataFilePath) throws Exception {
         KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+    }
+
+    @TestMetadata("beforeUnpairedBrace.kt")
+    public void testBeforeUnpairedBrace() throws Exception {
+        runTest("testData/editor/backspaceHandler/beforeUnpairedBrace.kt");
+    }
+
+    @TestMetadata("betweenOpenBraceAndParenthesis.kt")
+    public void testBetweenOpenBraceAndParenthesis() throws Exception {
+        runTest("testData/editor/backspaceHandler/betweenOpenBraceAndParenthesis.kt");
     }
 
     @TestMetadata("rawStringDelete.kt")

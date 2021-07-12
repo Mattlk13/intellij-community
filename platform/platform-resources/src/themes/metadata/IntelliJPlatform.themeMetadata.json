@@ -946,7 +946,7 @@
     },
     {
       "key": "ToolTip.Actions.background",
-      "description": "Actions in editor tooltips for inspection errors. Registry key \"ide.tooltip.show.with.actions\" should be on."
+      "description": "Actions in editor tooltips for inspection errors."
     },
     {
       "key": "ToolTip.Actions.infoForeground",
@@ -1201,9 +1201,64 @@
       "description": "Dialog border. Format: \"top,left,bottom,right,hex\", e.g. \"1,1,1,1,FFFFFF\". Sizes in pixels"
     },
     {
-      "key": "StateWidget.activeBackground",
-      "description": "Background of the state widget when at least one of the registered processes is active",
-      "since": "2021.1"
+      "key": "RunToolbar.Run.activeBackground",
+      "description": "Background of the run toolbar widget when at least one of the run processes is active",
+      "since": "2021.3"
+    },
+    {
+      "key": "RunToolbar.Debug.activeBackground",
+      "description": "Background of the run toolbar widget when at least one of the debug processes is active",
+      "since": "2021.3"
+    },
+    {
+      "key": "RunToolbar.Profile.activeBackground",
+      "description": "Background of the run toolbar widget when at least one of the profile processes is active",
+      "since": "2021.3"
+    },
+    {
+      "key": "DragAndDrop.borderColor",
+      "description": "Drop position highlighting (line/rectangle) for drag-n-drop in trees and lists",
+      "since": "2021.2"
+    },
+    {
+      "key": "Label.successForeground",
+      "description": "Foreground for successful state/text",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.shortcutBackground",
+      "description": "Background under shortcuts in the interactive IDE lessons",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.stepNumberForeground",
+      "description": "Foreground for task numbers in lessons",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.Tooltip.background",
+      "description": "Background for tooltips used in lessons",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.Tooltip.spanBackground",
+      "description": "Background for buttons and shortcuts used in lesson tooltips",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.Tooltip.foreground",
+      "description": "Foreground for tooltips text used in lessons",
+      "since": "2021.2"
+    },
+    {
+      "key": "Lesson.Tooltip.stepNumberForeground",
+      "description": "Foreground for task numbers in lesson tooltips",
+      "since": "2021.2"
+    },
+    {
+      "key": "ProblemsView.projectAnalysisButtonBackground",
+      "description": "Background for Project-Wide analysis button when enabled",
+      "since": "2021.2"
     }
   ]
 }

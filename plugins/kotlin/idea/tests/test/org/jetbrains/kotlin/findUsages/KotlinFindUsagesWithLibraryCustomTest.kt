@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.findUsages
 
@@ -17,8 +14,8 @@ class KotlinFindUsagesWithLibraryCustomTest : AbstractKotlinFindUsagesWithLibrar
     fun testFindUsagesForLocalClassProperty() {
         val libraryFile = FilenameIndex.getFilesByName(project, "library.kt", GlobalSearchScope.everythingScope(project)).first()
         val indexOf = libraryFile.text.indexOf("localClassProperty")
-        val jetParameter = libraryFile.findElementAt(indexOf)!!.getStrictParentOfType<KtParameter>()!!
-        val usages = findUsages(jetParameter.originalElement, null, false, project)
+        val ktParameter = libraryFile.findElementAt(indexOf)!!.getStrictParentOfType<KtParameter>()!!
+        val usages = findUsages(ktParameter.originalElement, null, false, project)
         assertEquals(2, usages.size)
     }
 }

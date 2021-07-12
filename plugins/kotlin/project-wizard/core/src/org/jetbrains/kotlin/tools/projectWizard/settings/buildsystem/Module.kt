@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem
 
 import org.jetbrains.annotations.NonNls
@@ -17,13 +18,13 @@ import org.jetbrains.kotlin.tools.projectWizard.settings.DisplayableSettingItem
 import org.jetbrains.kotlin.tools.projectWizard.templates.Template
 
 @Suppress("EnumEntryName")
-enum class ModuleKind(val isSingleplatform: Boolean) : DisplayableSettingItem {
-    multiplatform(isSingleplatform = false),
-    target(isSingleplatform = false),
-    singleplatformJvm(isSingleplatform = true),
-    singleplatformAndroid(isSingleplatform = true),
-    singleplatformJsBrowser(isSingleplatform = true),
-    singleplatformJsNode(isSingleplatform = true),
+enum class ModuleKind(val isSinglePlatform: Boolean) : DisplayableSettingItem {
+    multiplatform(isSinglePlatform = false),
+    target(isSinglePlatform = false),
+    singlePlatformJvm(isSinglePlatform = true),
+    singlePlatformAndroid(isSinglePlatform = true),
+    singlePlatformJsBrowser(isSinglePlatform = true),
+    singlePlatformJsNode(isSinglePlatform = true),
     ;
 
     override val text: String
@@ -31,13 +32,18 @@ enum class ModuleKind(val isSingleplatform: Boolean) : DisplayableSettingItem {
 }
 
 
-// TODO separate to classes
+/**
+ * @param template selected by default if any, should be present in [permittedTemplateIds].
+ * @param permittedTemplateIds when specified the set restricts templates available for the module. Final decision (on whether a template
+ * is included) is made on a template level, see [Template.isSupportedByModuleType].
+ */
 class Module(
     @NonNls var name: String,
     val configurator: ModuleConfigurator,
-    var template: Template?,
-    val sourcesets: List<Sourceset>,
-    subModules: List<Module>,
+    var template: Template? = null,
+    val permittedTemplateIds: Set<String>? = null,
+    val sourceSets: List<Sourceset> = createDefaultSourceSets(),
+    subModules: List<Module> = emptyList(),
     val dependencies: MutableList<ModuleReference> = mutableListOf(),
     var parent: Module? = null,
     override val identificator: Identificator = GeneratedIdentificator(name)
@@ -59,12 +65,12 @@ class Module(
 
     init {
         subModules.forEach { it.parent = this }
-        sourcesets.forEach { it.parent = this }
+        sourceSets.forEach { it.parent = this }
     }
 
 
     override val text: String get() = name
-    override val greyText: String?
+    override val greyText: String
         get() = when {
             kind == ModuleKind.target -> configurator.text + " " + KotlinNewProjectWizardBundle.message("module.kind.target")
             configurator == MppModuleConfigurator -> KotlinNewProjectWizardBundle.message("module.kind.mpp.module")
@@ -86,23 +92,19 @@ class Module(
 
         val parser: Parser<Module> = mapParser { map, path ->
             val (name) = map.parseValue<String>(path, "name")
-            val identificator = GeneratedIdentificator(name)
-            val (configurator) = map.parseValue(this, path, "type", ModuleConfigurator.getParser(identificator))
+            val identifier = GeneratedIdentificator(name)
+            val (configurator) = map.parseValue(this, path, "type", ModuleConfigurator.getParser(identifier))
 
             val template = map["template"]?.let {
-                Template.parser(identificator).parse(this, it, "$path.template")
+                Template.parser(identifier).parse(this, it, "$path.template")
             }.nullableValue()
-            val sourcesets = listOf(Sourceset(SourcesetType.main), Sourceset(SourcesetType.test))
+            val sourceSets = listOf(Sourceset(SourcesetType.main), Sourceset(SourcesetType.test))
             val (submodules) = map.parseValue(this, path, "subModules", listParser(Module.parser)) { emptyList() }
             val (dependencies) = map.parseValue(this, path, "dependencies", listParser(ModuleReference.ByPath.parser)) { emptyList() }
+
             Module(
-                name,
-                configurator,
-                template,
-                sourcesets,
-                submodules,
-                dependencies = dependencies.toMutableList(),
-                identificator = identificator
+                name, configurator, template = template, sourceSets = sourceSets, subModules = submodules,
+                dependencies = dependencies.toMutableList(), identificator = identifier
             )
         }
 
@@ -131,7 +133,7 @@ class Module(
                                 setting.title.capitalize()
                             )
                         )
-                    (setting.validator as SettingValidator<Any>).validate(this@settingValidator, value)
+                    setting.validator.validate(this@settingValidator, value)
                 }.fold()
             }
         }
@@ -156,8 +158,10 @@ class Module(
         val subModulesValidator = inValidatorContext<Module> { module ->
             validateList(module.subModules)
         }
-    }
 
+        private fun createDefaultSourceSets() =
+            SourcesetType.values().map { sourceSetType -> Sourceset(sourceSetType, dependencies = emptyList()) }
+    }
 }
 
 val Module.path
@@ -175,31 +179,13 @@ val Module.isRootModule
     get() = parent == null
 
 @Suppress("FunctionName")
-fun MultiplatformTargetModule(@NonNls name: String, configurator: ModuleConfigurator, sourcesets: List<Sourceset>) =
-    Module(
-        name,
-        configurator,
-        null,
-        sourcesets,
-        emptyList()
-    )
+fun MultiplatformTargetModule(@NonNls name: String, configurator: ModuleConfigurator, sourceSets: List<Sourceset>) =
+    Module(name, configurator, sourceSets = sourceSets)
 
 @Suppress("FunctionName")
 fun MultiplatformModule(@NonNls name: String, template: Template? = null, targets: List<Module> = emptyList()) =
-    Module(
-        name,
-        MppModuleConfigurator,
-        template,
-        emptyList(),
-        targets
-    )
+    Module(name, MppModuleConfigurator, template = template, subModules = targets)
 
 @Suppress("FunctionName")
-fun SingleplatformModule(@NonNls name: String, sourcesets: List<Sourceset>) =
-    Module(
-        name,
-        JvmSinglePlatformModuleConfigurator,
-        null,
-        sourcesets,
-        emptyList()
-    )
+fun SinglePlatformModule(@NonNls name: String, sourceSets: List<Sourceset>) =
+    Module(name, JvmSinglePlatformModuleConfigurator, sourceSets = sourceSets)

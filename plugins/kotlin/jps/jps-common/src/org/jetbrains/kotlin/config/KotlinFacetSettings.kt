@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.config
 
@@ -45,29 +42,6 @@ sealed class TargetPlatformKind<out Version : TargetPlatformVersion>(
         TargetPlatformVersion.NoVersion,
         "Common (experimental)"
     )
-}
-
-object CoroutineSupport {
-    @JvmStatic
-    fun byCompilerArguments(arguments: CommonCompilerArguments?): LanguageFeature.State =
-        byCompilerArgumentsOrNull(arguments) ?: LanguageFeature.Coroutines.defaultState
-
-    fun byCompilerArgumentsOrNull(arguments: CommonCompilerArguments?): LanguageFeature.State? = when (arguments?.coroutinesState) {
-        CommonCompilerArguments.ENABLE -> LanguageFeature.State.ENABLED
-        CommonCompilerArguments.WARN, CommonCompilerArguments.DEFAULT -> LanguageFeature.State.ENABLED_WITH_WARNING
-        CommonCompilerArguments.ERROR -> LanguageFeature.State.ENABLED_WITH_ERROR
-        else -> null
-    }
-
-    fun byCompilerArgument(argument: String): LanguageFeature.State =
-        LanguageFeature.State.values().find { getCompilerArgument(it).equals(argument, ignoreCase = true) }
-            ?: LanguageFeature.Coroutines.defaultState
-
-    fun getCompilerArgument(state: LanguageFeature.State): String = when (state) {
-        LanguageFeature.State.ENABLED -> "enable"
-        LanguageFeature.State.ENABLED_WITH_WARNING -> "warn"
-        LanguageFeature.State.ENABLED_WITH_ERROR, LanguageFeature.State.DISABLED -> "error"
-    }
 }
 
 sealed class VersionView : DescriptionAware {
@@ -182,7 +156,7 @@ data class ExternalSystemNativeMainRunTask(
 class KotlinFacetSettings {
     companion object {
         // Increment this when making serialization-incompatible changes to configuration data
-        val CURRENT_VERSION = 3
+        val CURRENT_VERSION = 4
         val DEFAULT_VERSION = 0
     }
 
@@ -273,21 +247,6 @@ class KotlinFacetSettings {
     fun getPlatform(): org.jetbrains.kotlin.platform.IdePlatform<*, *>? {
         return targetPlatform?.toIdePlatform()
     }
-
-    var coroutineSupport: LanguageFeature.State?
-        get() {
-            val languageVersion = languageLevel ?: return LanguageFeature.Coroutines.defaultState
-            if (languageVersion < LanguageFeature.Coroutines.sinceVersion!!) return LanguageFeature.State.DISABLED
-            return CoroutineSupport.byCompilerArgumentsOrNull(compilerArguments)
-        }
-        set(value) {
-            compilerArguments?.coroutinesState = when (value) {
-                null -> CommonCompilerArguments.DEFAULT
-                LanguageFeature.State.ENABLED -> CommonCompilerArguments.ENABLE
-                LanguageFeature.State.ENABLED_WITH_WARNING -> CommonCompilerArguments.WARN
-                LanguageFeature.State.ENABLED_WITH_ERROR, LanguageFeature.State.DISABLED -> CommonCompilerArguments.ERROR
-            }
-        }
 
     var implementedModuleNames: List<String> = emptyList() // used for first implementation of MPP, aka 'old' MPP
     var dependsOnModuleNames: List<String> = emptyList() // used for New MPP and later implementations

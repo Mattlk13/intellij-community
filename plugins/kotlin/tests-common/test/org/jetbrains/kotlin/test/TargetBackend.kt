@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.test
 
@@ -19,7 +16,11 @@ enum class TargetBackend(
     JS_IR(true, JS),
     JS_IR_ES6(true, JS_IR),
     WASM(true),
-    ANDROID(false, JVM);
+    ANDROID(false, JVM),
+    JVM_WITH_OLD_EVALUATOR(false),
+    JVM_IR_WITH_OLD_EVALUATOR(true),
+    JVM_WITH_IR_EVALUATOR(false),
+    JVM_IR_WITH_IR_EVALUATOR(true);
 
     val compatibleWith get() = compatibleWithTargetBackend ?: ANY
 }

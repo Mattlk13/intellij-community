@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ui.speedSearch;
 
 import com.intellij.openapi.actionSystem.DataProvider;
@@ -29,6 +29,7 @@ public final class ListWithFilter<T> extends JPanel implements DataProvider {
   private final JScrollPane myScrollPane;
   private final MySpeedSearch mySpeedSearch;
   private boolean myAutoPackHeight = true;
+  private boolean mySearchAlwaysVisible = false;
 
   @Override
   public Object getData(@NotNull @NonNls String dataId) {
@@ -63,7 +64,7 @@ public final class ListWithFilter<T> extends JPanel implements DataProvider {
     myScrollPane = scrollPane;
 
     mySearchField.getTextEditor().setFocusable(false);
-    mySearchField.setVisible(false);
+    mySearchField.setVisible(mySearchAlwaysVisible);
 
     add(mySearchField, BorderLayout.NORTH);
     add(myScrollPane, BorderLayout.CENTER);
@@ -102,6 +103,15 @@ public final class ListWithFilter<T> extends JPanel implements DataProvider {
     return hadPattern;
   }
 
+  public boolean isSearchAlwaysVisible() {
+    return mySearchAlwaysVisible;
+  }
+
+  public void setSearchAlwaysVisible(boolean searchAlwaysVisible) {
+    mySearchField.setVisible(searchAlwaysVisible);
+    mySearchAlwaysVisible = searchAlwaysVisible;
+  }
+
   public SpeedSearch getSpeedSearch() {
     return mySpeedSearch;
   }
@@ -136,7 +146,7 @@ public final class ListWithFilter<T> extends JPanel implements DataProvider {
         searchFieldShown = true;
       }
       else if (!isHoldingFilter() && searchFieldShown) {
-        mySearchField.setVisible(false);
+        mySearchField.setVisible(mySearchAlwaysVisible);
         searchFieldShown = false;
       }
 
@@ -158,7 +168,7 @@ public final class ListWithFilter<T> extends JPanel implements DataProvider {
     }
   }
 
-  protected void onSpeedSearchPatternChanged() {
+  private void onSpeedSearchPatternChanged() {
     T prevSelection = myList.getSelectedValue(); // save to restore the selection on filter drop
     myModel.refilter();
     if (myModel.getSize() > 0) {

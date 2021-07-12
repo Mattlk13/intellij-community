@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle
 
 import org.jetbrains.annotations.NonNls
@@ -83,7 +84,9 @@ data class GradleSectionIR(
 ) : GradleIR, FreeIR {
     override fun GradlePrinter.renderGradle() {
         sectionCall(name) {
-            irs.listNl()
+            if (irs.isNotEmpty()) {
+                irs.listNl()
+            }
         }
     }
 }

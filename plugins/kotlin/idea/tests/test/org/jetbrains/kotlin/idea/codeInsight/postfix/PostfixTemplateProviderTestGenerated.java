@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight.postfix;
 
@@ -221,9 +218,24 @@ public class PostfixTemplateProviderTestGenerated extends AbstractPostfixTemplat
         runTest("testData/codeInsight/postfix/whenExpression.kt");
     }
 
+    @TestMetadata("whenForEnumClass.kt")
+    public void testWhenForEnumClass() throws Exception {
+        runTest("testData/codeInsight/postfix/whenForEnumClass.kt");
+    }
+
+    @TestMetadata("whenForSealedClass.kt")
+    public void testWhenForSealedClass() throws Exception {
+        runTest("testData/codeInsight/postfix/whenForSealedClass.kt");
+    }
+
     @TestMetadata("while.kt")
     public void testWhile() throws Exception {
         runTest("testData/codeInsight/postfix/while.kt");
+    }
+
+    @TestMetadata("with.kt")
+    public void testWith() throws Exception {
+        runTest("testData/codeInsight/postfix/with.kt");
     }
 
     @RunWith(JUnit3RunnerWithInners.class)

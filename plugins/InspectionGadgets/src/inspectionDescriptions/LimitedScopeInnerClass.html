@@ -1,17 +1,17 @@
 <html>
 <body>
-Reports any limited-scope inner classes.
-They are unusual enough and can be confusing.
-Some code standards discourage them as well.
-<p>Example:</p>
-<pre>
+Reports local classes.
+<p>A local class is a named nested class declared inside a code block.
+Local classes are uncommon and may therefore be confusing.
+  In addition, some code standards discourage the use of local classes.</p>
+<p><b>Example:</b></p>
+<pre><code>
   void test() {
-    class Local { // limited-scope inner class
+    class Local { // local class
     }
     new Local();
   }
-</pre>
+</code></pre>
 <!-- tooltip end -->
-<p>
 </body>
 </html>

@@ -1,26 +1,12 @@
-/*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.compilerRunner
 
 import com.intellij.util.xmlb.XmlSerializerUtil
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.jps.api.GlobalOptions
+import org.jetbrains.kotlin.cli.common.CompilerSystemProperties
 import org.jetbrains.kotlin.cli.common.ExitCode
-import org.jetbrains.kotlin.cli.common.KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY
 import org.jetbrains.kotlin.cli.common.arguments.*
 import org.jetbrains.kotlin.cli.common.messages.MessageCollectorUtil
 import org.jetbrains.kotlin.config.CompilerSettings
@@ -55,6 +41,16 @@ class JpsKotlinCompilerRunner {
         private var _jpsCompileServiceSession: CompileServiceSession? = null
 
         @TestOnly
+        fun shutdownDaemon() {
+            _jpsCompileServiceSession?.let {
+                try {
+                    it.compileService.shutdown()
+                } catch (_: Throwable) {
+                }
+            }
+            _jpsCompileServiceSession = null
+        }
+
         fun releaseCompileServiceSession() {
             _jpsCompileServiceSession?.let {
                 try {
@@ -286,7 +282,7 @@ class JpsKotlinCompilerRunner {
         // unfortunately it cannot be currently set by default globally, because it breaks many tests
         // since there is no reliable way so far to detect running under tests, switching it on only for parallel builds
         if (System.getProperty(GlobalOptions.COMPILE_PARALLEL_OPTION, "false").toBoolean())
-            System.setProperty(KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY, "true")
+            CompilerSystemProperties.KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY.value = "true"
 
         val rc = environment.withProgressReporter { progress ->
             progress.compilationStarted()

@@ -24,7 +24,6 @@ import org.w3c.dom.svg.SVGDocument
 import java.awt.*
 import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
-import java.io.StringReader
 import java.lang.ref.WeakReference
 import kotlin.math.max
 import kotlin.math.min
@@ -111,8 +110,12 @@ class SvgTranscoder private constructor(private var width: Float, private var he
 
         val image = render((transcoder.width + 0.5f).toInt(), (transcoder.height + 0.5f).toInt(), transform, gvtRoot)
 
+        // Take into account the image size rounding and correct the original user size in order to compensate the inaccuracy.
+        val effectiveUserWidth = image.width / scale;
+        val effectiveUserHeight = image.height / scale;
+
         // outDimensions should contain the base size
-        outDimensions?.setSize(docWidth.toDouble() / normalizingScale, docHeight.toDouble() / normalizingScale)
+        outDimensions?.setSize(effectiveUserWidth.toDouble() / normalizingScale, effectiveUserHeight.toDouble() / normalizingScale)
         return image
       }
       catch (e: TranscoderException) {
@@ -167,7 +170,7 @@ class SvgTranscoder private constructor(private var width: Float, private var he
                        "  <line x1=\"1\" y1=\"1\" x2=\"15\" y2=\"15\" stroke=\"red\" stroke-width=\"2\"/>\n" +
                        "  <line x1=\"1\" y1=\"15\" x2=\"15\" y2=\"1\" stroke=\"red\" stroke-width=\"2\"/>\n" +
                        "</svg>\n"
-    return createSvgDocument(null, StringReader(fallbackIcon)) as SVGDocument
+    return createSvgDocument(null, fallbackIcon.byteInputStream()) as SVGDocument
   }
 
   override fun getTransform() = currentTransform!!

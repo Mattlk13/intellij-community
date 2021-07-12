@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
@@ -46,6 +43,8 @@ class IntroduceBackingPropertyIntention : SelfTargetingIntention<KtProperty>(
 
         fun introduceBackingProperty(property: KtProperty) {
             createBackingProperty(property)
+
+            property.removeModifier(KtTokens.LATEINIT_KEYWORD)
 
             if (property.typeReference == null) {
                 val type = SpecifyTypeExplicitlyIntention.getTypeForDeclaration(property)
@@ -101,6 +100,10 @@ class IntroduceBackingPropertyIntention : SelfTargetingIntention<KtProperty>(
                     appendFixedText(" = ")
                     appendExpression(property.initializer)
                 }
+            }
+
+            if (property.hasModifier(KtTokens.LATEINIT_KEYWORD)) {
+                backingProperty.addModifier(KtTokens.LATEINIT_KEYWORD)
             }
 
             property.parent.addBefore(backingProperty, property)

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix;
 
@@ -442,6 +439,11 @@ public abstract class QuickFixMultiModuleTestGenerated extends AbstractQuickFixM
         @TestMetadata("sealedSubclass")
         public void testSealedSubclass() throws Exception {
             runTest("testData/multiModuleQuickFix/createActual/sealedSubclass/");
+        }
+
+        @TestMetadata("valueClass")
+        public void testValueClass() throws Exception {
+            runTest("testData/multiModuleQuickFix/createActual/valueClass/");
         }
 
         @TestMetadata("withFakeJvm")

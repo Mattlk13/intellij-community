@@ -1,12 +1,15 @@
 // Copyright 2000-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.codeInspection.dataFlow;
 
+import com.intellij.codeInspection.dataFlow.memory.DfaMemoryState;
 import com.intellij.codeInspection.dataFlow.types.DfType;
 import com.intellij.codeInspection.dataFlow.types.DfTypes;
 import com.intellij.codeInspection.dataFlow.value.*;
 import com.intellij.codeInspection.util.InspectionMessage;
 import com.intellij.java.analysis.JavaAnalysisBundle;
 import com.intellij.psi.*;
+import com.siyeh.ig.psiutils.ExpressionUtils;
+import com.siyeh.ig.psiutils.MethodCallUtils;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -23,6 +26,11 @@ import java.util.stream.Stream;
 public abstract class ContractReturnValue {
   private static final int PARAMETER_ORDINAL_BASE = 10;
   private static final int MAX_SUPPORTED_PARAMETER = 100;
+
+  @Nullable
+  public PsiExpression findPlace(@NotNull PsiMethodCallExpression call) {
+    return null;
+  }
 
   private interface Validator extends Function<PsiMethod, @Nls @Nullable String> {}
 
@@ -386,7 +394,7 @@ public abstract class ContractReturnValue {
 
     @Override
     public boolean isValueCompatible(DfaMemoryState state, DfaValue value) {
-      return !state.isNotNull(value);
+      return state.getDfType(value).isSuperType(DfTypes.NULL);
     }
   };
 
@@ -408,7 +416,7 @@ public abstract class ContractReturnValue {
 
     @Override
     public boolean isValueCompatible(DfaMemoryState state, DfaValue value) {
-      return !state.isNull(value);
+      return state.getDfType(value) != DfTypes.NULL;
     }
   };
 
@@ -440,7 +448,7 @@ public abstract class ContractReturnValue {
 
     @Override
     public boolean isValueCompatible(DfaMemoryState state, DfaValue value) {
-      return !state.isNull(value);
+      return state.getDfType(value) != DfTypes.NULL;
     }
   };
 
@@ -460,6 +468,11 @@ public abstract class ContractReturnValue {
     }
 
     @Override
+    public @Nullable PsiExpression findPlace(@NotNull PsiMethodCallExpression call) {
+      return ExpressionUtils.getEffectiveQualifier(call.getMethodExpression());
+    }
+
+    @Override
     public boolean isNotNull() {
       return true;
     }
@@ -475,7 +488,7 @@ public abstract class ContractReturnValue {
 
     @Override
     public boolean isValueCompatible(DfaMemoryState state, DfaValue value) {
-      return !state.isNull(value);
+      return state.getDfType(value) != DfTypes.NULL;
     }
   };
 
@@ -515,7 +528,7 @@ public abstract class ContractReturnValue {
 
     @Override
     public boolean isValueCompatible(DfaMemoryState state, DfaValue value) {
-      DfType type = state.getUnboxedDfType(value);
+      DfType type = DfaUtil.getUnboxedDfType(state, value);
       return type.isSuperType(DfTypes.booleanValue(myValue));
     }
   }
@@ -530,6 +543,15 @@ public abstract class ContractReturnValue {
 
     public int getParameterNumber() {
       return myParamNumber;
+    }
+
+    @Override
+    public @Nullable PsiExpression findPlace(@NotNull PsiMethodCallExpression call) {
+      int number = this.getParameterNumber();
+      PsiExpression[] args = call.getArgumentList().getExpressions();
+      if (args.length <= number) return null;
+      if (args.length == number + 1 && MethodCallUtils.isVarArgCall(call)) return null;
+      return args[number];
     }
 
     @Override

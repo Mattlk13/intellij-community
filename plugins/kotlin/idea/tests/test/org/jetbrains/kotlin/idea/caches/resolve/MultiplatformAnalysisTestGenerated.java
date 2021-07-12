@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve;
 
@@ -29,6 +26,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("aliasesTypeMismatch")
     public void testAliasesTypeMismatch() throws Exception {
         runTest("testData/multiplatform/aliasesTypeMismatch/");
+    }
+
+    @TestMetadata("builtinsAndStdlib")
+    public void testBuiltinsAndStdlib() throws Exception {
+        runTest("testData/multiplatform/builtinsAndStdlib/");
     }
 
     @TestMetadata("callableReferences")
@@ -116,6 +118,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("testData/multiplatform/duplicateExpectsWithStrongIncompatibility/");
     }
 
+    @TestMetadata("expectActualLineMarkers")
+    public void testExpectActualLineMarkers() throws Exception {
+        runTest("testData/multiplatform/expectActualLineMarkers/");
+    }
+
     @TestMetadata("extensionOnExpect")
     public void testExtensionOnExpect() throws Exception {
         runTest("testData/multiplatform/extensionOnExpect/");
@@ -161,6 +168,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("testData/multiplatform/kt41218/");
     }
 
+    @TestMetadata("kt44898")
+    public void testKt44898() throws Exception {
+        runTest("testData/multiplatform/kt44898/");
+    }
+
     @TestMetadata("lambdas")
     public void testLambdas() throws Exception {
         runTest("testData/multiplatform/lambdas/");
@@ -174,6 +186,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("multilevelParents")
     public void testMultilevelParents() throws Exception {
         runTest("testData/multiplatform/multilevelParents/");
+    }
+
+    @TestMetadata("multiplatformLibrary")
+    public void testMultiplatformLibrary() throws Exception {
+        runTest("testData/multiplatform/multiplatformLibrary/");
     }
 
     @TestMetadata("overrideExpect")
@@ -236,6 +253,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("testData/multiplatform/typeParameters/");
     }
 
+    @TestMetadata("unresolvedInMultiplatformLibrary")
+    public void testUnresolvedInMultiplatformLibrary() throws Exception {
+        runTest("testData/multiplatform/unresolvedInMultiplatformLibrary/");
+    }
+
     @TestMetadata("useCorrectBuiltIns")
     public void testUseCorrectBuiltIns() throws Exception {
         runTest("testData/multiplatform/useCorrectBuiltIns/");
@@ -244,5 +266,10 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("weaklyIncompatibleActualInIntermediateModule")
     public void testWeaklyIncompatibleActualInIntermediateModule() throws Exception {
         runTest("testData/multiplatform/weaklyIncompatibleActualInIntermediateModule/");
+    }
+
+    @TestMetadata("whenExhaustivenessForSealed")
+    public void testWhenExhaustivenessForSealed() throws Exception {
+        runTest("testData/multiplatform/whenExhaustivenessForSealed/");
     }
 }

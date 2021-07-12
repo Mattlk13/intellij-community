@@ -1,7 +1,8 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.vfs.impl;
 
 import com.intellij.openapi.util.Comparing;
+import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.io.FileSystemUtil;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
@@ -134,7 +135,7 @@ class FilePartNode {
     if (fs instanceof ArchiveFileSystem && file.getParent() == null) {
       return JAR_SEPARATOR_NAME_ID;
     }
-    
+
     return ((VirtualFileSystemEntry)file).getNameId();
   }
 
@@ -151,7 +152,7 @@ class FilePartNode {
       CharSequence name = fromNameId(nameId);
       int index = children.length == 0 ? -1 : binarySearchChildByName(name);
       FilePartNode child;
-      assert index < 0 : index + " : child= '" + (child = children[index]) + "'"
+      if (index >= 0) throw new AssertionError(index + " : child= '" + (child = children[index]) + "'"
                          + "; child.nameEqualTo(nameId)=" + child.nameEqualTo(nameId)
                          + "; child.getClass()=" + child.getClass()
                          + "; child.nameId=" + child.nameId
@@ -159,11 +160,10 @@ class FilePartNode {
                          + "; nameId=" + nameId
                          + "; name='" + name + "'"
                          + "; compare(child) = " + StringUtil.compare(child.getName(), name, !isCaseSensitive()) + ";"
-                         + " UrlPart.nameEquals: " + FileUtil.PATH_CHAR_SEQUENCE_HASHING_STRATEGY.equals(child.getName(), fromNameId(nameId))
-                         + "; name.equals(child.getName())=" + child.getName().equals(name)
-                         + "; file="+file
-                         + "; this.isCaseSensitive()="+isCaseSensitive()
-        ;
+                         + " UrlPart.nameEquals: " + StringUtilRt.equal(child.getName(), fromNameId(nameId), SystemInfoRt.isFileSystemCaseSensitive)
+                                                                                               + "; name.equals(child.getName())=" + child.getName().equals(name)
+                                                                                               + "; file=" + file
+                                                                                               + "; this.isCaseSensitive()=" + isCaseSensitive());
       Object fileOrUrl = file;
       if (fileOrUrl == null) {
         fileOrUrl = this.nameId == -1 ? name.toString() : childUrl(myUrl(), name, childFs);

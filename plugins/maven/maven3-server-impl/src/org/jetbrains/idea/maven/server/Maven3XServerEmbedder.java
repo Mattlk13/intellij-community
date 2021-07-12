@@ -9,7 +9,6 @@ import com.intellij.util.Function;
 import com.intellij.util.ReflectionUtilRt;
 import com.intellij.util.containers.ContainerUtilRt;
 import com.intellij.util.text.VersionComparatorUtil;
-import gnu.trove.THashMap;
 import org.apache.commons.cli.ParseException;
 import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.DefaultMaven;
@@ -50,6 +49,8 @@ import org.apache.maven.profiles.activation.ProfileActivator;
 import org.apache.maven.profiles.activation.SystemPropertyProfileActivator;
 import org.apache.maven.project.*;
 import org.apache.maven.project.inheritance.DefaultModelInheritanceAssembler;
+import org.apache.maven.project.interpolation.AbstractStringBasedModelInterpolator;
+import org.apache.maven.project.interpolation.ModelInterpolationException;
 import org.apache.maven.project.path.DefaultPathTranslator;
 import org.apache.maven.project.validation.ModelValidationResult;
 import org.apache.maven.repository.RepositorySystem;
@@ -65,6 +66,7 @@ import org.codehaus.plexus.context.ContextException;
 import org.codehaus.plexus.context.DefaultContext;
 import org.codehaus.plexus.logging.BaseLoggerManager;
 import org.codehaus.plexus.logging.Logger;
+import org.codehaus.plexus.personality.plexus.lifecycle.phase.InitializationException;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.graph.Dependency;
@@ -424,6 +426,45 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
 
   @NotNull
   private static Model doInterpolate(@NotNull Model result, File basedir) throws RemoteException {
+    String mavenVersion = System.getProperty(MAVEN_EMBEDDER_VERSION);
+    if (VersionComparatorUtil.compare(mavenVersion, "3.3.1") >= 0) {
+      return doInterpolate330(result, basedir);
+    }
+    else {
+      Model model = doInterpolate325(result, basedir);
+      org.apache.maven.project.path.PathTranslator pathTranslator = new DefaultPathTranslator();
+      pathTranslator.alignToBaseDirectory(model, basedir);
+      return model;
+    }
+  }
+
+  @NotNull
+  private static Model doInterpolate325(@NotNull Model result, File basedir) throws RemoteException {
+    try {
+      AbstractStringBasedModelInterpolator interpolator = new CustomMaven3ModelInterpolator(new DefaultPathTranslator());
+      interpolator.initialize();
+
+      Properties props = MavenServerUtil.collectSystemProperties();
+      ProjectBuilderConfiguration config = new DefaultProjectBuilderConfiguration().setExecutionProperties(props);
+      config.setBuildStartTime(new Date());
+
+      Properties userProperties = new Properties();
+      userProperties.putAll(getMavenAndJvmConfigProperties(basedir));
+      config.setUserProperties(userProperties);
+
+      result = interpolator.interpolate(result, basedir, config, false);
+    }
+    catch (ModelInterpolationException e) {
+      Maven3ServerGlobals.getLogger().warn(e);
+    }
+    catch (InitializationException e) {
+      Maven3ServerGlobals.getLogger().error(e);
+    }
+    return result;
+  }
+
+  @NotNull
+  private static Model doInterpolate330(@NotNull Model result, File basedir) throws RemoteException {
     try {
 
       CustomMaven3ModelInterpolator2 interpolator = new CustomMaven3ModelInterpolator2();
@@ -571,7 +612,7 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
       customizeComponents(token);
 
       ArtifactFactory artifactFactory = getComponent(ArtifactFactory.class);
-      if(artifactFactory instanceof CustomMaven3ArtifactFactory) {
+      if (artifactFactory instanceof CustomMaven3ArtifactFactory) {
         ((CustomMaven3ArtifactFactory)artifactFactory).customize();
       }
 
@@ -598,7 +639,7 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
   public void customizeComponents(MavenToken token) throws RemoteException {
     MavenServerUtil.checkToken(token);
     // replace some plexus components
-    if(VersionComparatorUtil.compare("3.7.0-SNAPSHOT", getMavenVersion()) < 0) {
+    if (VersionComparatorUtil.compare("3.7.0-SNAPSHOT", getMavenVersion()) < 0) {
       myContainer.addComponent(getComponent(ArtifactFactory.class, "ide"), ArtifactFactory.ROLE);
     }
     myContainer.addComponent(getComponent(ArtifactResolver.class, "ide"), ArtifactResolver.ROLE);
@@ -748,7 +789,7 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
             }
             else {
               final DependencyResolutionResult dependencyResolutionResult = resolveDependencies(project, repositorySession);
-              boolean addUnresolved = System.getProperty("idea.maven.no.use.dependency.graph")==null;
+              boolean addUnresolved = System.getProperty("idea.maven.no.use.dependency.graph") == null;
               Set<Artifact> artifacts = resolveArtifacts(dependencyResolutionResult, addUnresolved);
               project.setArtifacts(artifacts);
               executionResults.add(new MavenExecutionResult(project, dependencyResolutionResult, exceptions, modelProblems));
@@ -1023,7 +1064,6 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
     }
     else {
       mavenMultiModuleProjectDirectory = MavenServerUtil.findMavenBasedir(file);
-
     }
     return mavenMultiModuleProjectDirectory;
   }
@@ -1227,7 +1267,7 @@ public abstract class Maven3XServerEmbedder extends Maven3ServerEmbedder {
         .resolveTransitively(toResolve, project, Collections.EMPTY_MAP, myLocalRepository, convertRepositories(remoteRepositories),
                              getComponent(ArtifactMetadataSource.class)).getArtifacts();
 
-      return MavenModelConverter.convertArtifacts(res, new THashMap<Artifact, MavenArtifact>(), getLocalRepositoryFile());
+      return MavenModelConverter.convertArtifacts(res, new HashMap<Artifact, MavenArtifact>(), getLocalRepositoryFile());
     }
     catch (ArtifactResolutionException e) {
       Maven3ServerGlobals.getLogger().info(e);

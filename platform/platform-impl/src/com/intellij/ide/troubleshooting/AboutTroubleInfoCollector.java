@@ -1,7 +1,6 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.troubleshooting;
 
-import com.intellij.ide.IdeBundle;
 import com.intellij.ide.ui.LafManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.ex.ApplicationInfoEx;
@@ -9,15 +8,17 @@ import com.intellij.openapi.application.impl.ApplicationInfoImpl;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.troubleshooting.GeneralTroubleInfoCollector;
-import com.intellij.util.text.DateFormatUtil;
+import com.intellij.util.system.CpuArch;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Locale;
 import java.util.Properties;
 
 final class AboutTroubleInfoCollector implements GeneralTroubleInfoCollector {
@@ -34,12 +35,12 @@ final class AboutTroubleInfoCollector implements GeneralTroubleInfoCollector {
     String output = "Build version: ";
     output += appInfo.getFullApplicationName();
 
-    String buildInfo = IdeBundle.message("about.box.build.number", appInfo.getBuild().asString());
+    String buildInfo = "Build: #" + appInfo.getBuild();
     String buildDate = "";
     if (appInfo.getBuild().isSnapshot()) {
       buildDate = new SimpleDateFormat("HH:mm, ").format(cal.getTime());
     }
-    buildDate += DateFormatUtil.formatAboutDialogDate(cal.getTime());
+    buildDate += DateFormat.getDateInstance(DateFormat.LONG, Locale.US).format(cal.getTime());
     output += ' ' + buildInfo + ' ' + buildDate;
     output += '\n';
 
@@ -61,6 +62,10 @@ final class AboutTroubleInfoCollector implements GeneralTroubleInfoCollector {
     output += properties.getProperty("java.vm.name", "unknown");
     output += ' ' + properties.getProperty("java.vendor", "unknown");
     output += '\n';
+
+    if(SystemInfo.isMac && CpuArch.isIntel64()){
+      output += "Under Rosetta: " + SystemInfo.isUnderRosetta() + '\n';
+    }
 
     output += PathManager.PROPERTY_CONFIG_PATH + "=" + logPath(PathManager.getConfigPath()) + '\n';
     output += PathManager.PROPERTY_SYSTEM_PATH + "=" + logPath(PathManager.getSystemPath()) + '\n';

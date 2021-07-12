@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve;
 
@@ -44,6 +41,11 @@ public class IdeCompiledLightClassTestGenerated extends AbstractIdeCompiledLight
     @TestMetadata("AnnotationClass.kt")
     public void testAnnotationClass() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/AnnotationClass.kt");
+    }
+
+    @TestMetadata("Constructors.kt")
+    public void testConstructors() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/Constructors.kt");
     }
 
     @TestMetadata("DataClassWithCustomImplementedMembers.kt")
@@ -126,6 +128,11 @@ public class IdeCompiledLightClassTestGenerated extends AbstractIdeCompiledLight
         runTest("testData/compiler/asJava/lightClasses/NonDataClassWithComponentFunctions.kt");
     }
 
+    @TestMetadata("OnlySecondaryConstructors.kt")
+    public void testOnlySecondaryConstructors() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/OnlySecondaryConstructors.kt");
+    }
+
     @TestMetadata("PublishedApi.kt")
     public void testPublishedApi() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/PublishedApi.kt");
@@ -134,6 +141,11 @@ public class IdeCompiledLightClassTestGenerated extends AbstractIdeCompiledLight
     @TestMetadata("SpecialAnnotationsOnAnnotationClass.kt")
     public void testSpecialAnnotationsOnAnnotationClass() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/SpecialAnnotationsOnAnnotationClass.kt");
+    }
+
+    @TestMetadata("SpecialAnnotationsOnAnnotationClass_1_6.kt")
+    public void testSpecialAnnotationsOnAnnotationClass_1_6() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/SpecialAnnotationsOnAnnotationClass_1_6.kt");
     }
 
     @TestMetadata("StubOrderForOverloads.kt")
@@ -323,24 +335,6 @@ public class IdeCompiledLightClassTestGenerated extends AbstractIdeCompiledLight
         @TestMetadata("Simple.kt")
         public void testSimple() throws Exception {
             runTest("testData/compiler/asJava/lightClasses/publicField/Simple.kt");
-        }
-    }
-
-    @RunWith(JUnit3RunnerWithInners.class)
-    @TestMetadata("testData/compiler/asJava/lightClasses/script")
-    public static class Script extends AbstractIdeCompiledLightClassTest {
-        private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
-        }
-
-        @TestMetadata("HelloWorld.kts")
-        public void testHelloWorld() throws Exception {
-            runTest("testData/compiler/asJava/lightClasses/script/HelloWorld.kts");
-        }
-
-        @TestMetadata("InnerClasses.kts")
-        public void testInnerClasses() throws Exception {
-            runTest("testData/compiler/asJava/lightClasses/script/InnerClasses.kts");
         }
     }
 }

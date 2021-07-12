@@ -9,13 +9,13 @@ version = "1.0-SNAPSHOT"
 
 dependencies {
     implementation(project(":b"))
-    testImplementation(kotlin("test-junit"))
+    testImplementation(kotlin("test"))
 }
 
 tasks.test {
-    useJUnit()
+    useJUnitPlatform()
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }

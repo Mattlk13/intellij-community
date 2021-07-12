@@ -1,11 +1,13 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package git4idea.stash.ui
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.DataProvider
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vcs.changes.EditorTabDiffPreviewManager
 import com.intellij.openapi.vcs.changes.EditorTabPreview
 import com.intellij.openapi.vcs.changes.ui.ChangesTree
 import com.intellij.openapi.vcs.changes.ui.TreeActionsToolbarPanel
@@ -17,8 +19,9 @@ import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, disposable: Disposable) : Disposable {
-  val mainComponent: JPanel = JPanel(BorderLayout())
+class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, disposable: Disposable) :
+  JPanel(BorderLayout()), Disposable, DataProvider {
+
   private val tree: ChangesTree
   private val treeDiffSplitter: OnePixelSplitter
   private val toolbar: JComponent
@@ -28,7 +31,7 @@ class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, dis
 
   init {
     tree = GitStashTree(project, this)
-    PopupHandler.installPopupHandler(tree, "Git.Stash.ContextMenu", GIT_STASH_UI_PLACE)
+    PopupHandler.installPopupMenu(tree, "Git.Stash.ContextMenu", GIT_STASH_UI_PLACE)
 
     toolbar = buildToolbar()
 
@@ -40,7 +43,7 @@ class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, dis
     treeDiffSplitter.firstComponent = treePanel
     setDiffPreviewInEditor(isEditorDiffPreview, force = true)
 
-    mainComponent.add(treeDiffSplitter, BorderLayout.CENTER)
+    add(treeDiffSplitter, BorderLayout.CENTER)
 
     Disposer.register(disposable, this)
   }
@@ -61,11 +64,11 @@ class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, dis
     if (!force && (isInEditor == (editorTabPreview != null))) return
 
     if (diffPreviewProcessor != null) Disposer.dispose(diffPreviewProcessor!!)
-    diffPreviewProcessor = GitStashDiffPreview(project, tree, this)
+    diffPreviewProcessor = GitStashDiffPreview(project, tree, isInEditor, this)
     diffPreviewProcessor!!.toolbarWrapper.setVerticalSizeReferent(toolbar)
 
     if (isInEditor) {
-      editorTabPreview = GitStashEditorDiffPreview(diffPreviewProcessor!!, tree, mainComponent)
+      editorTabPreview = GitStashEditorDiffPreview(diffPreviewProcessor!!, tree, this)
       treeDiffSplitter.secondComponent = null
     }
     else {
@@ -75,6 +78,12 @@ class GitStashUi(private val project: Project, isEditorDiffPreview: Boolean, dis
   }
 
   override fun dispose() {
+  }
+
+  override fun getData(dataId: String): Any? {
+    if (EditorTabDiffPreviewManager.EDITOR_TAB_DIFF_PREVIEW.`is`(dataId)) return editorTabPreview
+
+    return null
   }
 
   companion object {

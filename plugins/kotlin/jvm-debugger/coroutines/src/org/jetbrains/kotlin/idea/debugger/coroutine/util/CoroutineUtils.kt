@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.coroutine.util
 
@@ -23,6 +20,7 @@ import org.jetbrains.kotlin.idea.debugger.evaluate.DefaultExecutionContext
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 
 const val CREATION_STACK_TRACE_SEPARATOR = "\b\b\b" // the "\b\b\b" is used as creation stacktrace separator in kotlinx.coroutines
+const val CREATION_CLASS_NAME = "_COROUTINE._CREATION"
 
 fun Method.isInvokeSuspend(): Boolean =
     name() == "invokeSuspend" && signature() == "(Ljava/lang/Object;)Ljava/lang/Object;"
@@ -36,7 +34,7 @@ fun Method.isSuspendLambda() =
 fun Method.hasContinuationParameter() =
     signature().contains("Lkotlin/coroutines/Continuation;)")
 
-fun Location.isPreFlight(): SuspendExitMode {
+fun Location.getSuspendExitMode(): SuspendExitMode {
     val method = safeMethod() ?: return SuspendExitMode.NONE
     if (method.isSuspendLambda())
         return SuspendExitMode.SUSPEND_LAMBDA
@@ -104,7 +102,8 @@ fun hasGetCoroutineSuspended(frames: List<StackFrameProxyImpl>) =
     frames.indexOfFirst { it.safeLocation()?.safeMethod()?.isGetCoroutineSuspended() == true }
 
 fun StackTraceElement.isCreationSeparatorFrame() =
-    className.startsWith(CREATION_STACK_TRACE_SEPARATOR)
+    className.startsWith(CREATION_STACK_TRACE_SEPARATOR) ||
+    className == CREATION_CLASS_NAME
 
 fun Location.findPosition(project: Project) =
     readAction {

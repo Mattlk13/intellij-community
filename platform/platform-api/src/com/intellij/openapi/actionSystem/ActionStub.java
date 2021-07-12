@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.actionSystem;
 
 import com.intellij.openapi.diagnostic.Logger;
@@ -15,8 +15,9 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * The main (and single) purpose of this class is provide lazy initialization
- * of the actions. ClassLoader eats a lot of time on startup to load the actions' classes.
+ * The main (and single) purpose of this class is to provide lazy initialization
+ * of the actions.
+ * ClassLoader eats up a lot of time on startup to load the actions' classes.
  *
  * @author Vladimir Kondratyev
  */
@@ -93,7 +94,7 @@ public final class ActionStub extends AnAction implements ActionStubBase {
    * Copies template presentation and shortcuts set to {@code targetAction}.
    */
   @ApiStatus.Internal
-  public final void initAction(@NotNull AnAction targetAction) {
+  public void initAction(@NotNull AnAction targetAction) {
     copyTemplatePresentation(this.getTemplatePresentation(), targetAction.getTemplatePresentation());
     targetAction.setShortcutSet(getShortcutSet());
     copyActionTextOverrides(targetAction);

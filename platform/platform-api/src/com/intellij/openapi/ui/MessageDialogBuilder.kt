@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.ui
 
 import com.intellij.CommonBundle
@@ -6,9 +6,11 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper.DoNotAskOption
 import com.intellij.openapi.ui.Messages.*
+import com.intellij.openapi.ui.messages.AlertMessagesManager
 import com.intellij.openapi.ui.messages.MessagesService
 import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.util.NlsContexts.DialogMessage
+import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.ui.ComponentUtil
 import com.intellij.ui.mac.MacMessages
@@ -48,13 +50,6 @@ sealed class MessageDialogBuilder<T : MessageDialogBuilder<T>>(protected val tit
     fun yesNoCancel(title: @NlsContexts.DialogTitle String, message: @DialogMessage String): YesNoCancel {
       return YesNoCancel(title, message).icon(UIUtil.getQuestionIcon())
     }
-  }
-
-  @Deprecated(message = "Pass parentComponent to show", level = DeprecationLevel.ERROR)
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-  fun parentComponent(parentComponent: Component?): T {
-    this.parentComponent = parentComponent
-    return getThis()
   }
 
   @Deprecated(message = "Pass project to show", level = DeprecationLevel.ERROR)
@@ -123,15 +118,17 @@ sealed class MessageDialogBuilder<T : MessageDialogBuilder<T>>(protected val tit
     private fun show(project: Project?, parentComponent: Component?): Boolean {
       val yesText = yesText ?: CommonBundle.getYesButtonText()
       val noText = noText ?: CommonBundle.getNoButtonText()
-      return showMessage(project, parentComponent, mac = { window ->
-        MacMessages.getInstance().showYesNoDialog(title, message, yesText, noText, window, doNotAskOption, icon, helpId)
-      }, other = {
-        (MessagesService.getInstance().showMessageDialog(project = project, parentComponent = parentComponent,
-                                                         message = message, title = title, icon = icon,
-                                                         options = arrayOf(yesText, noText),
-                                                         doNotAskOption = doNotAskOption,
-                                                         helpId = helpId, alwaysUseIdeaUI = true) == 0)
-      })
+      return showMessage(
+        project,
+        parentComponent,
+        mac = { MacMessages.getInstance().showYesNoDialog(title, message, yesText, noText, it, doNotAskOption, icon, helpId) },
+        other = {
+          MessagesService.getInstance().showMessageDialog(
+            project = project, parentComponent = parentComponent, message = message, title = title, icon = icon,
+            options = arrayOf(yesText, noText), doNotAskOption = doNotAskOption, helpId = helpId, alwaysUseIdeaUI = true
+          ) == YES
+        }
+      )
     }
   }
 
@@ -249,7 +246,7 @@ class OkCancelDialogBuilder internal constructor(title: String, message: String)
 }
 
 private inline fun <T> showMessage(project: Project?, parentComponent: Component?, mac: (Window?) -> T, other: () -> T): T {
-  if (canShowMacSheetPanel()) {
+  if (canShowMacSheetPanel() || (SystemInfoRt.isMac && AlertMessagesManager.isEnabled())) {
     try {
       val window = if (parentComponent == null) {
         WindowManager.getInstance().suggestParentWindow(project)

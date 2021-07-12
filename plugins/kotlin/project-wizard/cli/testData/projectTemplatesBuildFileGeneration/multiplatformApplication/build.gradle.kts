@@ -10,14 +10,23 @@ repositories {
 }
 
 kotlin {
-    
+    jvm {
+        compilations.all {
+            kotlinOptions.jvmTarget = "1.8"
+        }
+        withJava()
+        testRuns["test"].executionTask.configure {
+            useJUnitPlatform()
+        }
+    }
     sourceSets {
         val commonMain by getting
         val commonTest by getting {
             dependencies {
-                implementation(kotlin("test-common"))
-                implementation(kotlin("test-annotations-common"))
+                implementation(kotlin("test"))
             }
         }
+        val jvmMain by getting
+        val jvmTest by getting
     }
 }

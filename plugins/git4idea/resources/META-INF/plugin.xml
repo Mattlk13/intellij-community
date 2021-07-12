@@ -17,8 +17,12 @@
 
   <resource-bundle>messages.GitBundle</resource-bundle>
 
-  <depends>com.intellij.modules.vcs</depends>
-  <depends optional="true" config-file="git-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <content>
+    <module name="intellij.vcs.git/terminal"/>
+  </content>
+  <dependencies>
+    <plugin id="com.intellij.modules.vcs"/>
+  </dependencies>
 
   <actions>
     <action id="Git.Init" class="git4idea.actions.GitInit">
@@ -275,7 +279,8 @@
       <add-to-group group-id="CopyFileReference"/>
     </action>
 
-    <action id="Git.Show.Stage" class="git4idea.index.actions.GitShowStagingAreaAction" use-shortcut-of="CheckinProject" icon="AllIcons.Actions.Commit">
+    <action id="Git.Show.Stage" class="git4idea.index.actions.GitShowStagingAreaAction"/>
+    <action id="Git.Commit.Stage" class="git4idea.index.actions.GitCommitWithStagingAreaAction" use-shortcut-of="CheckinProject" icon="AllIcons.Actions.Commit">
       <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="CheckinProject"/>
       <add-to-group group-id="VcsToolbarActions" anchor="after" relative-to-action="CheckinProject"/>
       <add-to-group group-id="VcsNavBarToolbarActions" anchor="after" relative-to-action="CheckinProject"/>
@@ -283,9 +288,9 @@
     <action id="Git.Stage.Add" class="git4idea.index.actions.GitAddAction" use-shortcut-of="ChangesView.AddUnversioned"/>
     <action id="Git.Stage.Reset" class="git4idea.index.actions.GitResetAction" use-shortcut-of="ChangesView.Revert"/>
     <action id="Git.Stage.Revert" class="git4idea.index.actions.GitRevertAction" use-shortcut-of="ChangesView.Revert"/>
-    <action id="Git.Stage.AcceptTheirs" class="git4idea.index.actions.GitAcceptTheirsAction"/>
-    <action id="Git.Stage.AcceptYours" class="git4idea.index.actions.GitAcceptYoursAction"/>
-    <action id="Git.Stage.Merge" class="git4idea.index.actions.GitMergeConflictAction"/>
+    <action id="Git.Stage.AcceptTheirs" class="git4idea.index.actions.GitStageAcceptTheirsAction"/>
+    <action id="Git.Stage.AcceptYours" class="git4idea.index.actions.GitStageAcceptYoursAction"/>
+    <action id="Git.Stage.Merge" class="git4idea.index.actions.GitStageMergeConflictAction"/>
     <action id="Git.Stage.ThreeSideDiff" class="git4idea.index.actions.GitStageThreeSideDiffAction"/>
     <action id="Git.Stage.ToggleIgnored" class="git4idea.index.actions.GitToggleIgnoredFilesAction"/>
     <action id="Git.Stage.Add.All" class="git4idea.index.actions.GitStageAllAction"/>
@@ -296,6 +301,15 @@
     <action id="Git.Stage.Compare.Staged.Local" class="git4idea.index.actions.GitStageCompareStagedWithLocalAction"/>
     <action id="Git.Stage.Compare.Staged.Head" class="git4idea.index.actions.GitStageCompareStagedWithHeadAction"/>
     <action id="Git.Stage.Compare.Three.Versions" class="git4idea.index.actions.GitStageCompareThreeVersionsAction"/>
+
+    <group id="Git.ChangesView.Conflicts">
+      <action id="Git.ChangesView.Merge" class="git4idea.merge.GitMergeConflictAction"/>
+      <action id="Git.ChangesView.AcceptTheirs" class="git4idea.merge.GitAcceptTheirsAction"/>
+      <action id="Git.ChangesView.AcceptYours" class="git4idea.merge.GitAcceptYoursAction"/>
+      <separator/>
+
+      <add-to-group group-id="ChangesViewPopupMenu" anchor="first"/>
+    </group>
 
     <action id="Git.Stash.Silently" class="git4idea.index.actions.GitStashSilentlyAction" icon="AllIcons.Vcs.ShelveSilent"/>
 
@@ -318,6 +332,7 @@
       <reference id="Git.Ignore.File"/>
       <separator/>
       <reference id="Diff.ShowDiff"/>
+      <reference ref="Diff.ShowStandaloneDiff"/>
       <reference id="Git.Stage.ThreeSideDiff"/>
       <reference ref="EditSource"/>
       <reference ref="ChangesView.CreatePatchFromChanges"/>
@@ -360,12 +375,18 @@
       <reference id="Git.Stash.Drop"/>
       <separator/>
       <reference id="Diff.ShowDiff"/>
+      <reference ref="Diff.ShowStandaloneDiff"/>
       <reference id="Vcs.ShowDiffWithLocal"/>
       <reference id="Vcs.ShowDiffWithLocal.Before"/>
     </group>
   </actions>
 
   <extensions defaultExtensionNs="com.intellij">
+    <advancedSetting id="git.clone.recurse.submodules" default="true" groupKey="advanced.settings.git"/>
+    <advancedSetting id="git.read.content.with" enumClass="git4idea.util.GitTextConvMode" default="FILTERS" groupKey="advanced.settings.git"/>
+    <advancedSetting id="git.use.push.force.with.lease" default="true" groupKey="advanced.settings.git"/>
+    <advancedSetting id="git.update.incoming.outgoing.info" default="true" groupKey="advanced.settings.git"/>
+    <advancedSetting id="git.use.schannel.on.windows" default="false" groupKey="advanced.settings.git"/>
     <registryKey key="git.execute.with.mediator" defaultValue="true"
                  description="Use wrapper executable on Windows to support soft Git process cancellation."/>
     <registryKey key="git.blocking.read" defaultValue="true"
@@ -398,14 +419,6 @@
                               Otherwise only the affected files will be refreshed.
                               Affects only a subset of Git operations.
                               The option is needed to debug possible &quot;incomplete VFS refresh&quot; reports, if they appear."/>
-    <registryKey key="git.force.commit.using.staging.area" defaultValue="true"
-                 description="When enabled, perform all git commits by updating staging area. If disabled, use 'git commit --only' when possible."/>
-    <registryKey key="git.clone.recurse.submodules" defaultValue="true"
-                 description="When enabled, Checkout from Git calls 'git clone --recurse-submodules', i.e. clones the main repository with all submodules if there are any."/>
-    <registryKey key="git.read.content.with.textconv" defaultValue="false"
-                 description="Apply 'textconv' transformations when reading file content from git. (overrides &quot;git.read.content.with.filters&quot; option)"/>
-    <registryKey key="git.read.content.with.filters" defaultValue="true"
-                 description="Apply 'filters' transformations when reading file content from git."/>
     <registryKey key="git.log.fix.merge.commits.parents.order" defaultValue="false" restartRequired="true"
                  description="Find merge commits where a remote branch was merged into local before pushing
                               and fix parents order for such commits in order to display them more naturally in the commits graph."/>
@@ -423,8 +436,6 @@
                               Set to -2 to start as many threads, as there are repositories in the project.\n
                               Set to -3 to start as many threads, as there are repositories, but not more than 2 * number of cores.\n
                               By default, SSH supports up to 10 multiplexed connections, thus number of threads will be limited by 10 despite this value."/>
-    <registryKey key="git.use.schannel.on.windows" defaultValue="false"
-                 description="Force git to use Windows certificate store to very SSL connections. Git 2.14 and above is required"/>
     <registryKey key="git.use.shell.script.on.windows" defaultValue="true"
                  description="Use workaround for Native SSH support in Git. Batch file cannot properly handle arguments with newlines when used as SSH_ASKPASS."/>
     <registryKey key="git.use.setsid.for.native.ssh" defaultValue="true"
@@ -434,20 +445,12 @@
                  description="Wrap 'git' process with 'setsid -w' for remote operations with WSL executable."/>
     <registryKey key="git.wsl.exe.executable.no.shell" defaultValue="false"
                  description="Run git process for WSL executables without wrapping into a shell command."/>
-    <registryKey key="git.use.push.force.with.lease" defaultValue="true"
-                 description="Use '--force-with-lease' to push from IDE instead of '--force'"/>
     <registryKey key="git.use.no.optional.locks" defaultValue="true"
                  description="Use 'GIT_OPTIONAL_LOCKS' env variable to avoid taking unnecessary locks in git. Ex: to avoid 'git status' to interfere with 'git rebase' process in terminal."/>
-    <registryKey key="git.process.ignored" defaultValue="true"
-                 description="Process and highlight Git ignored files."/>
-    <registryKey key="git.update.incoming.outgoing.info" defaultValue="true"
-                 description="Update branches info that have incoming/outgoing commits in the Branches popup."/>
     <registryKey key="git.merge.conflicts.toolwindow" defaultValue="false"
                  description="Show dedicated toolwindow for git merge conflicts"/>
     <registryKey key="git.update.project.info.as.log" defaultValue="true"
                  description="If enabled, Update Project for Git is followed by the list of commits, instead of the list of updated files."/>
-    <registryKey key="git.enable.stage" defaultValue="false"
-                 description="Obsolete property, replaced by Settings | Version Control | Git | Enable staging area"/>
     <registryKey key="git.enable.stage.line.status.tracker" defaultValue="true"
                  description="Show staged and unstaged changes in gutter markers." restartRequired="true"/>
     <registryKey key="git.shelve.load.base.in.batches" defaultValue="1000"
@@ -462,9 +465,6 @@
                  description="Do not record stage operations in the undo stack of the document"/>
     <registryKey key="git.show.full.branch.name.instead.current.selected"
                  description="Show full branch names instead of Current/Selected"
-                 defaultValue="false"/>
-    <registryKey key="git.auto.commit.on.revert"
-                 description="If false, show modal commit dialog before producing revert commit"
                  defaultValue="true"/>
 
     <search.projectOptionsTopHitProvider implementation="git4idea.config.GitOptionsTopHitProvider"/>
@@ -480,6 +480,7 @@
     <checkinHandlerFactory implementation="git4idea.checkin.GitSkipHooksCommitHandlerFactory" order="last"/>
     <unresolvedMergeCheckProvider implementation="git4idea.checkin.GitUnresolvedMergeCheckProvider"/>
     <logProvider implementation="git4idea.log.GitLogProvider"/>
+    <vcsLogCustomColumn implementation="git4idea.log.GitCommitSignatureLogColumn"/>
     <vcsChangesViewRefresher implementation="git4idea.changes.GitChangesViewRefresher" />
     <vcs.branchStateProvider implementation="git4idea.branch.GitBranchStateProvider"/>
     <pushSupport implementation="git4idea.push.GitPushSupport"/>
@@ -589,6 +590,7 @@
                         preloaderClassName="git4idea.index.GitStageContentPreloader"
                         displayNameSupplierClassName="git4idea.index.GitStageDisplayNameSupplier"
                         isInCommitToolWindow="true"/>
+    <vcs.changes.changesViewNodeAction implementation="git4idea.merge.GitChangesViewNodeAction"/>
     <projectService serviceImplementation="git4idea.index.ui.GitStageUiSettingsImpl"/>
 
     <projectService serviceImplementation="git4idea.index.GitStageTracker"/>
@@ -606,6 +608,7 @@
     <vcs.fileStatusProvider implementation="git4idea.index.vfs.GitIndexVirtualFileStatusProvider"/>
 
     <diff.actions.ShowDiffAction.ExtensionProvider implementation="git4idea.index.actions.GitStageDiffAction"/>
+    <diff.actions.ShowStandaloneDiffAction.ExtensionProvider implementation="git4idea.index.actions.GitStageDiffAction"/>
     <openapi.vcs.changes.actions.CreatePatchFromChangesAction.Dialog.ExtensionProvider
       implementation="git4idea.index.actions.GitStageCreatePatchActionProvider$Dialog"/>
     <openapi.vcs.changes.actions.CreatePatchFromChangesAction.Clipboard.ExtensionProvider
@@ -622,6 +625,7 @@
     <projectService serviceImplementation="git4idea.stash.GitStashCache"/>
     <postStartupActivity implementation="git4idea.stash.ui.GitStashStartupActivity"/>
     <diff.actions.ShowDiffAction.ExtensionProvider implementation="git4idea.stash.ui.GitShowDiffFromStashAction"/>
+    <diff.actions.ShowStandaloneDiffAction.ExtensionProvider implementation="git4idea.stash.ui.GitShowDiffFromStashAction"/>
 
     <vcs.consoleFolding implementation="git4idea.console.GitConsoleFolding"/>
     <console.folding implementation="git4idea.console.GitProgressOutputConsoleFolding"/>

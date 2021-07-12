@@ -17,8 +17,6 @@ import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.HtmlBuilder;
 import com.intellij.openapi.util.text.HtmlChunk;
-import com.intellij.openapi.vcs.ProjectLevelVcsManager;
-import com.intellij.openapi.vcs.VcsBundle;
 import com.intellij.openapi.vcs.VcsNotifier;
 import com.intellij.openapi.vcs.ex.ProjectLevelVcsManagerEx;
 import com.intellij.openapi.vcs.update.AbstractCommonUpdateAction;
@@ -27,6 +25,7 @@ import com.intellij.openapi.vcs.update.UpdatedFiles;
 import com.intellij.util.concurrency.annotations.RequiresEdt;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.vcs.ViewUpdateInfoNotification;
+import com.intellij.xml.util.XmlStringUtil;
 import git4idea.GitVcs;
 import git4idea.branch.GitBranchUtil;
 import git4idea.i18n.GitBundle;
@@ -180,12 +179,7 @@ final class GitPushResultNotification extends Notification {
         && !grouped.errors.isEmpty()
         || !grouped.rejected.isEmpty()
         || !grouped.customRejected.isEmpty()) {
-      notification.addAction(NotificationAction.createSimple(
-        VcsBundle.message("notification.showDetailsInConsole"),
-        () -> {
-          ProjectLevelVcsManager vcsManager = ProjectLevelVcsManager.getInstance(project);
-          vcsManager.showConsole(vcsManager::scrollConsoleToTheEnd);
-        }));
+      notification.addAction(VcsNotifier.getInstance(project).createShowDetailsAction());
     }
 
     return notification;
@@ -307,7 +301,7 @@ final class GitPushResultNotification extends Notification {
         description = GitBundle.message("push.notification.description.rejected.by.remote", sourceBranch, targetBranch);
         break;
       case ERROR:
-        description = result.getError();
+        description = XmlStringUtil.escapeString(result.getError());
         break;
       default:
         LOG.error("Unexpected push result: " + result);

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.highlighter
 
@@ -149,7 +146,8 @@ internal class ElementAnnotator(
                         else -> null
                     },
                     highlightType = when (factory) {
-                        in Errors.UNUSED_ELEMENT_DIAGNOSTICS -> ProblemHighlightType.LIKE_UNUSED_SYMBOL
+                        in Errors.UNUSED_ELEMENT_DIAGNOSTICS, Errors.UNUSED_DESTRUCTURED_PARAMETER_ENTRY ->
+                            ProblemHighlightType.LIKE_UNUSED_SYMBOL
                         Errors.UNUSED_ANONYMOUS_PARAMETER -> ProblemHighlightType.WEAK_WARNING
                         else -> null
                     }
@@ -193,28 +191,19 @@ internal class ElementAnnotator(
     }
 
     private fun isUnstableAbiClassDiagnosticForModulesWithEnabledUnstableAbi(diagnostic: Diagnostic): Boolean {
-        // TODO: following code has to be adjusted with 1.5M1 migration
-        //   relates to original commit 913c298be858b63e472cfd6c58af11702b3a101d
+        val factory = diagnostic.factory
+        if (factory != Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS && factory != Errors.FIR_COMPILED_CLASS) return false
 
-        //val factory = diagnostic.factory
-        //if (factory != Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS && factory != Errors.FIR_COMPILED_CLASS) return false
-        //
-        //val module = element.module ?: return false
-        //val moduleFacetSettings = KotlinFacetSettingsProvider.getInstance(element.project)?.getSettings(module) ?: return false
-        //return when (factory) {
-        //    Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS ->
-        //        moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useIR) &&
-        //                !moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useOldBackend)
-        //    Errors.FIR_COMPILED_CLASS ->
-        //        moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useFir)
-        //    else -> error(factory)
-        //}
-
-        if (diagnostic.factory != Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS) return false
         val module = element.module ?: return false
         val moduleFacetSettings = KotlinFacetSettingsProvider.getInstance(element.project)?.getSettings(module) ?: return false
-        return moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useIR)
-                || moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::allowUnstableDependencies)
+        return when (factory) {
+            Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS ->
+                moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useIR) &&
+                        !moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useOldBackend)
+            Errors.FIR_COMPILED_CLASS ->
+                moduleFacetSettings.isCompilerSettingPresent(K2JVMCompilerArguments::useFir)
+            else -> error(factory)
+        }
     }
 
     companion object {

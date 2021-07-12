@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.test;
 
@@ -460,6 +457,11 @@ public abstract class IrKotlinSteppingTestGenerated extends AbstractIrKotlinStep
             runTest("testData/stepping/stepOver/kt24343.kt");
         }
 
+        @TestMetadata("kt44074.kt")
+        public void testKt44074() throws Exception {
+            runTest("testData/stepping/stepOver/kt44074.kt");
+        }
+
         @TestMetadata("lambdaToInlineFold.kt")
         public void testLambdaToInlineFold() throws Exception {
             runTest("testData/stepping/stepOver/lambdaToInlineFold.kt");
@@ -478,6 +480,16 @@ public abstract class IrKotlinSteppingTestGenerated extends AbstractIrKotlinStep
         @TestMetadata("lambdaToInlineMapFiltersDisabled.kt")
         public void testLambdaToInlineMapFiltersDisabled() throws Exception {
             runTest("testData/stepping/stepOver/lambdaToInlineMapFiltersDisabled.kt");
+        }
+
+        @TestMetadata("localFunction.kt")
+        public void testLocalFunction() throws Exception {
+            runTest("testData/stepping/stepOver/localFunction.kt");
+        }
+
+        @TestMetadata("localFunctionWithSingleLineExpressionBody.kt")
+        public void testLocalFunctionWithSingleLineExpressionBody() throws Exception {
+            runTest("testData/stepping/stepOver/localFunctionWithSingleLineExpressionBody.kt");
         }
 
         @TestMetadata("noParameterExtensionLambdaArgumentCallInInline.kt")
@@ -1152,6 +1164,16 @@ public abstract class IrKotlinSteppingTestGenerated extends AbstractIrKotlinStep
         @TestMetadata("manyFilesWithInlineCalls2.kt")
         public void testManyFilesWithInlineCalls2() throws Exception {
             runTest("testData/stepping/custom/manyFilesWithInlineCalls2.kt");
+        }
+
+        @TestMetadata("multilineFunctionCall.kt")
+        public void testMultilineFunctionCall() throws Exception {
+            runTest("testData/stepping/custom/multilineFunctionCall.kt");
+        }
+
+        @TestMetadata("sequentialInlineFunctionCalls.kt")
+        public void testSequentialInlineFunctionCalls() throws Exception {
+            runTest("testData/stepping/custom/sequentialInlineFunctionCalls.kt");
         }
 
         @TestMetadata("severalFunLiterals.kt")

@@ -13,6 +13,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.*;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.*;
+import com.intellij.openapi.util.registry.ExperimentalUI;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.wm.IdeFocusManager;
@@ -36,10 +37,7 @@ import com.intellij.ui.tabs.impl.tabsLayout.TabsLayout;
 import com.intellij.ui.tabs.impl.tabsLayout.TabsLayoutCallback;
 import com.intellij.ui.tabs.impl.tabsLayout.TabsLayoutInfo;
 import com.intellij.ui.tabs.impl.tabsLayout.TabsLayoutSettingsManager;
-import com.intellij.util.Alarm;
-import com.intellij.util.Function;
-import com.intellij.util.MathUtil;
-import com.intellij.util.Producer;
+import com.intellij.util.*;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.JBIterable;
 import com.intellij.util.ui.*;
@@ -139,6 +137,7 @@ public class JBTabsImpl extends JComponent
   private boolean myPaintFocus;
 
   private boolean myHideTabs;
+  private boolean myHideTopPanel;
   @Nullable private Project myProject;
   @NotNull private final Disposable myParentDisposable;
 
@@ -227,15 +226,6 @@ public class JBTabsImpl extends JComponent
 
   private JBTabsImpl(@NotNull Project project, @NotNull Disposable parent) {
     this(project, IdeFocusManager.getInstance(project), parent);
-  }
-
-  /**
-   * @deprecated Do not pass ActionManager.
-   */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-  public JBTabsImpl(@Nullable Project project, @SuppressWarnings("unused") @NotNull ActionManager actionManager, IdeFocusManager focusManager, @NotNull Disposable parent) {
-    this(project, focusManager, parent);
   }
 
   public JBTabsImpl(@Nullable Project project, @Nullable IdeFocusManager focusManager, @NotNull Disposable parentDisposable) {
@@ -847,7 +837,7 @@ public class JBTabsImpl extends JComponent
 
   private void addTimerUpdate() {
     if (!myListenerAdded) {
-      ActionManager.getInstance().addTimerListener(500, this);
+      ActionManager.getInstance().addTimerListener(this);
       myListenerAdded = true;
     }
   }
@@ -1018,6 +1008,7 @@ public class JBTabsImpl extends JComponent
     if (titleProducer != null) {
       ActionToolbar toolbar = ActionManager.getInstance()
         .createActionToolbar(ActionPlaces.TABS_MORE_TOOLBAR, new DefaultActionGroup(new TitleAction(titleProducer)), true);
+      toolbar.setTargetComponent(null);
       toolbar.setMiniMode(true);
       myTitleWrapper.setContent(toolbar.getComponent());
     }
@@ -1195,7 +1186,7 @@ public class JBTabsImpl extends JComponent
     return myPopupGroup != null ? myPopupGroup.get() : null;
   }
 
-  String getPopupPlace() {
+  public String getPopupPlace() {
     return myPopupPlace;
   }
 
@@ -1772,7 +1763,8 @@ public class JBTabsImpl extends JComponent
 
       if (group != null) {
         final String place = info.getPlace();
-        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(place != null ? place : "JBTabs", group, tabs.myHorizontalSide);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(
+          place != null && !place.equals(ActionPlaces.UNKNOWN) ? place : "JBTabs", group, tabs.myHorizontalSide);
         toolbar.setTargetComponent(info.getActionsContextComponent());
         final JComponent actionToolbar = toolbar.getComponent();
         add(actionToolbar, BorderLayout.CENTER);
@@ -2287,7 +2279,7 @@ public class JBTabsImpl extends JComponent
 
   private void processRemove(final TabInfo info, boolean forcedNow) {
     TabLabel tabLabel = myInfo2Label.get(info);
-    remove(tabLabel);
+    ObjectUtils.consumeIfNotNull(tabLabel, label -> remove(label));
     remove(myInfo2Toolbar.get(info));
 
     JComponent tabComponent = info.getComponent();
@@ -2525,7 +2517,7 @@ public class JBTabsImpl extends JComponent
 
   @Override
   public boolean isHideTabs() {
-    return myHideTabs;
+    return myHideTabs || myHideTopPanel;
   }
 
   @Override
@@ -2535,6 +2527,27 @@ public class JBTabsImpl extends JComponent
     myHideTabs = hideTabs;
 
     relayout(true, false);
+  }
+
+  /**
+   * @param hideTopPanel true if tabs and top toolbar should be hidden from a view
+   */
+  @Override
+  public void setHideTopPanel(boolean hideTopPanel) {
+    if (isHideTopPanel() == hideTopPanel) return;
+
+    myHideTopPanel = hideTopPanel;
+
+    getTabs().stream()
+      .map(TabInfo::getSideComponent)
+      .forEach(component -> component.setVisible(!myHideTopPanel));
+
+    relayout(true, true);
+  }
+
+  @Override
+  public boolean isHideTopPanel() {
+    return myHideTopPanel;
   }
 
   @Override
@@ -2826,7 +2839,7 @@ public class JBTabsImpl extends JComponent
 
   @Override
   public boolean isSingleRow() {
-    return mySingleRow;
+    return mySingleRow || ExperimentalUI.isNewEditorTabs();
   }
 
   public boolean isSideComponentVertical() {
@@ -2941,6 +2954,10 @@ public class JBTabsImpl extends JComponent
     }
 
     return result;
+  }
+
+  public ActionGroup getNavigationActions() {
+    return myNavigationActions;
   }
 
   @Override

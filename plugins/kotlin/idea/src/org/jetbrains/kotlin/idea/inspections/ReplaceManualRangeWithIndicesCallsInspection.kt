@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
- * that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -11,13 +8,18 @@ import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.psi.search.searches.ReferencesSearch
+import org.jetbrains.kotlin.builtins.DefaultBuiltIns
 import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.inspections.collections.isMap
 import org.jetbrains.kotlin.idea.intentions.getArguments
 import org.jetbrains.kotlin.idea.intentions.isSizeOrLength
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
+import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 
 class ReplaceManualRangeWithIndicesCallsInspection : AbstractKotlinInspection() {
     val rangeFunctions = setOf("until", "rangeTo")
@@ -47,8 +49,12 @@ class ReplaceManualRangeWithIndicesCallsInspection : AbstractKotlinInspection() 
             "rangeTo" -> right.receiverIfIsSizeOrLengthMinusOneCall()
             else -> null
         } as? KtSimpleNameExpression ?: return
+        if (!collection.doesHaveIndicesExtensionFunction()) return
         visitIndicesRange(holder, expression, collection)
     }
+
+    private fun KtExpression.doesHaveIndicesExtensionFunction() =
+        getType(analyze(BodyResolveMode.PARTIAL))?.isMap(DefaultBuiltIns.Instance) == false
 
     private fun visitIndicesRange(holder: ProblemsHolder, range: KtExpression, collection: KtSimpleNameExpression) {
         val parent = range.parent.parent

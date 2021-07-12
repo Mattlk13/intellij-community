@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.templates
 
@@ -89,8 +86,8 @@ class ReactJsClientTemplate : JsClientTemplate() {
                 if (!hasKtorServNeighbourTarget) {
                     +(FileTemplateDescriptor("jsClient/index.html.vm") asResourceOf SourcesetType.main)
                 }
-                +(FileTemplateDescriptor("$id/reactClient.kt.vm", "client.kt".asPath()) asSrcOf SourcesetType.main)
-                +(FileTemplateDescriptor("$id/reactComponent.kt.vm", "welcome.kt".asPath()) asSrcOf SourcesetType.main)
+                +(FileTemplateDescriptor("$id/reactClient.kt.vm", "Client.kt".asPath()) asSrcOf SourcesetType.main)
+                +(FileTemplateDescriptor("$id/reactComponent.kt.vm", "Welcome.kt".asPath()) asSrcOf SourcesetType.main)
 
                 if (useStyledComponents.reference.settingValue) {
                     +(FileTemplateDescriptor("$id/WelcomeStyles.kt.vm") asSrcOf SourcesetType.main)
@@ -99,7 +96,7 @@ class ReactJsClientTemplate : JsClientTemplate() {
         }
 
     override fun Reader.getAdditionalSettings(module: Module): Map<String, Any> = withSettingsOf(module) {
-        mapOf("useStyledComponents" to (useStyledComponents.reference.settingValue))
+        jsSettings(module) + mapOf("useStyledComponents" to (useStyledComponents.reference.settingValue))
     }
 
     private object Dependencies {
@@ -135,9 +132,9 @@ class ReactJsClientTemplate : JsClientTemplate() {
 
         private fun wrapperDependency(artifact: String, version: Version) =
             ArtifactBasedLibraryDependencyIR(
-              MavenArtifact(Repositories.KOTLIN_JS_WRAPPERS, "org.jetbrains", artifact),
-              version,
-              DependencyType.MAIN
+                MavenArtifact(Repositories.KOTLIN_JS_WRAPPERS, "org.jetbrains.kotlin-wrappers", artifact),
+                version,
+                DependencyType.MAIN
             )
     }
 }

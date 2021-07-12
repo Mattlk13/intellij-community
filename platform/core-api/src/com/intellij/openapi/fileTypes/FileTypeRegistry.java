@@ -34,15 +34,13 @@ import java.util.function.Supplier;
  * <pre>{@code file.getFileType()}</pre>.
  * Otherwise consider moving the computation into background, e.g. via {@link com.intellij.openapi.vfs.AsyncFileListener} or
  * {@link com.intellij.openapi.application.ReadAction#nonBlocking}.
- *
- * @author yole
  */
 public abstract class FileTypeRegistry {
   /**
    * @deprecated Use {@link #setInstanceSupplier(Supplier)}
    */
   @Deprecated
-  public static Getter<FileTypeRegistry> ourInstanceGetter;
+  public static Getter<FileTypeRegistry> ourInstanceGetter = ()->((ComponentManagerEx)ApplicationManager.getApplication()).getServiceByClassName("com.intellij.openapi.fileTypes.FileTypeManager");
 
   @ApiStatus.Internal
   public static void setInstanceSupplier(@NotNull Supplier<? extends FileTypeRegistry> supplier) {
@@ -66,10 +64,6 @@ public abstract class FileTypeRegistry {
   }
 
   public static FileTypeRegistry getInstance() {
-    if (ourInstanceGetter == null) {
-      // in tests FileTypeManager service maybe not preloaded, so, ourInstanceGetter is not set
-      return ((ComponentManagerEx)ApplicationManager.getApplication()).getServiceByClassName("com.intellij.openapi.fileTypes.FileTypeManager");
-    }
     return ourInstanceGetter.get();
   }
 
@@ -133,7 +127,6 @@ public abstract class FileTypeRegistry {
   /**
    * Finds a file type with the specified name.
    */
-  @Nullable
   public abstract FileType findFileTypeByName(@NonNls @NotNull String fileTypeName);
 
   /**

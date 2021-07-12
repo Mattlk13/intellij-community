@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.codeInsight.gradle
 
 import com.intellij.lang.annotation.HighlightSeverity
@@ -13,6 +14,7 @@ import org.jetbrains.kotlin.idea.codeMetaInfo.renderConfigurations.LineMarkerCon
 import org.jetbrains.kotlin.idea.util.sourceRoots
 import java.io.File
 import java.nio.file.Paths
+import kotlin.test.assertTrue
 
 data class HighlightingCheck(
     private val project: Project,
@@ -37,9 +39,9 @@ data class HighlightingCheck(
 
 
     fun invokeOnAllModules() {
-        ModuleManager.getInstance(project).modules.forEach { module ->
-            this(module)
-        }
+        val modules = ModuleManager.getInstance(project).modules
+        assertTrue(modules.isNotEmpty(), "Expected at least one module")
+        modules.forEach(this::invoke)
     }
 
     operator fun invoke(module: Module) {

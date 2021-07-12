@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.codeInspection.ex;
 
 import com.intellij.CommonBundle;
@@ -19,6 +19,9 @@ import com.intellij.openapi.module.JavaModuleType;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleType;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.JavaSdk;
@@ -61,12 +64,14 @@ public final class GlobalJavaInspectionContextImpl extends GlobalJavaInspectionC
 
   @Override
   public void enqueueClassUsagesProcessor(RefClass refClass, UsagesProcessor p) {
+    LOG.assertTrue(!refClass.isAnonymous());
     if (myClassUsagesRequests == null) myClassUsagesRequests = new HashMap<>();
     enqueueRequestImpl(refClass, myClassUsagesRequests, p);
 
   }
   @Override
   public void enqueueDerivedClassesProcessor(RefClass refClass, DerivedClassesProcessor p) {
+    LOG.assertTrue(!refClass.isAnonymous());
     if (myDerivedClassesRequests == null) myDerivedClassesRequests = new HashMap<>();
     enqueueRequestImpl(refClass, myDerivedClassesRequests, p);
   }
@@ -184,18 +189,25 @@ public final class GlobalJavaInspectionContextImpl extends GlobalJavaInspectionC
   }
 
   private static boolean isBadSdk(Project project, Module[] modules) {
-    boolean anyModuleAcceptsSdk = false;
-    boolean anyModuleUsesProjectSdk = false;
-    Sdk projectSdk = ProjectRootManager.getInstance(project).getProjectSdk();
-    for (Module module : modules) {
-      if (ModuleRootManager.getInstance(module).isSdkInherited()) {
-        anyModuleUsesProjectSdk = true;
-        if (ModuleType.get(module).isValidSdk(module, projectSdk)) {
-          anyModuleAcceptsSdk = true;
+    return ProgressManager.getInstance().run(new Task.WithResult<Boolean, RuntimeException>(project,
+                                                                                            JavaBundle.message("dialog.title.check.configuration"), true) {
+      @Override
+      protected Boolean compute(@NotNull ProgressIndicator indicator) throws RuntimeException {
+        boolean anyModuleAcceptsSdk = false;
+        boolean anyModuleUsesProjectSdk = false;
+        Sdk projectSdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        for (Module module : modules) {
+          if (ModuleRootManager.getInstance(module).isSdkInherited()) {
+            anyModuleUsesProjectSdk = true;
+            if (ModuleType.get(module).isValidSdk(module, projectSdk)) {
+              anyModuleAcceptsSdk = true;
+            }
+          }
         }
+        return anyModuleUsesProjectSdk && !anyModuleAcceptsSdk;
       }
-    }
-    return anyModuleUsesProjectSdk && !anyModuleAcceptsSdk;
+    });
+    
   }
 
   private static <T> void enqueueRequestImpl(RefElement refElement, Map<SmartPsiElementPointer<?>, List<T>> requestMap, T processor) {
@@ -299,7 +311,12 @@ public final class GlobalJavaInspectionContextImpl extends GlobalJavaInspectionC
 
         LOG.assertTrue(processors != null, classDeclaration.getClass().getName());
         UClass uClass = ReadAction.compute(() -> UastContextKt.toUElement(classDeclaration, UClass.class));
-        context.incrementJobDoneAmount(context.getStdJobDescriptors().FIND_EXTERNAL_USAGES, getClassPresentableName(uClass));
+        String name = getClassPresentableName(uClass);
+        if (name == null) {
+          LOG.error(classDeclaration.getText());
+          continue;
+        }
+        context.incrementJobDoneAmount(context.getStdJobDescriptors().FIND_EXTERNAL_USAGES, name);
 
         ReferencesSearch.search(classDeclaration, searchScope, false).forEach(new PsiReferenceProcessorAdapter(createReferenceProcessor(processors, context)));
       }
@@ -367,7 +384,7 @@ public final class GlobalJavaInspectionContextImpl extends GlobalJavaInspectionC
       if (qualifiedName != null) {
         return qualifiedName;
       }
-      return Objects.requireNonNullElse(uClass.getName(), "anonymous class");
+      return Objects.requireNonNull(uClass.getName(), uClass.getClass().getName());
     });
   }
 

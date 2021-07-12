@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.asJava.classes;
 
@@ -44,6 +41,11 @@ public class UltraLightClassSanityTestGenerated extends AbstractUltraLightClassS
     @TestMetadata("AnnotationClass.kt")
     public void testAnnotationClass() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/AnnotationClass.kt");
+    }
+
+    @TestMetadata("Constructors.kt")
+    public void testConstructors() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/Constructors.kt");
     }
 
     @TestMetadata("DataClassWithCustomImplementedMembers.kt")
@@ -126,6 +128,11 @@ public class UltraLightClassSanityTestGenerated extends AbstractUltraLightClassS
         runTest("testData/compiler/asJava/lightClasses/NonDataClassWithComponentFunctions.kt");
     }
 
+    @TestMetadata("OnlySecondaryConstructors.kt")
+    public void testOnlySecondaryConstructors() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/OnlySecondaryConstructors.kt");
+    }
+
     @TestMetadata("PublishedApi.kt")
     public void testPublishedApi() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/PublishedApi.kt");
@@ -134,6 +141,11 @@ public class UltraLightClassSanityTestGenerated extends AbstractUltraLightClassS
     @TestMetadata("SpecialAnnotationsOnAnnotationClass.kt")
     public void testSpecialAnnotationsOnAnnotationClass() throws Exception {
         runTest("testData/compiler/asJava/lightClasses/SpecialAnnotationsOnAnnotationClass.kt");
+    }
+
+    @TestMetadata("SpecialAnnotationsOnAnnotationClass_1_6.kt")
+    public void testSpecialAnnotationsOnAnnotationClass_1_6() throws Exception {
+        runTest("testData/compiler/asJava/lightClasses/SpecialAnnotationsOnAnnotationClass_1_6.kt");
     }
 
     @TestMetadata("StubOrderForOverloads.kt")

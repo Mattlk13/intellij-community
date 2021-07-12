@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.j2k.ast
 
@@ -22,6 +8,7 @@ import com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.j2k.CodeBuilder
 import org.jetbrains.kotlin.j2k.append
 import org.jetbrains.kotlin.lexer.KtTokens
+import java.util.*
 
 class ArrayAccessExpression(val expression: Expression, val index: Expression, val lvalue: Boolean) : Expression() {
     override fun generateCode(builder: CodeBuilder) {
@@ -294,7 +281,7 @@ class ClassLiteralExpression(val type: Type): Expression() {
 fun createArrayInitializerExpression(arrayType: ArrayType, initializers: List<Expression>, needExplicitType: Boolean = true) : MethodCallExpression {
     val elementType = arrayType.elementType
     val createArrayFunction = when {
-        elementType is PrimitiveType -> (elementType.toNotNullType().canonicalCode() + "ArrayOf").decapitalize()
+        elementType is PrimitiveType -> (elementType.toNotNullType().canonicalCode() + "ArrayOf").decapitalize(Locale.US)
         needExplicitType -> "arrayOf<" + arrayType.elementType.canonicalCode() + ">"
         else -> "arrayOf"
     }

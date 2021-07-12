@@ -1,18 +1,4 @@
-/*
- * Copyright 2000-2017 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.refactoring.introduceVariable;
 
 import com.intellij.codeInsight.intention.impl.TypeExpression;
@@ -21,6 +7,8 @@ import com.intellij.java.JavaBundle;
 import com.intellij.java.refactoring.JavaRefactoringBundle;
 import com.intellij.openapi.actionSystem.Shortcut;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
@@ -50,6 +38,7 @@ import com.intellij.refactoring.rename.inplace.VariableInplaceRenamer;
 import com.intellij.refactoring.ui.TypeSelectorManagerImpl;
 import com.intellij.refactoring.util.RefactoringUtil;
 import com.intellij.ui.NonFocusableCheckBox;
+import com.intellij.util.concurrency.NonUrgentExecutor;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -195,14 +184,7 @@ public class JavaVariableInplaceIntroducer extends AbstractJavaInplaceIntroducer
       return;
     }
 
-    TypeSelectorManagerImpl.typeSelected(psiVariable.getType(), myTypeSelectorManager.getDefaultType());
-    if (myCanBeFinalCb != null) {
-      JavaRefactoringSettings.getInstance().INTRODUCE_LOCAL_CREATE_FINALS = psiVariable.hasModifierProperty(PsiModifier.FINAL);
-    }
-
-    if (myCanBeVarTypeCb != null) {
-      JavaRefactoringSettings.getInstance().INTRODUCE_LOCAL_CREATE_VAR_TYPE = myCanBeVarTypeCb.isSelected();
-    }
+    saveLocalSettings(psiVariable);
 
     final Document document = myEditor.getDocument();
     LOG.assertTrue(psiVariable.isValid());
@@ -232,6 +214,29 @@ public class JavaVariableInplaceIntroducer extends AbstractJavaInplaceIntroducer
         appendTypeCasts(getOccurrenceMarkers(), file, myProject, psiVariable);
       }
     });
+  }
+
+  private void saveLocalSettings(PsiVariable psiVariable) {
+    TypeSelectorManagerImpl.typeSelected(psiVariable.getType(), myTypeSelectorManager.getDefaultType());
+
+    boolean oldFinal = createFinals();
+    boolean oldVarType = IntroduceVariableBase.createVarType();
+
+    if (myCanBeFinalCb != null) {
+      JavaRefactoringSettings.getInstance().INTRODUCE_LOCAL_CREATE_FINALS = psiVariable.hasModifierProperty(PsiModifier.FINAL);
+    }
+
+    if (myCanBeVarTypeCb != null) {
+      JavaRefactoringSettings.getInstance().INTRODUCE_LOCAL_CREATE_VAR_TYPE = myCanBeVarTypeCb.isSelected();
+    }
+
+    boolean newFinals = createFinals();
+    boolean newVarType = IntroduceVariableBase.createVarType();
+    IntroduceVariableUsagesCollector.settingsChanged.log(myProject,
+                                                         IntroduceVariableUsagesCollector.changed.with(newFinals != oldFinal || newVarType != oldVarType));
+    IntroduceVariableUsagesCollector.settingsOnPerform.log(myProject, 
+                                                           IntroduceVariableUsagesCollector.varType.with(newVarType), 
+                                                           IntroduceVariableUsagesCollector.finalState.with(newFinals));
   }
 
   @Override
@@ -297,6 +302,10 @@ public class JavaVariableInplaceIntroducer extends AbstractJavaInplaceIntroducer
         }
       });
     }
+
+    IntroduceVariableUsagesCollector.settingsOnShow.log(myProject, 
+                                                        IntroduceVariableUsagesCollector.varType.with(IntroduceVariableBase.createVarType()), 
+                                                        IntroduceVariableUsagesCollector.finalState.with(createFinals()));
 
     final JPanel panel = new JPanel(new GridBagLayout());
     panel.setBorder(null);
@@ -491,7 +500,13 @@ public class JavaVariableInplaceIntroducer extends AbstractJavaInplaceIntroducer
         SmartPsiElementPointer<PsiDeclarationStatement> pointer = smartPointerManager.createSmartPsiElementPointer(declarationStatement);
         myPointer = pointer;
         myEditor.putUserData(ReassignVariableUtil.DECLARATION_KEY, pointer);
-        setAdvertisementText(getAdvertisementText(declarationStatement, variable.getType(), myHasTypeSuggestion));
+        PsiType variableType = variable.getType();
+        ReadAction.nonBlocking(() -> {
+            PsiDeclarationStatement element = pointer.getElement();
+            return element != null && variableType.isValid() ? getAdvertisementText(element, variableType, myHasTypeSuggestion) : null;
+          })
+          .finishOnUiThread(ModalityState.NON_MODAL, (@NlsContexts.PopupAdvertisement String text) -> setAdvertisementText(text))
+          .submit(NonUrgentExecutor.getInstance());
       }
     }
 

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -15,6 +12,7 @@ import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.createExpressionByPattern
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.types.KotlinType
+import java.util.*
 
 class AddArrayOfTypeFix(expression: KtExpression, expectedType: KotlinType) : KotlinQuickFixAction<KtExpression>(expression) {
 
@@ -22,7 +20,7 @@ class AddArrayOfTypeFix(expression: KtExpression, expectedType: KotlinType) : Ko
         "arrayOf"
     } else {
         val typeName = DescriptorRenderer.SHORT_NAMES_IN_TYPES.renderType(expectedType)
-        "${typeName.decapitalize()}Of"
+        "${typeName.decapitalize(Locale.US)}Of"
 
     }
 

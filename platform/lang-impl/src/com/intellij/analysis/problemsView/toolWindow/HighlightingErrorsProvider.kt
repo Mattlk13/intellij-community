@@ -2,6 +2,7 @@
 package com.intellij.analysis.problemsView.toolWindow
 
 import com.intellij.analysis.problemsView.ProblemsCollector
+import com.intellij.analysis.problemsView.ProblemsListener
 import com.intellij.analysis.problemsView.ProblemsProvider
 import com.intellij.codeInsight.problems.WolfTheProblemSolverImpl
 import com.intellij.lang.annotation.HighlightSeverity.ERROR
@@ -13,7 +14,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.problems.ProblemListener
 import com.intellij.problems.WolfTheProblemSolver
 
-internal class HighlightingErrorsProvider(override val project: Project) : ProblemsProvider, ProblemListener {
+open class HighlightingErrorsProvider(final override val project: Project) : HighlightingErrorsProviderBase {
   companion object {
     @JvmStatic
     fun getInstance(project: Project) = project.getService(HighlightingErrorsProvider::class.java)!!
@@ -31,7 +32,7 @@ internal class HighlightingErrorsProvider(override val project: Project) : Probl
 
   override fun problemsAppeared(file: VirtualFile) {
     if (!file.isValid || FileTypeRegistry.getInstance().isFileIgnored(file)) return
-    if (project.isDisposed || !ProjectFileIndex.getInstance(project).isInSourceContent(file)) return
+    if (project.isDisposed || ProjectFileIndex.getInstance(project).isExcluded(file)) return
     synchronized(watchers) {
       watchers.computeIfAbsent(file) { file ->
         HighlightingWatcher(this, ProblemsCollector.getInstance(project), file, ERROR.myVal).also { watcher ->

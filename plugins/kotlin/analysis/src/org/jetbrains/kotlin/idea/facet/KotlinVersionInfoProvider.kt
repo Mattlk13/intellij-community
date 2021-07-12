@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.facet
 
@@ -13,13 +10,14 @@ import org.jetbrains.kotlin.config.ApiVersion
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.VersionView
+import org.jetbrains.kotlin.idea.compiler.configuration.Version
 import org.jetbrains.kotlin.platform.IdePlatformKind
 import org.jetbrains.kotlin.platform.idePlatformKind
 import org.jetbrains.kotlin.platform.orDefault
 
 interface KotlinVersionInfoProvider {
     companion object {
-        val EP_NAME: ExtensionPointName<KotlinVersionInfoProvider> = ExtensionPointName.create("org.jetbrains.kotlin.versionInfoProvider")
+        val EP_NAME: ExtensionPointName<KotlinVersionInfoProvider> = ExtensionPointName("org.jetbrains.kotlin.versionInfoProvider")
     }
 
     fun getCompilerVersion(module: Module): String?
@@ -34,39 +32,54 @@ fun getRuntimeLibraryVersions(
     module: Module,
     rootModel: ModuleRootModel?,
     platformKind: IdePlatformKind<*>
-): Collection<String> = KotlinVersionInfoProvider.EP_NAME
-    .extensions
-    .map { it.getLibraryVersions(module, platformKind, rootModel) }
-    .firstOrNull { it.isNotEmpty() } ?: emptyList()
+): Collection<String> {
+    return KotlinVersionInfoProvider.EP_NAME.extensionList.asSequence()
+        .map { it.getLibraryVersions(module, platformKind, rootModel) }
+        .firstOrNull { it.isNotEmpty() } ?: emptyList()
+}
 
 fun getLibraryLanguageLevel(
     module: Module,
     rootModel: ModuleRootModel?,
     platformKind: IdePlatformKind<*>?,
     coerceRuntimeLibraryVersionToReleased: Boolean = true
-): LanguageVersion {
+) = getLibraryVersion(module, rootModel, platformKind, coerceRuntimeLibraryVersionToReleased).languageVersion
+
+fun getLibraryVersion(
+    module: Module,
+    rootModel: ModuleRootModel?,
+    platformKind: IdePlatformKind<*>?,
+    coerceRuntimeLibraryVersionToReleased: Boolean = true
+): Version {
     val minVersion = getRuntimeLibraryVersions(module, rootModel, platformKind.orDefault())
         .addReleaseVersionIfNecessary(coerceRuntimeLibraryVersionToReleased)
         .minWithOrNull(VersionComparatorUtil.COMPARATOR)
-    return getDefaultLanguageLevel(module, minVersion, coerceRuntimeLibraryVersionToReleased)
+    return getDefaultVersion(module, minVersion, coerceRuntimeLibraryVersionToReleased)
+}
+
+fun getDefaultVersion(
+    module: Module,
+    explicitVersion: String? = null,
+    coerceRuntimeLibraryVersionToReleased: Boolean = true
+): Version {
+    val libVersion = explicitVersion
+        ?: KotlinVersionInfoProvider.EP_NAME.extensions
+            .mapNotNull { it.getCompilerVersion(module) }
+            .addReleaseVersionIfNecessary(coerceRuntimeLibraryVersionToReleased)
+            .minWithOrNull(VersionComparatorUtil.COMPARATOR)
+    return Version.parse(libVersion)
 }
 
 fun getDefaultLanguageLevel(
     module: Module,
     explicitVersion: String? = null,
     coerceRuntimeLibraryVersionToReleased: Boolean = true
-): LanguageVersion {
-    val libVersion = explicitVersion
-        ?: KotlinVersionInfoProvider.EP_NAME.extensions
-            .mapNotNull { it.getCompilerVersion(module) }
-            .addReleaseVersionIfNecessary(coerceRuntimeLibraryVersionToReleased)
-            .minWithOrNull(VersionComparatorUtil.COMPARATOR)
-        ?: return VersionView.RELEASED_VERSION
-    return libVersion.toLanguageVersion()
-}
+) = getDefaultVersion(module, explicitVersion, coerceRuntimeLibraryVersionToReleased).languageVersion
 
 fun String?.toLanguageVersion(): LanguageVersion = when {
     this == null -> VersionView.RELEASED_VERSION
+    startsWith("1.6") -> LanguageVersion.KOTLIN_1_6
+    startsWith("1.5") -> LanguageVersion.KOTLIN_1_5
     startsWith("1.4") -> LanguageVersion.KOTLIN_1_4
     startsWith("1.3") -> LanguageVersion.KOTLIN_1_3
     startsWith("1.2") -> LanguageVersion.KOTLIN_1_2

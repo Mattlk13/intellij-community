@@ -1,20 +1,22 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.updateSettings.impl;
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginHeaderPanel;
 import com.intellij.ide.plugins.PluginManagerCore;
-import com.intellij.ide.plugins.PluginManagerMain;
+import com.intellij.ide.plugins.newui.MyPluginModel;
+import com.intellij.ide.plugins.newui.PluginDetailsPageComponent;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.OnePixelDivider;
 import com.intellij.openapi.ui.Splitter;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.ui.*;
-import com.intellij.util.ui.JBDimension;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -28,12 +30,14 @@ import java.util.HashSet;
  */
 public final class DetectedPluginsPanel extends OrderPanel<PluginDownloader> {
 
-  private final JEditorPane myDescriptionPanel = new JEditorPane();
+  private final PluginDetailsPageComponent myDetailsComponent;
   private final PluginHeaderPanel myHeader = new PluginHeaderPanel();
   private final HashSet<PluginId> mySkippedPlugins = new HashSet<>();
 
-  public DetectedPluginsPanel() {
+  public DetectedPluginsPanel(@Nullable Project project) {
     super(PluginDownloader.class);
+    MyPluginModel pluginModel = new MyPluginModel(project);
+    myDetailsComponent = new PluginDetailsPageComponent(pluginModel, (aSource, aLinkData) -> {}, true);
     JTable entryTable = getEntryTable();
     entryTable.setTableHeader(null);
     entryTable.setDefaultRenderer(PluginDownloader.class, new ColoredTableCellRenderer() {
@@ -77,20 +81,16 @@ public final class DetectedPluginsPanel extends OrderPanel<PluginDownloader> {
         if (selectedRow != -1) {
           IdeaPluginDescriptor plugin = getValueAt(selectedRow).getDescriptor();
           myHeader.setPlugin(plugin);
-          myDescriptionPanel.setText(PluginManagerMain.pluginInfoUpdate(plugin));
-          myDescriptionPanel.setCaretPosition(0);
+          myDetailsComponent.setOnlyUpdateMode();
+          myDetailsComponent.showPluginImpl(plugin, null);
         }
       }
     });
-    myDescriptionPanel.setPreferredSize(new JBDimension(600, 400));
-    myDescriptionPanel.setEditable(false);
-    myDescriptionPanel.setEditorKit(UIUtil.getHTMLEditorKit());
-    myDescriptionPanel.addHyperlinkListener(new PluginManagerMain.MyHyperlinkListener());
     removeAll();
 
     Splitter splitter = new OnePixelSplitter(false);
     splitter.setFirstComponent(wrapWithPane(entryTable, 1, 0));
-    splitter.setSecondComponent(wrapWithPane(myDescriptionPanel, 0, 1));
+    splitter.setSecondComponent(wrapWithPane(myDetailsComponent, 0, 1));
     add(splitter, BorderLayout.CENTER);
   }
 
@@ -100,8 +100,14 @@ public final class DetectedPluginsPanel extends OrderPanel<PluginDownloader> {
     return pane;
   }
 
-  @Override
-  public void addAll(@NotNull Collection<? extends PluginDownloader> orderEntries) {
+  public void addAll(@NotNull Collection<? extends PluginDownloader> orderEntries, @Nullable PluginDownloader selectedPlugin) {
+    if (selectedPlugin != null) {
+      for (PluginDownloader entry : orderEntries) {
+        if (entry != selectedPlugin) {
+          mySkippedPlugins.add(entry.getId());
+        }
+      }
+    }
     super.addAll(orderEntries);
     TableUtil.ensureSelectionExists(getEntryTable());
   }

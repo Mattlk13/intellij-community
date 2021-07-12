@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.hierarchy;
 
@@ -312,6 +309,16 @@ public abstract class HierarchyTestGenerated extends AbstractHierarchyTest {
             runTest("testData/hierarchy/calls/callers/kotlinClass/");
         }
 
+        @TestMetadata("kotlinEnumClass")
+        public void testKotlinEnumClass() throws Exception {
+            runTest("testData/hierarchy/calls/callers/kotlinEnumClass/");
+        }
+
+        @TestMetadata("kotlinEnumEntry")
+        public void testKotlinEnumEntry() throws Exception {
+            runTest("testData/hierarchy/calls/callers/kotlinEnumEntry/");
+        }
+
         @TestMetadata("kotlinFunction")
         public void testKotlinFunction() throws Exception {
             runTest("testData/hierarchy/calls/callers/kotlinFunction/");
@@ -350,6 +357,11 @@ public abstract class HierarchyTestGenerated extends AbstractHierarchyTest {
         @TestMetadata("kotlinNestedInnerClass")
         public void testKotlinNestedInnerClass() throws Exception {
             runTest("testData/hierarchy/calls/callers/kotlinNestedInnerClass/");
+        }
+
+        @TestMetadata("kotlinObjectDeclaration")
+        public void testKotlinObjectDeclaration() throws Exception {
+            runTest("testData/hierarchy/calls/callers/kotlinObjectDeclaration/");
         }
 
         @TestMetadata("kotlinPackageFunction")

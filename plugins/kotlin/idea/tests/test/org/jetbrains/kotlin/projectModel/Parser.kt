@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
- * that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.projectModel
 
@@ -23,7 +20,9 @@ open class ProjectStructureParser(private val projectRoot: File) {
         "FULL_JDK" to ResolveLibrary.Builder(FullJdk),
         "MOCK_JDK" to ResolveLibrary.Builder(MockJdk),
         "KOTLIN_TEST_JS" to ResolveLibrary.Builder(KotlinTest.JsKotlinTest),
-        "KOTLIN_TEST_JVM" to ResolveLibrary.Builder(KotlinTest.JvmKotlinTest)
+        "KOTLIN_TEST_JVM" to ResolveLibrary.Builder(KotlinTest.JvmKotlinTest),
+        "KOTLIN_TEST" to ResolveLibrary.Builder(KotlinTest.JustKotlinTest),
+        "JUNIT" to ResolveLibrary.Builder(KotlinTest.Junit)
     )
 
     fun parse(text: String): ProjectResolveModel {

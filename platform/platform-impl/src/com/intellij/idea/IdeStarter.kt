@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 @file:Suppress("ReplaceNegatedIsEmptyWithIsNotEmpty")
 package com.intellij.idea
 
@@ -9,13 +9,12 @@ import com.intellij.diagnostic.runActivity
 import com.intellij.diagnostic.runChild
 import com.intellij.featureStatistics.fusCollectors.LifecycleUsageTriggerCollector
 import com.intellij.ide.*
-import com.intellij.ide.customize.CommonCustomizeIDEWizardDialog
-import com.intellij.ide.customize.CustomizeIDEWizardDialog
 import com.intellij.ide.customize.CustomizeIDEWizardStepsProvider
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.ide.lightEdit.LightEditService
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.plugins.PluginManagerMain
+import com.intellij.internal.inspector.UiInspectorAction
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationType
@@ -23,7 +22,6 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.*
 import com.intellij.openapi.application.ex.ApplicationEx
 import com.intellij.openapi.application.ex.ApplicationManagerEx
-import com.intellij.openapi.application.impl.ApplicationInfoImpl
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
@@ -38,23 +36,20 @@ import com.intellij.util.ui.accessibility.ScreenReader
 import java.awt.EventQueue
 import java.beans.PropertyChangeListener
 import java.nio.file.Path
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ForkJoinPool
 import javax.swing.JOptionPane
 
 open class IdeStarter : ApplicationStarter {
   companion object {
-    @JvmStatic
-    private var filesToLoad: List<Path> = emptyList()
-    @JvmStatic
+    private var filesToLoad: List<Path> = Collections.emptyList()
     private var wizardStepProvider: CustomizeIDEWizardStepsProvider? = null
 
-    @JvmStatic
     fun openFilesOnLoading(value: List<Path>) {
       filesToLoad = value
     }
 
-    @JvmStatic
     fun setWizardStepsProvider(provider: CustomizeIDEWizardStepsProvider) {
       wizardStepProvider = provider
     }
@@ -71,7 +66,7 @@ open class IdeStarter : ApplicationStarter {
     assert(!app.isDispatchThread)
 
     if (app.isLightEditMode && !app.isHeadlessEnvironment) {
-      // In a light mode UI is shown very quickly, tab layout requires ActionManager but it is forbidden to init ActionManager in EDT,
+      // In a light mode UI is shown very quickly, tab layout requires ActionManager, but it is forbidden to init ActionManager in EDT,
       // so, preload
       ForkJoinPool.commonPool().execute {
         ActionManager.getInstance()
@@ -113,8 +108,12 @@ open class IdeStarter : ApplicationStarter {
       return CompletableFuture.completedFuture(null)
     }
 
+    if (ApplicationManager.getApplication().isInternal) {
+      UiInspectorAction.initGlobalInspector()
+    }
+
     if (JetBrainsProtocolHandler.appStartedWithCommand()) {
-      val needToOpenProject = showWizardAndWelcomeFrame(lifecyclePublisher, willOpenProject = false)
+      val needToOpenProject = showWelcomeFrame(lifecyclePublisher, willOpenProject = false)
       frameInitActivity.end()
       LifecycleUsageTriggerCollector.onIdeStart()
 
@@ -131,7 +130,7 @@ open class IdeStarter : ApplicationStarter {
       val recentProjectManager = RecentProjectsManager.getInstance()
       val willReopenRecentProjectOnStart = recentProjectManager.willReopenProjectOnStart()
       val willOpenProject = willReopenRecentProjectOnStart || !args.isEmpty() || !filesToLoad.isEmpty()
-      val needToOpenProject = showWizardAndWelcomeFrame(lifecyclePublisher, willOpenProject)
+      val needToOpenProject = showWelcomeFrame(lifecyclePublisher, willOpenProject)
       frameInitActivity.end()
       ForkJoinPool.commonPool().execute {
         LifecycleUsageTriggerCollector.onIdeStart()
@@ -163,47 +162,14 @@ open class IdeStarter : ApplicationStarter {
     return CompletableFuture.completedFuture(null)
   }
 
-  private fun showWizardAndWelcomeFrame(lifecyclePublisher: AppLifecycleListener, willOpenProject: Boolean): Boolean {
+  private fun showWelcomeFrame(lifecyclePublisher: AppLifecycleListener, willOpenProject: Boolean): Boolean {
     val doShowWelcomeFrame = if (willOpenProject) null else WelcomeFrame.prepareToShow()
-    // do not show Customize IDE Wizard [IDEA-249516]
-    val wizardStepProvider = wizardStepProvider
-    if (wizardStepProvider == null || System.getProperty("idea.show.customize.ide.wizard")?.toBoolean() != true) {
-      if (doShowWelcomeFrame == null) {
-        return true
-      }
 
-      ApplicationManager.getApplication().invokeLater {
-        doShowWelcomeFrame.run()
-        lifecyclePublisher.welcomeScreenDisplayed()
-      }
-      return false
-    }
+    if (doShowWelcomeFrame == null) return true
 
-    // temporary until 211 release
-    val stepDialogName = System.getProperty("idea.temp.change.ide.wizard")
-                         ?: ApplicationInfoImpl.getShadowInstance().customizeIDEWizardDialog
     ApplicationManager.getApplication().invokeLater {
-      val wizardDialog: CommonCustomizeIDEWizardDialog?
-      if (stepDialogName.isNullOrBlank()) {
-        wizardDialog = CustomizeIDEWizardDialog(wizardStepProvider, null, false, true)
-      }
-      else {
-        wizardDialog = try {
-          Class.forName(stepDialogName).getConstructor(StartupUtil.AppStarter::class.java)
-            .newInstance(null) as CommonCustomizeIDEWizardDialog
-        }
-        catch (e: Throwable) {
-          Main.showMessage(BootstrapBundle.message("bootstrap.error.title.configuration.wizard.failed"), e)
-          null
-        }
-      }
-
-      wizardDialog?.showIfNeeded()
-
-      if (doShowWelcomeFrame != null) {
-        doShowWelcomeFrame.run()
-        lifecyclePublisher.welcomeScreenDisplayed()
-      }
+      doShowWelcomeFrame.run()
+      lifecyclePublisher.welcomeScreenDisplayed()
     }
     return false
   }
@@ -293,9 +259,11 @@ private fun reportPluginErrors() {
   ApplicationManager.getApplication().invokeLater({
     val title = IdeBundle.message("title.plugin.error")
     val content = HtmlBuilder().appendWithSeparators(HtmlChunk.p(), pluginErrors).toString()
-    Notification(NotificationGroup.createIdWithTitle("Plugin Error", title), title, content, NotificationType.ERROR) { notification, event ->
-      notification.expire()
-      PluginManagerMain.onEvent(event.description)
-    }.notify(null)
+    Notification(NotificationGroup.createIdWithTitle("Plugin Error", title), title, content, NotificationType.ERROR)
+      .setListener { notification, event ->
+        notification.expire()
+        PluginManagerMain.onEvent(event.description)
+      }
+      .notify(null)
   }, ModalityState.NON_MODAL)
 }

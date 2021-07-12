@@ -13,10 +13,8 @@ import com.intellij.execution.impl.ExecutionManagerImplKt;
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.runners.ProgramRunner;
-import com.intellij.execution.stateExecutionWidget.StateWidgetProcess;
-import com.intellij.execution.stateWidget.StateWidget;
-import com.intellij.execution.stateWidget.StateWidgetAdditionActionsHolder;
-import com.intellij.execution.stateWidget.StateWidgetGroup;
+import com.intellij.execution.runToolbar.*;
+import com.intellij.execution.runToolbar.RunToolbarProcess;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.macro.MacroManager;
@@ -33,10 +31,7 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.util.IconUtil;
 import com.intellij.util.containers.ContainerUtil;
-import org.jetbrains.annotations.NonNls;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.*;
 
 import javax.swing.*;
 import java.util.*;
@@ -52,7 +47,8 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
   private final Set<String> myContextActionIdSet = new HashSet<>();
   private final Map<String, AnAction> myIdToAction = new HashMap<>();
   private final Map<String, AnAction> myContextActionIdToAction = new HashMap<>();
-  private final Map<String, AnAction> myStateWidgetIdToAction = new HashMap<>();
+
+  private final Map<String, AnAction> myRunWidgetIdToAction = new HashMap<>();
 
   public ExecutorRegistryImpl() {
     Executor.EXECUTOR_EXTENSION_NAME.addExtensionPointListener(new ExtensionPointListener<>() {
@@ -121,32 +117,35 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
     ((DefaultActionGroup)actionManager.getAction(RUN_CONTEXT_GROUP_MORE))
       .add(nonExistingAction, new Constraints(Anchor.BEFORE, "CreateNewRunConfiguration"), actionManager);
 
-    if(StateWidgetProcess.isAvailable()) {
-      StateWidgetProcess.getProcessesByExecutorId(executor.getId()).forEach(process -> {
+    if(RunToolbarProcess.isAvailable()) {
+      RunToolbarProcess.getProcessesByExecutorId(executor.getId()).forEach(process -> {
         if (executor instanceof ExecutorGroup) {
+
           ExecutorGroup<?> executorGroup = (ExecutorGroup<?>)executor;
-          if(process.getShowInBar()) {
-            ActionGroup wrappedAction = new SplitButtonAction(new StateWidgetGroup(executorGroup, ExecutorAction::new, process));
+          if (process.getShowInBar()) {
+            ActionGroup wrappedAction = new RunToolbarExecutorGroupAction(
+              new RunToolbarExecutorGroup(executorGroup, (ex) -> new RunToolbarGroupProcessAction(process, ex), process));
             Presentation presentation = wrappedAction.getTemplatePresentation();
             presentation.setIcon(executor.getIcon());
             presentation.setText(process.getName());
             presentation.setDescription(executor.getDescription());
 
-            registerActionInGroup(actionManager, process.getActionId(), wrappedAction, StateWidgetProcess.STATE_WIDGET_GROUP,
-                                  myStateWidgetIdToAction);
+            registerActionInGroup(actionManager, process.getActionId(), wrappedAction, RunToolbarProcess.RUN_WIDGET_GROUP,
+                                  myRunWidgetIdToAction);
+          } else {
+            RunToolbarAdditionActionsHolder holder = new RunToolbarAdditionActionsHolder(executorGroup, process);
+
+            registerActionInGroup(actionManager, RunToolbarAdditionActionsHolder.getAdditionActionId(process), holder.getAdditionAction(), process.getMoreActionSubGroupName(),
+                                  myRunWidgetIdToAction);
+            registerActionInGroup(actionManager, RunToolbarAdditionActionsHolder.getAdditionActionChooserGroupId(process), holder.getMoreActionChooserGroup(), process.getMoreActionSubGroupName(),
+                                  myRunWidgetIdToAction);
           }
 
-          StateWidgetAdditionActionsHolder holder = new StateWidgetAdditionActionsHolder(executorGroup, process);
-
-          registerActionInGroup(actionManager, StateWidgetAdditionActionsHolder.getAdditionActionId(process), holder.getAdditionAction(), process.getMoreActionSubGroupName(),
-                                myStateWidgetIdToAction);
-          registerActionInGroup(actionManager, StateWidgetAdditionActionsHolder.getAdditionActionChooserGroupId(process), holder.getMoreActionChooserGroup(), process.getMoreActionSubGroupName(),
-                                myStateWidgetIdToAction);
         }
         else {
-          ExecutorAction wrappedAction = new StateWidget(executor, process);
-          registerActionInGroup(actionManager, process.getActionId(), wrappedAction, StateWidgetProcess.STATE_WIDGET_GROUP,
-                                myStateWidgetIdToAction);
+          ExecutorAction wrappedAction = new RunToolbarProcessAction(process, executor);
+          registerActionInGroup(actionManager, process.getActionId(), wrappedAction, RunToolbarProcess.RUN_WIDGET_GROUP,
+                                myRunWidgetIdToAction);
         }
       });
     }
@@ -194,13 +193,14 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
     }
     unregisterAction(newConfigurationContextActionId(executor), RUN_CONTEXT_GROUP_MORE, myContextActionIdToAction);
 
-    StateWidgetProcess.getProcessesByExecutorId(executor.getId()).forEach(process -> {
-      unregisterAction(process.getActionId(), StateWidgetProcess.STATE_WIDGET_GROUP, myStateWidgetIdToAction);
+    RunToolbarProcess.getProcessesByExecutorId(executor.getId()).forEach(process -> {
+      unregisterAction(process.getActionId(), RunToolbarProcess.RUN_WIDGET_GROUP, myRunWidgetIdToAction);
+
       if (executor instanceof ExecutorGroup) {
-        unregisterAction(StateWidgetAdditionActionsHolder.getAdditionActionId(process), process.getMoreActionSubGroupName(),
-                         myStateWidgetIdToAction);
-        unregisterAction(StateWidgetAdditionActionsHolder.getAdditionActionChooserGroupId(process), process.getMoreActionSubGroupName(),
-                         myStateWidgetIdToAction);
+        unregisterAction(RunToolbarAdditionActionsHolder.getAdditionActionId(process), process.getMoreActionSubGroupName(),
+                         myRunWidgetIdToAction);
+        unregisterAction(RunToolbarAdditionActionsHolder.getAdditionActionChooserGroupId(process), process.getMoreActionSubGroupName(),
+                         myRunWidgetIdToAction);
       }
     });
   }
@@ -270,7 +270,7 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
         return;
       }
 
-      RunnerAndConfigurationSettings selectedSettings = getSelectedConfiguration(project);
+      RunnerAndConfigurationSettings selectedSettings = getSelectedConfiguration(e);
       boolean enabled = false;
       boolean hideDisabledExecutorButtons = false;
       String text;
@@ -343,8 +343,9 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
     }
 
     @Nullable
-    private static RunnerAndConfigurationSettings getSelectedConfiguration(@NotNull Project project) {
-      return RunManager.getInstance(project).getSelectedConfiguration();
+    protected RunnerAndConfigurationSettings getSelectedConfiguration(@NotNull AnActionEvent e) {
+      if(e.getProject() == null ) return null;
+      return RunManager.getInstance(e.getProject()).getSelectedConfiguration();
     }
 
     private void run(@NotNull Project project, @Nullable RunConfiguration configuration, @Nullable RunnerAndConfigurationSettings settings, @NotNull DataContext dataContext) {
@@ -359,26 +360,27 @@ public final class ExecutorRegistryImpl extends ExecutorRegistry {
       }
 
       MacroManager.getInstance().cacheMacrosPreview(e.getDataContext());
-      RunnerAndConfigurationSettings selectedConfiguration = getSelectedConfiguration(project);
+      RunnerAndConfigurationSettings selectedConfiguration = getSelectedConfiguration(e);
       if (selectedConfiguration != null) {
         run(project, selectedConfiguration.getConfiguration(), selectedConfiguration, e.getDataContext());
       }
     }
   }
 
-  // TODO: make private as soon as IDEA-207986 will be fixed
-  // RunExecutorSettings configurations can be modified, so we request current childExecutors on each AnAction#update call
-  public static class ExecutorGroupActionGroup extends ActionGroup implements DumbAware {
+  @ApiStatus.Internal
+  public static class ExecutorGroupActionGroup extends ActionGroup implements DumbAware, UpdateInBackground {
     protected final ExecutorGroup<?> myExecutorGroup;
     private final Function<? super Executor, ? extends AnAction> myChildConverter;
 
-    protected ExecutorGroupActionGroup(@NotNull ExecutorGroup<?> executorGroup, @NotNull Function<? super Executor, ? extends AnAction> childConverter) {
+    protected ExecutorGroupActionGroup(@NotNull ExecutorGroup<?> executorGroup,
+                                       @NotNull Function<? super Executor, ? extends AnAction> childConverter) {
       myExecutorGroup = executorGroup;
       myChildConverter = childConverter;
     }
 
     @Override
     public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
+      // RunExecutorSettings configurations can be modified, so we request current childExecutors on each call
       List<Executor> childExecutors = myExecutorGroup.childExecutors();
       AnAction[] result = new AnAction[childExecutors.size()];
       for (int i = 0; i < childExecutors.size(); i++) {

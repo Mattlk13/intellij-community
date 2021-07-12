@@ -21,7 +21,6 @@ import javax.swing.table.TableCellRenderer
 
 @Suppress("MagicNumber") // Swing dimension constants
 internal class PackageActionsTableCellRendererAndEditor(
-    private val table: JTable,
     private val actionPerformedCallback: (ActionsViewModel) -> Unit
 ) : AbstractTableCellEditor(), TableCellRenderer {
 
@@ -87,9 +86,9 @@ internal class PackageActionsTableCellRendererAndEditor(
             }
 
             text = when (viewModel.operationType) {
+                PackageOperationType.SET -> PackageSearchBundle.message("packagesearch.ui.toolwindow.packages.actions.set")
                 PackageOperationType.INSTALL -> PackageSearchBundle.message("packagesearch.ui.toolwindow.packages.actions.install")
                 PackageOperationType.UPGRADE -> PackageSearchBundle.message("packagesearch.ui.toolwindow.packages.actions.upgrade")
-                else -> throw IllegalArgumentException("The actions column can only render INSTALL and UPGRADE operations.")
             }
         }
     }

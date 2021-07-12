@@ -12,13 +12,18 @@
    </ul>
   ]]></description>
   <vendor>JetBrains</vendor>
-  <depends>com.intellij.properties</depends>
-  <depends>com.intellij.modules.java</depends>
+
+  <content>
+    <module name="intellij.groovy/ant"/>
+    <module name="intellij.groovy/byte-code-viewer"/>
+  </content>
+  <dependencies>
+    <plugin id="com.intellij.properties"/>
+    <plugin id="com.intellij.java"/>
+  </dependencies>
 
   <depends optional="true" config-file="groovy-copyright.xml">com.intellij.copyright</depends>
   <depends optional="true" config-file="intellilang-groovy-support.xml">org.intellij.intelliLang</depends>
-  <depends optional="true" config-file="ant.xml">AntSupport</depends>
-  <depends optional="true" config-file="groovy-byte-code-viewer.xml">ByteCodeViewer</depends>
   <!--suppress PluginXmlValidity -->
   <depends optional="true" config-file="duplicates-groovy.xml">com.intellij.modules.ultimate</depends>
   <!--suppress PluginXmlValidity -->
@@ -766,6 +771,7 @@
     <localInspection language="Groovy" groupPath="Groovy"
                      key="inspection.display.name.assignment.can.be.operator.assignment"
                      groupKey="inspection.assignments"
+                     enabledByDefault="true" level="INFORMATION"
                      implementationClass="org.jetbrains.plugins.groovy.codeInspection.assignment.GroovyAssignmentCanBeOperatorAssignmentInspection"/>
     <localInspection language="Groovy" groupPath="Groovy"
                      key="inspection.display.name.assignment.to.for.loop.parameter"
@@ -1238,6 +1244,7 @@
     <notificationGroup id="Groovy DSL errors" displayType="BALLOON"/>
     <notificationGroup id="Grape" displayType="BALLOON"/>
     <backgroundPostStartupActivity implementation="org.jetbrains.plugins.groovy.dsl.GdslStartupActivity"/>
+    <newProjectWizard implementation="org.jetbrains.plugins.groovy.config.GroovyNewProjectWizard"/>
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij.debugger">

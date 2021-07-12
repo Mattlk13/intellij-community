@@ -16,13 +16,17 @@
 
     <component>
       <interface-class>com.intellij.openapi.module.ModuleManager</interface-class>
-      <implementation-class>com.intellij.openapi.module.impl.ModuleManagerComponent</implementation-class>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.legacyBridge.module.ModuleManagerComponentBridge</implementation-class>
       <loadForDefaultProject/>
     </component>
     <component>
-      <interface-class>com.intellij.openapi.module.impl.ExternalModuleListStorage</interface-class>
-      <implementation-class>com.intellij.openapi.module.impl.ExternalModuleListStorageImpl</implementation-class>
-      <loadForDefaultProject/>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.jps.serialization.JpsProjectModelSynchronizer</implementation-class>
+    </component>
+    <component>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.legacyBridge.watcher.RootsChangeWatcher</implementation-class>
+    </component>
+    <component>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.legacyBridge.watcher.VirtualFileUrlWatcher</implementation-class>
     </component>
 
     <component>
@@ -81,11 +85,29 @@
                         testServiceImplementation="com.intellij.ide.impl.HeadlessDataManager"/>
     <postStartupActivity implementation="com.intellij.openapi.wm.impl.LibraryDependentToolWindowManager"/>
 
+    <applicationService serviceImplementation="com.intellij.openapi.command.impl.UndoManagerImpl$ClientState"
+                        client="all"/>
+    <projectService serviceImplementation="com.intellij.openapi.command.impl.UndoManagerImpl$ClientState"
+                    client="all"/>
+
+    <applicationService serviceInterface="com.intellij.openapi.fileEditor.impl.CurrentEditorProvider"
+                        serviceImplementation="com.intellij.openapi.fileEditor.impl.FocusBasedCurrentEditorProvider"
+                        client="local"/>
+    <applicationService serviceInterface="com.intellij.openapi.fileEditor.impl.CurrentEditorProvider"
+                        serviceImplementation="com.intellij.openapi.fileEditor.impl.ClientCurrentEditorProvider"
+                        client="guest"/>
+
     <projectService serviceInterface="com.intellij.openapi.wm.ToolWindowManager"
                     serviceImplementation="com.intellij.openapi.wm.impl.ToolWindowManagerImpl"
                     headlessImplementation="com.intellij.openapi.wm.impl.ToolWindowHeadlessManagerImpl" preload="notHeadless"/>
 
     <applicationService serviceImplementation="com.intellij.openapi.keymap.impl.ModifierKeyDoubleClickHandler" preload="await"/>
+
+    <applicationService serviceInterface="com.intellij.openapi.client.ClientSessionsManager"
+                        serviceImplementation="com.intellij.openapi.client.ClientAppSessionsManager"/>
+    <projectService serviceInterface="com.intellij.openapi.client.ClientSessionsManager"
+                    serviceImplementation="com.intellij.openapi.client.ClientProjectSessionsManager"/>
+
     <projectService serviceInterface="com.intellij.openapi.fileEditor.ex.IdeDocumentHistory"
                     serviceImplementation="com.intellij.openapi.fileEditor.impl.IdeDocumentHistoryImpl" preload="await"/>
 
@@ -104,11 +126,11 @@
   <module-components>
     <component>
       <interface-class>com.intellij.openapi.roots.ModuleRootManager</interface-class>
-      <implementation-class>com.intellij.openapi.roots.impl.ModuleRootManagerComponent</implementation-class>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.legacyBridge.module.roots.ModuleRootComponentBridge</implementation-class>
     </component>
     <component>
       <interface-class>com.intellij.facet.FacetManager</interface-class>
-      <implementation-class>com.intellij.facet.FacetManagerImpl</implementation-class>
+      <implementation-class>com.intellij.workspaceModel.ide.impl.legacyBridge.facet.FacetManagerBridge</implementation-class>
     </component>
   </module-components>
 

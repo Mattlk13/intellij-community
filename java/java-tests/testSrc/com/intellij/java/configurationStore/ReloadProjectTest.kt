@@ -6,6 +6,7 @@ import com.intellij.facet.mock.MockFacetType
 import com.intellij.facet.mock.registerFacetType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ex.PathManagerEx
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.module.ConfigurationErrorDescription
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.module.impl.ProjectLoadingErrorsHeadlessNotifier
@@ -93,11 +94,15 @@ class ReloadProjectTest {
   @Test
   fun `change artifact`() {
     loadProjectAndCheckResults("changeArtifact/initial") { project ->
-      val artifact = ArtifactManager.getInstance(project).artifacts.single()
+      val artifact = runReadAction {
+        ArtifactManager.getInstance(project).artifacts.single()
+      }
       assertThat(artifact.name).isEqualTo("a")
       assertThat((artifact.rootElement.children.single() as FileCopyPackagingElement).filePath).endsWith("/a.txt")
       copyFilesAndReload(project, "changeArtifact/update")
-      val artifact2 = ArtifactManager.getInstance(project).artifacts.single()
+      val artifact2 = runReadAction {
+        ArtifactManager.getInstance(project).artifacts.single()
+      }
       assertThat(artifact2.name).isEqualTo("a")
       assertThat((artifact2.rootElement.children.single() as FileCopyPackagingElement).filePath).endsWith("/bbb.txt")
     }
@@ -106,7 +111,7 @@ class ReloadProjectTest {
   @Test
   fun `change iml file content to invalid xml`() {
     val errors = ArrayList<ConfigurationErrorDescription>()
-    ProjectLoadingErrorsHeadlessNotifier.setErrorHandler(errors::add, disposable.disposable)
+    ProjectLoadingErrorsHeadlessNotifier.setErrorHandler(disposable.disposable, errors::add)
     loadProjectAndCheckResults("changeImlContentToInvalidXml/initial") { project ->
       copyFilesAndReload(project, "changeImlContentToInvalidXml/update")
       assertThat(ModuleManager.getInstance(project).modules.single().name).isEqualTo("foo")
@@ -128,14 +133,12 @@ class ReloadProjectTest {
       val changedFacet = FacetManager.getInstance(module).getFacetByType(MockFacetType.ID)!!
       assertThat(changedFacet.configuration.data).isEqualTo("changed-data")
 
-      if (WorkspaceModel.isEnabled) {
-        val entityStorage = WorkspaceModel.getInstance(project).entityStorage.current
-        assumeTrue(entityStorage.entities(ModuleEntity::class.java).single().entitySource is DummyParentEntitySource)
-        assumeTrue(entityStorage.entities(ModuleCustomImlDataEntity::class.java).single().entitySource is JpsImportedEntitySource)
-        val moduleOptionsEntity = entityStorage.entities(ExternalSystemModuleOptionsEntity::class.java).single()
-        assertThat(moduleOptionsEntity.externalSystem).isEqualTo("GRADLE")
-        assertThat(moduleOptionsEntity.externalSystemModuleVersion).isEqualTo("42.0")
-      }
+      val entityStorage = WorkspaceModel.getInstance(project).entityStorage.current
+      assumeTrue(entityStorage.entities(ModuleEntity::class.java).single().entitySource is DummyParentEntitySource)
+      assumeTrue(entityStorage.entities(ModuleCustomImlDataEntity::class.java).single().entitySource is JpsImportedEntitySource)
+      val moduleOptionsEntity = entityStorage.entities(ExternalSystemModuleOptionsEntity::class.java).single()
+      assertThat(moduleOptionsEntity.externalSystem).isEqualTo("GRADLE")
+      assertThat(moduleOptionsEntity.externalSystemModuleVersion).isEqualTo("42.0")
      }
   }
 

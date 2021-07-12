@@ -1,10 +1,10 @@
 package com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.models.operations
 
+import com.intellij.buildsystem.model.unified.UnifiedDependency
+import com.intellij.buildsystem.model.unified.UnifiedDependencyRepository
 import com.jetbrains.packagesearch.intellij.plugin.extensibility.ProjectModule
 import com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.models.PackageScope
 import com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.models.PackageVersion
-import com.intellij.buildsystem.model.unified.UnifiedDependency
-import com.intellij.buildsystem.model.unified.UnifiedDependencyRepository
 
 internal sealed class PackageSearchOperation<T>(
     open val model: T,
@@ -50,7 +50,7 @@ internal sealed class PackageSearchOperation<T>(
         ) : Package(model, projectModule) {
 
             override fun toString() =
-                "Package.Change(model='${model.displayName}', projectModule='${projectModule.getFullName()}', " +
+                "Package.ChangeInstalled(model='${model.displayName}', projectModule='${projectModule.getFullName()}', " +
                     "currentVersion='$currentVersion', currentScope='$currentScope', " +
                     "newVersion='$newVersion', newScope='$newScope')"
         }

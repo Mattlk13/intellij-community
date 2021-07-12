@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin
 
@@ -45,8 +42,8 @@ abstract class AbstractDataFlowValueRenderingTest: KotlinLightCodeInsightFixture
         val fixture = myFixture
         fixture.configureByFile(fileName())
 
-        val jetFile = fixture.file as KtFile
-        val element = jetFile.findElementAt(fixture.caretOffset)!!
+        val ktFile = fixture.file as KtFile
+        val element = ktFile.findElementAt(fixture.caretOffset)!!
         val expression = element.getStrictParentOfType<KtExpression>()!!
         val info = expression.analyze().getDataFlowInfoAfter(expression)
 

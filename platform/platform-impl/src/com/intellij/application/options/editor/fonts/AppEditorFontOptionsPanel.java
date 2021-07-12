@@ -21,7 +21,6 @@ import com.intellij.application.options.colors.ColorAndFontSettingsListener;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.DataManager;
 import com.intellij.openapi.application.ApplicationBundle;
-import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import com.intellij.openapi.editor.colors.FontPreferences;
 import com.intellij.openapi.editor.colors.ModifiableFontPreferences;
@@ -29,11 +28,13 @@ import com.intellij.openapi.editor.colors.impl.AppEditorFontOptions;
 import com.intellij.openapi.editor.colors.impl.FontPreferencesImpl;
 import com.intellij.openapi.editor.impl.FontFamilyService;
 import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.options.OptionsBundle;
+import com.intellij.openapi.options.colors.pages.GeneralColorsPage;
 import com.intellij.openapi.options.ex.Settings;
+import com.intellij.openapi.util.NlsSafe;
 import com.intellij.ui.AbstractFontCombo;
-import com.intellij.ui.HoverHyperlinkLabel;
+import com.intellij.ui.HyperlinkLabel;
 import com.intellij.ui.IdeBorderFactory;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.ui.JBUI;
@@ -57,8 +58,6 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
   private final static int FONT_WEIGHT_COMBO_WIDTH = 250;
 
   private final EditorColorsScheme myScheme;
-  private JPanel myWarningPanel;
-  private JLabel myEditorFontLabel;
   private final FontPreferences myDefaultPreferences;
   private FontWeightCombo myRegularWeightCombo;
   private FontWeightCombo myBoldWeightCombo;
@@ -80,9 +79,6 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
     c.gridx = 0;
     c.gridy = 0;
     c.anchor = GridBagConstraints.WEST;
-    myWarningPanel = createMessagePanel();
-    topPanel.add(myWarningPanel, c);
-    c.gridy ++;
     topPanel.add(createFontSettingsPanel(), c);
     c.gridy ++;
     c.insets = JBUI.insets(ADDITIONAL_VERTICAL_GAP, BASE_INSET, 0, 0);
@@ -101,7 +97,6 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
         if (myBoldWeightCombo != null) {
           myBoldWeightCombo.update(getFontPreferences());
         }
-        updateWarning();
         updateRestoreButtonState();
       }
     });
@@ -165,10 +160,7 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
       fixComboWidth(myBoldWeightCombo, JBUI.scale(FONT_WEIGHT_COMBO_WIDTH));
       internalPanel.add(myBoldWeightCombo, c);
       c.gridy ++;
-      JLabel boldHintLabel = new JLabel(ApplicationBundle.message("settings.editor.font.bold.weight.hint"));
-      boldHintLabel.setFont(JBUI.Fonts.smallFont());
-      boldHintLabel.setForeground(UIUtil.getContextHelpForeground());
-      internalPanel.add(boldHintLabel, c);
+      internalPanel.add(createColorSchemeLinkPane(), c);
       c.gridy ++;
     }
     c.gridx = 0;
@@ -186,6 +178,53 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
       }
     );
     return typographyPanel;
+  }
+
+  private JPanel createColorSchemeLinkPane() {
+    JPanel pane = new JPanel();
+    pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
+    String[] lines = ApplicationBundle.message("settings.editor.font.bold.weight.hint").split("\n");
+    for (@NlsSafe String line : lines) {
+      JComponent label;
+      if (line.contains("<hyperlink>")) {
+        HyperlinkLabel hyperlinkLabel = new HyperlinkLabel();
+        hyperlinkLabel.setTextWithHyperlink(line);
+        hyperlinkLabel.addHyperlinkListener(new HyperlinkListener() {
+          @Override
+          public void hyperlinkUpdate(HyperlinkEvent e) {
+            navigateToColorSchemeTextSettings();
+          }
+        });
+        label = hyperlinkLabel;
+      }
+      else {
+        label = new JLabel(line);
+      }
+      label.setFont(JBUI.Fonts.smallFont());
+      label.setForeground(UIUtil.getContextHelpForeground());
+      pane.add(label);
+    }
+    return pane;
+  }
+
+  private void navigateToColorSchemeTextSettings() {
+    String defaultTextOption = OptionsBundle.message("options.general.attribute.descriptor.default.text");
+    String separator = "//";
+    int separatorPos = defaultTextOption.lastIndexOf(separator);
+    if (separatorPos > 0) {
+      defaultTextOption = defaultTextOption.substring(separatorPos + separator.length());
+    }
+    Settings allSettings = Settings.KEY.getData(DataManager.getInstance().getDataContext(this));
+    if (allSettings != null) {
+      final Configurable colorSchemeConfigurable = allSettings.find(ColorAndFontOptions.ID);
+      if (colorSchemeConfigurable instanceof ColorAndFontOptions) {
+        Configurable generalSettings =
+          ((ColorAndFontOptions)colorSchemeConfigurable).findSubConfigurable(GeneralColorsPage.getDisplayNameText());
+        if (generalSettings != null) {
+          allSettings.select(generalSettings, defaultTextOption);
+        }
+      }
+    }
   }
 
   private static void fixComboWidth(@NotNull FontWeightCombo combo, int width) {
@@ -214,29 +253,6 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
 
   private void updateRestoreButtonState() {
     myRestoreLabel.setEnabled(!myDefaultPreferences.equals(getFontPreferences()));
-  }
-
-  private JPanel createMessagePanel() {
-    JPanel messagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    messagePanel.add(new JLabel(AllIcons.General.BalloonWarning));
-    myEditorFontLabel = createHyperlinkLabel();
-    messagePanel.add(myEditorFontLabel);
-    JLabel commentLabel = new JLabel(ApplicationBundle.message("settings.editor.font.defined.in.color.scheme.message"));
-    commentLabel.setForeground(JBColor.GRAY);
-    messagePanel.add(commentLabel);
-    return messagePanel;
-  }
-
-  public void updateWarning() {
-    EditorColorsScheme scheme = EditorColorsManager.getInstance().getGlobalScheme();
-    if (!scheme.isUseAppFontPreferencesInEditor()) {
-      myEditorFontLabel.setText(
-        ApplicationBundle.message("settings.editor.font.overridden.message", scheme.getEditorFontName(), scheme.getEditorFontSize()));
-      myWarningPanel.setVisible(true);
-    }
-    else {
-      myWarningPanel.setVisible(false);
-    }
   }
 
   @Override
@@ -275,34 +291,6 @@ public class AppEditorFontOptionsPanel extends AbstractFontOptionsPanel {
   @Override
   protected void setCurrentLineSpacing(float lineSpacing) {
     myScheme.setLineSpacing(lineSpacing);
-  }
-
-  @NotNull
-  private JLabel createHyperlinkLabel() {
-    HoverHyperlinkLabel label = new HoverHyperlinkLabel("");
-    label.addHyperlinkListener(new HyperlinkListener() {
-      @Override
-      public void hyperlinkUpdate(HyperlinkEvent e) {
-        if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-          navigateToColorSchemeFontConfigurable();
-        }
-      }
-    });
-    return label;
-  }
-
-  protected void navigateToColorSchemeFontConfigurable() {
-    Settings allSettings = Settings.KEY.getData(DataManager.getInstance().getDataContext(getPanel()));
-    if (allSettings != null) {
-      final Configurable colorSchemeConfigurable = allSettings.find(ColorAndFontOptions.ID);
-      if (colorSchemeConfigurable instanceof ColorAndFontOptions) {
-        Configurable fontOptions =
-          ((ColorAndFontOptions)colorSchemeConfigurable).findSubConfigurable(ColorAndFontOptions.getFontConfigurableName());
-        if (fontOptions != null) {
-          allSettings.select(fontOptions);
-        }
-      }
-    }
   }
 
   @Override

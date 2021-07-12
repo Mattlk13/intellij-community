@@ -459,9 +459,26 @@ public class Py3TypeCheckerInspectionTest extends PyInspectionTestCase {
                  "mymap(myfoo, [1, 2, 3])\n");
   }
 
-  // PY-36062
-  public void testModuleTypeParameter() {
-    // `types.ModuleType` class qualified name is `_importlib_modulespec.ModuleType` in Python 3
-    doMultiFileTest();
+  // PY-44974
+  public void testBitwiseOrUnionNoneIntStrAssignList() {
+    doTestByText("bar: None | int | str = <warning descr=\"Expected type 'None | int | str', got 'list[int]' instead\">[42]</warning>");
+  }
+
+  // PY-44974
+  public void testParenthesizedBitwiseOrUnionOfUnionsAssignNone() {
+    doTestByText("bar: int | ((list | dict) | (float | str)) = <warning descr=\"Expected type 'int | list | dict | float | str', got 'None' instead\">None</warning>");
+  }
+
+  // PY-44974
+  public void testTypingAndTypesBitwiseOrUnionDifference() {
+    doTestByText("from typing import Type\n" +
+                 "def foo(x: Type[int | str]):\n" +
+                 "    pass\n" +
+                 "foo(<warning descr=\"Expected type 'Type[int | str]', got 'Union' instead\">int | str</warning>)");
+  }
+
+  // PY-44974
+  public void testBitwiseOrUnionsAndOldStyleUnionsAreEquivalent() {
+    doTest();
   }
 }

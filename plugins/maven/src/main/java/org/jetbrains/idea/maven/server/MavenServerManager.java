@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.idea.maven.server;
 
 import com.intellij.ide.AppLifecycleListener;
@@ -13,8 +13,10 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
-import com.intellij.openapi.projectRoots.JdkUtil;
+import com.intellij.openapi.projectRoots.JavaSdk;
+import com.intellij.openapi.projectRoots.JavaSdkVersion;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.projectRoots.SdkTypeId;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
@@ -44,7 +46,6 @@ import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.*;
 import java.util.function.Predicate;
-import java.util.jar.Attributes;
 
 public final class MavenServerManager implements Disposable {
   public static final String BUNDLED_MAVEN_2 = "Bundled (Maven 2)";
@@ -54,12 +55,6 @@ public final class MavenServerManager implements Disposable {
   private final Map<String, MavenServerConnector> myMultimoduleDirToConnectorMap = new HashMap<>();
   private File eventListenerJar;
 
-  @ApiStatus.Internal
-  public void unregisterConnector(MavenServerConnector serverConnector) {
-    synchronized (myMultimoduleDirToConnectorMap) {
-      myMultimoduleDirToConnectorMap.values().remove(serverConnector);
-    }
-  }
 
   public Collection<MavenServerConnector> getAllConnectors() {
     Set<MavenServerConnector> set = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -71,7 +66,7 @@ public final class MavenServerManager implements Disposable {
 
   public void cleanUp(MavenServerConnector connector) {
     synchronized (myMultimoduleDirToConnectorMap){
-      myMultimoduleDirToConnectorMap.entrySet().removeIf(e ->e.getValue() == connector);
+      myMultimoduleDirToConnectorMap.entrySet().removeIf(e -> e.getValue() == connector);
     }
   }
 
@@ -226,7 +221,7 @@ public final class MavenServerManager implements Disposable {
 
   @NotNull
   private static Sdk getJdk(Project project, MavenWorkspaceSettings settings) {
-    String jdkForImporterName = settings.importingSettings.getJdkForImporter();
+    String jdkForImporterName = settings.getImportingSettings().getJdkForImporter();
     try {
       return MavenUtil.getJdk(project, jdkForImporterName);
     }
@@ -266,12 +261,17 @@ public final class MavenServerManager implements Disposable {
   }
 
   public static boolean verifyMavenSdkRequirements(@NotNull Sdk jdk, String mavenVersion) {
-    String version = JdkUtil.getJdkMainAttribute(jdk, Attributes.Name.IMPLEMENTATION_VERSION);
-    if (StringUtil.compareVersionNumbers(mavenVersion, "3.3.1") >= 0
-        && StringUtil.compareVersionNumbers(version, "1.7") < 0) {
-      return false;
+    if (StringUtil.compareVersionNumbers(mavenVersion, "3.3.1") < 0) {
+      return true;
     }
-    return true;
+    SdkTypeId sdkType = jdk.getSdkType();
+    if (sdkType instanceof JavaSdk) {
+      JavaSdkVersion version = ((JavaSdk)sdkType).getVersion(jdk);
+      if (version == null || version.isAtLeast(JavaSdkVersion.JDK_1_7)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public static File getMavenEventListener() {
@@ -309,8 +309,7 @@ public final class MavenServerManager implements Disposable {
     return new File(root.getParent(), "intellij.maven.server.eventListener");
   }
 
-  @Nullable
-  public String getMavenVersion(@Nullable String mavenHome) {
+  public static @Nullable String getMavenVersion(@Nullable String mavenHome) {
     return MavenUtil.getMavenVersion(getMavenHomeFile(mavenHome));
   }
 
@@ -364,7 +363,7 @@ public final class MavenServerManager implements Disposable {
     classpath.add(new File(root, "maven-server-api.jar"));
 
     if (StringUtil.compareVersionNumbers(mavenVersion, "3") < 0) {
-      classpath.add(new File(root, "maven2-server-impl.jar"));
+      classpath.add(new File(root, "maven2-server.jar"));
       addDir(classpath, new File(root, "maven2-server-lib"), f -> true);
     }
     else {
@@ -372,12 +371,12 @@ public final class MavenServerManager implements Disposable {
       addDir(classpath, new File(root, "maven3-server-lib"), f -> true);
 
       if (StringUtil.compareVersionNumbers(mavenVersion, "3.1") < 0) {
-        classpath.add(new File(root, "maven30-server-impl.jar"));
+        classpath.add(new File(root, "maven30-server.jar"));
       }
       else {
-        classpath.add(new File(root, "maven3-server-impl.jar"));
+        classpath.add(new File(root, "maven3-server.jar"));
         if (StringUtil.compareVersionNumbers(mavenVersion, "3.6") >= 0) {
-          classpath.add(new File(root, "maven36-server-impl.jar"));
+          classpath.add(new File(root, "maven36-server.jar"));
         }
       }
     }
@@ -406,7 +405,6 @@ public final class MavenServerManager implements Disposable {
       }
     }
   }
-
 
   private static void addMavenLibs(List<File> classpath, File mavenHome) {
     addDir(classpath, new File(mavenHome, "lib"), f -> !f.getName().contains("maven-slf4j-provider"));
@@ -491,6 +489,7 @@ public final class MavenServerManager implements Disposable {
   /**
    * @deprecated use {@link MavenServerManager#createIndexer(Project)}
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
   @Deprecated
   public MavenIndexerWrapper createIndexer() {
     return createIndexer(ProjectManager.getInstance().getDefaultProject());

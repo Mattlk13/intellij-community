@@ -8,9 +8,9 @@ import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.icons.AllIcons
 import com.intellij.ide.impl.DataManagerImpl
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataProvider
-import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.LogicalPosition
@@ -42,6 +42,7 @@ import training.util.KeymapUtil
 import training.util.WeakReferenceDelegator
 import training.util.invokeActionForFocusContext
 import java.awt.Rectangle
+import java.awt.event.KeyEvent
 import javax.swing.JDialog
 import javax.swing.text.JTextComponent
 
@@ -54,7 +55,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
   protected abstract val confNameForWatches: String
   protected abstract val debuggingMethodName: String
   protected abstract val methodForStepInto: String
-  protected abstract val stepIntoDirection: String
+  protected abstract val stepIntoDirectionToRight: Boolean
 
   protected val afterFixText: String by lazy { sample.text.replaceFirst("[0]", "[1]") }
 
@@ -156,7 +157,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
             (debugSession as XDebugSessionImpl).setWatchExpressions(emptyList())
             debugSession.addSessionListener(object : XDebugSessionListener {
               override fun sessionPaused() {
-                invokeLater { completeStep() }
+                taskInvokeLater { completeStep() }
               }
             }, lessonDisposable)
             debugSession.addSessionListener(object : XDebugSessionListener {
@@ -239,7 +240,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
       }
       text(LessonsBundle.message("debug.workflow.choose.method.to.step.in",
                                  code(methodForStepInto),
-                                 "<raw_action>$stepIntoDirection</raw_action>",
+                                 LessonUtil.rawKeyStroke(if (stepIntoDirectionToRight) KeyEvent.VK_RIGHT else KeyEvent.VK_LEFT),
                                  action("EditorEnter")))
       stateCheck {
         val debugLine = debugSession?.currentStackFrame?.sourcePosition?.line
@@ -249,7 +250,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
       proposeModificationRestore(sample.text)
       test {
         Thread.sleep(500)
-        invokeActionViaShortcut(if (stepIntoDirection == "→") "RIGHT" else "LEFT")
+        invokeActionViaShortcut(if (stepIntoDirectionToRight) "RIGHT" else "LEFT")
         invokeActionViaShortcut("ENTER")
       }
     }
@@ -287,7 +288,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
       }
       test {
         invokeActionViaShortcut("ESCAPE")
-        invokeLater {
+        taskInvokeLater {
           WriteCommandAction.runWriteCommandAction(project) {
             val offset = sample.text.indexOf("[0]")
             editor.selectionModel.removeSelection()
@@ -437,7 +438,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
   private fun TaskRuntimeContext.configureDebugConfiguration(): Boolean {
     val runManager = RunManager.getInstance(project)
     val dataContext = DataManagerImpl.getInstance().getDataContext(editor.component)
-    val configurationsFromContext = ConfigurationContext.getFromContext(dataContext).configurationsFromContext
+    val configurationsFromContext = ConfigurationContext.getFromContext(dataContext, ActionPlaces.UNKNOWN).configurationsFromContext
 
     val configuration = configurationsFromContext?.singleOrNull() ?: return false
     runManager.addConfiguration(configuration.configurationSettings)

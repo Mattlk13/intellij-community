@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.kotlin.expressions
 
 import com.intellij.psi.PsiElement
@@ -26,7 +27,7 @@ internal class KotlinLocalFunctionUVariable(
     }
     override val typeReference: UTypeReferenceExpression? = null
     override val uastAnchor: UElement? = null
-    override val annotations: List<UAnnotation> = emptyList()
+    override val uAnnotations: List<UAnnotation> = emptyList()
     override fun getOriginalElement(): PsiElement {
         return psi.originalElement
     }

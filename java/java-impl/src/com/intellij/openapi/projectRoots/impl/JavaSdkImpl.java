@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.projectRoots.impl;
 
 import com.intellij.codeInsight.BaseExternalAnnotationsManager;
@@ -120,11 +120,6 @@ public final class JavaSdkImpl extends JavaSdk {
   }
 
   @Override
-  public @NotNull Icon getIconForAddAction() {
-    return AllIcons.General.AddJdk;
-  }
-
-  @Override
   public @Nullable String getDefaultDocumentationUrl(@NotNull Sdk sdk) {
     JavaSdkVersion version = getVersion(sdk);
     int release = version != null ? version.ordinal() : 0;
@@ -239,17 +234,12 @@ public final class JavaSdkImpl extends JavaSdk {
 
   @Override
   public @NotNull String suggestSdkName(@Nullable String currentSdkName, @NotNull String sdkHome) {
-    var info = getInfo(sdkHome);
+    JdkVersionDetector.JdkVersionInfo info = getInfo(sdkHome);
     if (info == null) return currentSdkName != null ? currentSdkName : "";
 
-    String vendorPrefix = info.vendorPrefix;
-    if (!Registry.is("use.jdk.vendor.in.suggested.jdk.name", true)) {
-      vendorPrefix = null;
-    }
+    String vendorPrefix = Registry.is("use.jdk.vendor.in.suggested.jdk.name", true) ? info.variant.prefix : null;
     String name = JdkUtil.suggestJdkName(info.version, vendorPrefix);
-    if (WslDistributionManager.isWslPath(sdkHome)) {
-      return name + " (WSL)";
-    }
+    if (WslDistributionManager.isWslPath(sdkHome)) name += " (WSL)";
     return name;
   }
 
@@ -391,7 +381,7 @@ public final class JavaSdkImpl extends JavaSdk {
   }
 
   @Override
-  public final String getVersionString(String sdkHome) {
+  public String getVersionString(String sdkHome) {
     var info = getInfo(sdkHome);
     if (info == null) return null;
     return info.displayVersionString();
@@ -409,11 +399,6 @@ public final class JavaSdkImpl extends JavaSdk {
 
   private @Nullable JavaVersion getJavaVersion(@Nullable String versionString) {
     return versionString != null ? myCachedVersionStringToJdkVersion.computeIfAbsent(versionString, JavaVersion::tryParse) : null;
-  }
-
-  @Override
-  public @Nullable JavaSdkVersion getVersion(@NotNull String versionString) {
-    return JavaSdkVersion.fromVersionString(versionString);
   }
 
   @Override

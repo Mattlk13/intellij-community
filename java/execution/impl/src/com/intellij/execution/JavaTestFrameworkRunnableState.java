@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution;
 
 import com.intellij.codeInsight.daemon.impl.analysis.JavaModuleGraphUtil;
@@ -45,23 +45,19 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.ex.JavaSdkUtil;
 import com.intellij.openapi.roots.CompilerModuleExtension;
 import com.intellij.openapi.roots.ModuleRootManager;
-import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.JarFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiJavaModule;
 import com.intellij.psi.PsiPackage;
-import com.intellij.psi.impl.PsiImplUtil;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.GlobalSearchScopesCore;
 import com.intellij.util.PathUtil;
-import com.intellij.util.PathsList;
 import com.intellij.util.net.NetUtils;
 import com.intellij.util.ui.UIUtil;
 import org.jdom.Element;
@@ -194,7 +190,7 @@ public abstract class JavaTestFrameworkRunnableState<T extends
    * @deprecated Use {@link #createSearchingForTestsTask(TargetEnvironment)} instead
    */
   @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
+  @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
   public @Nullable SearchForTestsTask createSearchingForTestsTask() throws ExecutionException {
     return null;
   }
@@ -502,10 +498,7 @@ public abstract class JavaTestFrameworkRunnableState<T extends
       vmParametersList.add("--add-modules");
       vmParametersList.add(testModule.getName());
       //setup module path
-      PathsList classPath = javaParameters.getClassPath();
-      PathsList modulePath = javaParameters.getModulePath();
-      modulePath.addAll(classPath.getPathList());
-      classPath.clear();
+      JavaParametersUtil.putDependenciesOnModulePath(javaParameters, testModule, true);
     }
     else {
       PsiJavaModule prodModule = findJavaModule(module, false);
@@ -523,10 +516,7 @@ public abstract class JavaTestFrameworkRunnableState<T extends
     CompilerModuleExtension compilerExt = CompilerModuleExtension.getInstance(module);
     if (compilerExt == null) return;
 
-    PathsList modulePath = javaParameters.getModulePath();
-    PathsList classPath = javaParameters.getClassPath();
-
-    putDependenciesOnModulePath(modulePath, classPath, prodModule);
+    JavaParametersUtil.putDependenciesOnModulePath(javaParameters, prodModule, true);
 
     ParametersList vmParametersList = javaParameters.getVMParametersList()
       .addParamsGroup(JIGSAW_OPTIONS)
@@ -537,7 +527,7 @@ public abstract class JavaTestFrameworkRunnableState<T extends
     VirtualFile testOutput = compilerExt.getCompilerOutputPathForTests();
     if (testOutput != null) {
       vmParametersList.add("--patch-module");
-      vmParametersList.add(prodModuleName + "=" + testOutput.getPath());
+      vmParametersList.add(new CompositeParameterTargetedValue().addLocalPart(prodModuleName + "=").addPathPart(testOutput.getPath()));
     }
 
     //ensure test dependencies missing from production module descriptor are available in tests
@@ -572,42 +562,6 @@ public abstract class JavaTestFrameworkRunnableState<T extends
     for (PsiPackage subPackage : subPackages) {
       collectSubPackages(options, subPackage, globalSearchScope);
     }
-  }
-
-  protected static void putDependenciesOnModulePath(PathsList modulePath,
-                                                    PathsList classPath,
-                                                    PsiJavaModule prodModule) {
-    Set<PsiJavaModule> allRequires = JavaModuleGraphUtil.getAllDependencies(prodModule);
-    allRequires.add(prodModule);    //put production output on the module path as well
-    JarFileSystem jarFS = JarFileSystem.getInstance();
-    ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(prodModule.getProject());
-    allRequires.stream()
-      .filter(javaModule -> !PsiJavaModule.JAVA_BASE.equals(javaModule.getName()))
-      .map(javaModule -> getClasspathEntry(javaModule, fileIndex, jarFS))
-      .filter(Objects::nonNull)
-      .forEach(file -> putOnModulePath(modulePath, classPath, file));
-  }
-
-  private static void putOnModulePath(PathsList modulePath, PathsList classPath, VirtualFile virtualFile) {
-    String path = PathUtil.getLocalPath(virtualFile.getPath());
-    if (classPath.getPathList().contains(path)) {
-      classPath.remove(path);
-      modulePath.add(path);
-    }
-  }
-
-  private static VirtualFile getClasspathEntry(PsiJavaModule javaModule,
-                                               ProjectFileIndex fileIndex,
-                                               JarFileSystem jarFileSystem) {
-    VirtualFile moduleFile = PsiImplUtil.getModuleVirtualFile(javaModule);
-
-    Module moduleDependency = fileIndex.getModuleForFile(moduleFile);
-    if (moduleDependency == null) {
-      return jarFileSystem.getLocalVirtualFileFor(moduleFile);
-    }
-
-    CompilerModuleExtension moduleExtension = CompilerModuleExtension.getInstance(moduleDependency);
-    return moduleExtension != null ? moduleExtension.getCompilerOutputPath() : null;
   }
 
   protected void createServerSocket(JavaParameters javaParameters) {

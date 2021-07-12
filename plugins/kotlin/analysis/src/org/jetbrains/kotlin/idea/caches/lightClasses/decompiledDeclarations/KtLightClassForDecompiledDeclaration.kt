@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.lightClasses
 
@@ -18,6 +15,7 @@ import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.analyzer.KotlinModificationTrackerService
 import org.jetbrains.kotlin.asJava.classes.KotlinClassInnerStuffCache
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
+import org.jetbrains.kotlin.asJava.classes.LightClassesLazyCreator
 import org.jetbrains.kotlin.asJava.classes.lazyPub
 import org.jetbrains.kotlin.asJava.elements.KtLightElementBase
 import org.jetbrains.kotlin.idea.decompiler.classFile.KtClsFile
@@ -34,7 +32,8 @@ open class KtLightClassForDecompiledDeclaration(
 
     private val myInnersCache = KotlinClassInnerStuffCache(
         myClass = this,
-        externalDependencies = listOf(KotlinModificationTrackerService.getInstance(manager.project).outOfBlockModificationTracker)
+        externalDependencies = listOf(KotlinModificationTrackerService.getInstance(manager.project).outOfBlockModificationTracker),
+        lazyCreator = LightClassesLazyCreator(project)
     )
 
     override fun getOwnMethods(): MutableList<PsiMethod> = _methods

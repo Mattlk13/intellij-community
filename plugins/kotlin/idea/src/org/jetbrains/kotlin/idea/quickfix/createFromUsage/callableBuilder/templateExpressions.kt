@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix.createFromUsage.callableBuilder
 
@@ -74,8 +71,8 @@ internal class ParameterNameExpression(
         }
 
         // remember other parameter names for later use
-        val parameterNames = parameterList.parameters.mapNotNullTo(HashSet<String>()) { jetParameter ->
-            if (jetParameter == parameter) null else jetParameter.name
+        val parameterNames = parameterList.parameters.mapNotNullTo(HashSet<String>()) { ktParameter ->
+            if (ktParameter == parameter) null else ktParameter.name
         }
 
         // add fallback parameter name

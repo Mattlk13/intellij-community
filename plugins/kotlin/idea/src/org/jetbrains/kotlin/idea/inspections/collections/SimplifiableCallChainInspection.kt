@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections.collections
 
@@ -57,6 +54,13 @@ class SimplifiableCallChainInspection : AbstractCallChainChecker() {
                 if (conversion.firstName == "map" && conversion.secondName in listOf("max", "maxOrNull", "min", "minOrNull")) {
                     val parent = expression.parent
                     if (parent !is KtPostfixExpression || parent.operationToken != KtTokens.EXCLEXCL) return@check false
+                }
+                if (conversion.firstName == "map" && conversion.secondName == "sum" && conversion.replacement == "sumOf") {
+                    val type = firstResolvedCall.lastFunctionalArgumentReturnType(context) ?: return@check false
+                    if (!KotlinBuiltIns.isInt(type) && !KotlinBuiltIns.isLong(type) &&
+                        !KotlinBuiltIns.isUInt(type) && !KotlinBuiltIns.isULong(type) &&
+                        !KotlinBuiltIns.isDouble(type)
+                    ) return@check false
                 }
                 return@check conversion.enableSuspendFunctionCall || !containsSuspendFunctionCall(firstResolvedCall, context)
             } ?: return

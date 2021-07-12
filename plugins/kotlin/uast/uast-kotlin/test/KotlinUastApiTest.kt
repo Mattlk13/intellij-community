@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.test.kotlin
 
 import com.intellij.psi.*
@@ -297,7 +298,7 @@ class KotlinUastApiTest : AbstractKotlinUastTest() {
     fun testSimpleAnnotated() {
         doTest("SimpleAnnotated") { _, file ->
             file.findElementByTextFromPsi<UField>("@kotlin.SinceKotlin(\"1.0\")\n    val property: String = \"Mary\"").let { field ->
-                val annotation = field.annotations.assertedFind("kotlin.SinceKotlin") { it.qualifiedName }
+                val annotation = field.uAnnotations.assertedFind("kotlin.SinceKotlin") { it.qualifiedName }
                 Assert.assertEquals("1.0", annotation.findDeclaredAttributeValue("version")?.evaluateString())
                 Assert.assertEquals("SinceKotlin", annotation.cast<UAnchorOwner>().uastAnchor?.sourcePsi?.text)
             }

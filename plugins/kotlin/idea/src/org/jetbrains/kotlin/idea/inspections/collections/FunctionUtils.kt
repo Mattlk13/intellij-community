@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2017 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections.collections
 
@@ -52,11 +38,18 @@ fun KotlinType?.isMap(builtIns: KotlinBuiltIns): Boolean {
 
 fun KotlinType?.isIterable(builtIns: KotlinBuiltIns): Boolean {
     val classDescriptor = this?.constructor?.declarationDescriptor as? ClassDescriptor ?: return false
-    val className = classDescriptor.name.asString()
-    // First two lines are just to make things faster
-    return className.endsWith("List") && classDescriptor.isSubclassOf(builtIns.list)
-            || className.endsWith("Set") && classDescriptor.isSubclassOf(builtIns.set)
-            || classDescriptor.isSubclassOf(builtIns.iterable)
+    return classDescriptor.isListOrSet(builtIns) || classDescriptor.isSubclassOf(builtIns.iterable)
+}
+
+fun KotlinType?.isCollection(builtIns: KotlinBuiltIns): Boolean {
+    val classDescriptor = this?.constructor?.declarationDescriptor as? ClassDescriptor ?: return false
+    return classDescriptor.isListOrSet(builtIns) || classDescriptor.isSubclassOf(builtIns.collection)
+}
+
+private fun ClassDescriptor.isListOrSet(builtIns: KotlinBuiltIns): Boolean {
+    val className = name.asString()
+    return className.endsWith("List") && isSubclassOf(builtIns.list)
+            || className.endsWith("Set") && isSubclassOf(builtIns.set)
 }
 
 fun KtCallExpression.isCalling(fqName: FqName, context: BindingContext? = null): Boolean {

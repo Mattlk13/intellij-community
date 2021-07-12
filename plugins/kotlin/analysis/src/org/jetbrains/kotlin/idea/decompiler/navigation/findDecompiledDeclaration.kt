@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.decompiler.navigation
 
@@ -18,6 +15,7 @@ import org.jetbrains.kotlin.idea.caches.project.BinaryModuleInfo
 import org.jetbrains.kotlin.idea.caches.resolve.LOG
 import org.jetbrains.kotlin.idea.decompiler.KtDecompiledFile
 import org.jetbrains.kotlin.idea.decompiler.textBuilder.DecompiledTextIndexer
+import org.jetbrains.kotlin.idea.decompiler.textBuilder.defaultDecompilerRendererOptions
 import org.jetbrains.kotlin.idea.stubindex.*
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
@@ -189,9 +187,8 @@ object ByDescriptorIndexer : DecompiledTextIndexer<String> {
         return descriptorRendererForKeys.render(this)
     }
 
-    private val descriptorRendererForKeys = DescriptorRenderer.COMPACT_WITH_MODIFIERS.withOptions {
-        modifiers = DescriptorRendererModifier.ALL
-        alwaysRenderModifiers = true
+    private val descriptorRendererForKeys = DescriptorRenderer.withOptions {
+        defaultDecompilerRendererOptions()
         withDefinedIn = true
         renderUnabbreviatedType = false
     }

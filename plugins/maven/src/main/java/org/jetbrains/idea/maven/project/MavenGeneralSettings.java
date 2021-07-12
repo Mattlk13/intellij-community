@@ -1,9 +1,9 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.idea.maven.project;
 
 import com.intellij.execution.wsl.WSLDistribution;
-import com.intellij.openapi.project.Project;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
@@ -13,8 +13,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.xmlb.annotations.Property;
 import com.intellij.util.xmlb.annotations.Transient;
-import gnu.trove.THashSet;
 import org.jdom.Element;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.idea.maven.execution.MavenExecutionOptions;
@@ -24,10 +24,7 @@ import org.jetbrains.idea.maven.utils.MavenUtil;
 import org.jetbrains.idea.maven.utils.MavenWslUtil;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -138,6 +135,7 @@ public class MavenGeneralSettings implements Cloneable {
    */
   @Transient
   @NotNull
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public MavenExecutionOptions.LoggingLevel getLoggingLevel() {
     return getOutputLevel();
@@ -186,10 +184,10 @@ public class MavenGeneralSettings implements Cloneable {
     }
   }
 
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public File getEffectiveMavenHome() {
+  public @Nullable File getEffectiveMavenHome() {
     if (myEffectiveLocalHomeCache == null) {
       myEffectiveLocalHomeCache =
         resolveWslAware(
@@ -214,35 +212,36 @@ public class MavenGeneralSettings implements Cloneable {
     }
   }
 
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public File getEffectiveUserSettingsIoFile() {
+  public @Nullable File getEffectiveUserSettingsIoFile() {
     return resolveWslAware(
       () -> MavenUtil.resolveUserSettingsFile(getUserSettingsFile()),
       wsl -> MavenWslUtil.resolveUserSettingsFile(wsl, getUserSettingsFile())
     );
   }
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public File getEffectiveGlobalSettingsIoFile() {
+  public @Nullable File getEffectiveGlobalSettingsIoFile() {
     return resolveWslAware(
       () -> MavenUtil.resolveGlobalSettingsFile(getMavenHome()),
       wsl -> MavenWslUtil.resolveGlobalSettingsFile(wsl, getMavenHome())
     );
   }
 
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public VirtualFile getEffectiveUserSettingsFile() {
+  public @Nullable VirtualFile getEffectiveUserSettingsFile() {
     File file = getEffectiveUserSettingsIoFile();
     return file == null ? null : LocalFileSystem.getInstance().findFileByIoFile(file);
   }
 
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
   public List<VirtualFile> getEffectiveSettingsFiles() {
     List<VirtualFile> result = new ArrayList<>(2);
     VirtualFile file = getEffectiveUserSettingsFile();
@@ -252,10 +251,10 @@ public class MavenGeneralSettings implements Cloneable {
     return result;
   }
 
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public VirtualFile getEffectiveGlobalSettingsFile() {
+  public @Nullable VirtualFile getEffectiveGlobalSettingsFile() {
     File file = getEffectiveGlobalSettingsIoFile();
     return file == null ? null : LocalFileSystem.getInstance().findFileByIoFile(file);
   }
@@ -275,9 +274,9 @@ public class MavenGeneralSettings implements Cloneable {
     }
   }
 
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-
   public File getEffectiveLocalRepository() {
     File result = myEffectiveLocalRepositoryCache;
     if (result != null) return result;
@@ -292,10 +291,10 @@ public class MavenGeneralSettings implements Cloneable {
     return result;
   }
 
-  @Nullable
+  /** @deprecated use {@link MavenUtil} or {@link MavenWslUtil} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
-  /*use MavenUtil or MavenWslUtil*/
-  public VirtualFile getEffectiveSuperPom() {
+  public @Nullable VirtualFile getEffectiveSuperPom() {
     VirtualFile result = myEffectiveSuperPomCache;
     if (result != null && result.isValid()) {
       return result;
@@ -314,7 +313,7 @@ public class MavenGeneralSettings implements Cloneable {
     Set<String> result = myDefaultPluginsCache;
     if (result != null) return result;
 
-    result = new THashSet<>();
+    result = new HashSet<>();
 
     VirtualFile effectiveSuperPom = getEffectiveSuperPom();
     if (effectiveSuperPom != null) {

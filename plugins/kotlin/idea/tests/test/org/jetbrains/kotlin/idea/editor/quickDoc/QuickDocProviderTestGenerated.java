@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.editor.quickDoc;
 
@@ -89,6 +86,11 @@ public class QuickDocProviderTestGenerated extends AbstractQuickDocProviderTest 
     @TestMetadata("ExtensionReceiverEnd.kt")
     public void testExtensionReceiverEnd() throws Exception {
         runTest("testData/editor/quickDoc/ExtensionReceiverEnd.kt");
+    }
+
+    @TestMetadata("Formatting.kt")
+    public void testFormatting() throws Exception {
+        runTest("testData/editor/quickDoc/Formatting.kt");
     }
 
     @TestMetadata("IndentedCodeBlock.kt")
@@ -196,6 +198,11 @@ public class QuickDocProviderTestGenerated extends AbstractQuickDocProviderTest 
         runTest("testData/editor/quickDoc/OnEnumValuesFunction.kt");
     }
 
+    @TestMetadata("OnFunctionDeclarationWithGFMTable.kt")
+    public void testOnFunctionDeclarationWithGFMTable() throws Exception {
+        runTest("testData/editor/quickDoc/OnFunctionDeclarationWithGFMTable.kt");
+    }
+
     @TestMetadata("OnFunctionDeclarationWithPackage.kt")
     public void testOnFunctionDeclarationWithPackage() throws Exception {
         runTest("testData/editor/quickDoc/OnFunctionDeclarationWithPackage.kt");
@@ -269,6 +276,11 @@ public class QuickDocProviderTestGenerated extends AbstractQuickDocProviderTest 
     @TestMetadata("OnMethodUsageWithTypeParameter.kt")
     public void testOnMethodUsageWithTypeParameter() throws Exception {
         runTest("testData/editor/quickDoc/OnMethodUsageWithTypeParameter.kt");
+    }
+
+    @TestMetadata("renderAnnotatedExtensionFunctionType.kt")
+    public void testRenderAnnotatedExtensionFunctionType() throws Exception {
+        runTest("testData/editor/quickDoc/renderAnnotatedExtensionFunctionType.kt");
     }
 
     @TestMetadata("Samples.kt")

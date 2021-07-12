@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.jps.javac;
 
 import com.intellij.openapi.util.io.FileUtilRt;
@@ -53,7 +53,13 @@ public final class JpsJavacFileManager extends ForwardingJavaFileManager<Standar
   private final Function<File, JavaFileObject> myFileToInputFileObjectConverter = new Function<File, JavaFileObject>() {
     @Override
     public JavaFileObject fun(File file) {
-      return new InputFileObject(file, myEncodingName);
+      return new InputFileObject(file, myEncodingName, false);
+    }
+  };
+  private final Function<File, JavaFileObject> myFileToCachingInputFileObjectConverter = new Function<File, JavaFileObject>() {
+    @Override
+    public JavaFileObject fun(File file) {
+      return new InputFileObject(file, myEncodingName, true);
     }
   };
   private static final Function<String, File> ourPathToFileConverter = new Function<String, File>() {
@@ -326,12 +332,12 @@ public final class JpsJavacFileManager extends ForwardingJavaFileManager<Standar
     void reportMessage(final Diagnostic.Kind kind, @Nls String message);
   }
 
-  public final Context getContext() {
+  public Context getContext() {
     return myContext;
   }
 
   @NotNull
-  protected StandardJavaFileManager getStdManager() {
+  StandardJavaFileManager getStdManager() {
     return fileManager;
   }
 
@@ -389,7 +395,7 @@ public final class JpsJavacFileManager extends ForwardingJavaFileManager<Standar
 
   @Override
   public Iterable<? extends JavaFileObject> getJavaFileObjectsFromFiles(final Iterable<? extends File> files) {
-    return wrapJavaFileObjects(Iterators.map(files, myFileToInputFileObjectConverter));
+    return wrapJavaFileObjects(Iterators.map(files, myFileToCachingInputFileObjectConverter));
   }
 
   @Override
@@ -512,7 +518,7 @@ public final class JpsJavacFileManager extends ForwardingJavaFileManager<Standar
                   );
                 }
               };
-              return Iterators.map(Iterators.filter(myFileOperations.listFiles(dir, recurse), filter), myFileToInputFileObjectConverter);
+              return Iterators.map(Iterators.filter(myFileOperations.listFiles(dir, recurse), filter), location.isOutputLocation()? myFileToInputFileObjectConverter : myFileToCachingInputFileObjectConverter);
             }
             catch (IOException e) {
               throw new RuntimeException(e);

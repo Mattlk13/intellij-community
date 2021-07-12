@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.ui.laf;
 
 import com.intellij.CommonBundle;
@@ -25,7 +25,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ex.ApplicationInfoEx;
 import com.intellij.openapi.components.PersistentStateComponent;
-import com.intellij.openapi.components.RoamingType;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
@@ -71,7 +70,7 @@ import java.util.List;
 import java.util.*;
 import java.util.function.BooleanSupplier;
 
-@State(name = "LafManager", storages = @Storage(value = "laf.xml", roamingType = RoamingType.PER_OS))
+@State(name = "LafManager", storages = @Storage("laf.xml"))
 public final class LafManagerImpl extends LafManager implements PersistentStateComponent<Element>, Disposable {
   private static final Logger LOG = Logger.getInstance(LafManager.class);
 
@@ -159,6 +158,7 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
   private final Lazy<ActionToolbar> settingsToolbar = new SynchronizedClearableLazy<>(() -> {
     DefaultActionGroup group = new DefaultActionGroup(new PreferredLafAction());
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(ActionPlaces.TOOLBAR, group, true);
+    toolbar.setTargetComponent(toolbar.getComponent());
     toolbar.getComponent().setOpaque(false);
     return toolbar;
   });
@@ -406,10 +406,18 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
         }
       }
     }
+
+    UIManager.LookAndFeelInfo laf = null;
     if (lafClassName != null) {
-      return findLaf(lafClassName);
+      laf = findLaf(lafClassName);
     }
-    return null;
+
+    if (laf == null && ("com.intellij.laf.win10.WinIntelliJLaf".equals(lafClassName) ||
+                        "com.intellij.laf.macos.MacIntelliJLaf".equals(lafClassName))) {
+      return defaultLightLaf.getValue();
+    }
+
+    return laf;
   }
 
   @Override
@@ -647,25 +655,7 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
     }
 
     // set L&F
-    // that is IDEA default LAF
-    if (IdeaLookAndFeelInfo.CLASS_NAME.equals(lookAndFeelInfo.getClassName())) {
-      IdeaLaf laf = new IdeaLaf();
-      MetalLookAndFeel.setCurrentTheme(new IdeaBlueMetalTheme());
-      try {
-        UIManager.setLookAndFeel(laf);
-        updateIconsUnderSelection(false);
-      }
-      catch (Exception e) {
-        LOG.error(e);
-        Messages.showMessageDialog(
-          IdeBundle.message("error.cannot.set.look.and.feel", lookAndFeelInfo.getName(), e.getMessage()),
-          CommonBundle.getErrorTitle(),
-          Messages.getErrorIcon()
-        );
-        return true;
-      }
-    }
-    else if (DarculaLookAndFeelInfo.CLASS_NAME.equals(lookAndFeelInfo.getClassName())) {
+    if (DarculaLookAndFeelInfo.CLASS_NAME.equals(lookAndFeelInfo.getClassName())) {
       DarculaLaf laf = new DarculaLaf();
       try {
         UIManager.setLookAndFeel(laf);
@@ -722,7 +712,13 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
 
     if (lookAndFeelInfo instanceof UIThemeBasedLookAndFeelInfo) {
       try {
-        ((UIThemeBasedLookAndFeelInfo)lookAndFeelInfo).installTheme(UIManager.getLookAndFeelDefaults(), !installEditorScheme);
+        UIThemeBasedLookAndFeelInfo themeInfo = (UIThemeBasedLookAndFeelInfo)lookAndFeelInfo;
+        themeInfo.installTheme(UIManager.getLookAndFeelDefaults(), !installEditorScheme);
+
+        //IntelliJ Light is the only theme which is, in fact, a LaF.
+        if (!themeInfo.getName().equals("IntelliJ Light")) {
+          defaults.put("Theme.name", themeInfo.getName());
+        }
       }
       catch (Exception e) {
         LOG.error(e);
@@ -854,7 +850,7 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
     uiDefaults.put(RenderingHints.KEY_TEXT_LCD_CONTRAST, UIUtil.getLcdContrastValue());
 
     uiDefaults.put(RenderingHints.KEY_FRACTIONALMETRICS,
-                   AppUIUtil.adjustFractionalMetrics(UISettings.getPREFERRED_FRACTIONAL_METRICS_VALUE()));
+                   AppUIUtil.adjustFractionalMetrics(UISettings.Companion.getPreferredFractionalMetricsValue()));
 
     for (Frame frame : Frame.getFrames()) {
       updateUI(frame);
@@ -992,7 +988,8 @@ public final class LafManagerImpl extends LafManager implements PersistentStateC
   private static void patchRowHeight(UIDefaults defaults, String key, float prevScale) {
     Object value = defaults.get(key);
     int rowHeight = value instanceof Integer ? (Integer)value : 0;
-    if (!SystemInfoRt.isMac && !SystemInfoRt.isWindows && Registry.is("linux.row.height.disabled", true)) {
+    if (!SystemInfoRt.isMac && !SystemInfoRt.isWindows &&
+        (!LoadingState.APP_STARTED.isOccurred() || Registry.is("linux.row.height.disabled", true))) {
       rowHeight = 0;
     }
     else if (rowHeight <= 0) {

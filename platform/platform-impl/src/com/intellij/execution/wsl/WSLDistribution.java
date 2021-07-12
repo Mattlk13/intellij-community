@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution.wsl;
 
 import com.google.common.net.InetAddresses;
@@ -53,12 +53,13 @@ public class WSLDistribution {
   private static final String RUN_PARAMETER = "run";
   public static final String UNC_PREFIX = "\\\\wsl$\\";
   private static final String WSLENV = "WSLENV";
-  private static final int DEFAULT_TIMEOUT = SystemProperties.getIntProperty("ide.wsl.probe.timeout", 20_000);
+  static final int DEFAULT_TIMEOUT = SystemProperties.getIntProperty("ide.wsl.probe.timeout", 20_000);
 
   private static final Key<ProcessListener> SUDO_LISTENER_KEY = Key.create("WSL sudo listener");
 
   private final @NotNull WslDistributionDescriptor myDescriptor;
   private final @Nullable Path myExecutablePath;
+  private @Nullable Integer myVersion;
   private final NullableLazyValue<String> myHostIp = NullableLazyValue.createValue(this::readHostIp);
   private final NullableLazyValue<String> myWslIp = NullableLazyValue.createValue(this::readWslIp);
   private final NullableLazyValue<String> myShellPath = NullableLazyValue.createValue(this::readShellPath);
@@ -66,6 +67,7 @@ public class WSLDistribution {
 
   protected WSLDistribution(@NotNull WSLDistribution dist) {
     this(dist.myDescriptor, dist.myExecutablePath);
+    myVersion = dist.myVersion;
   }
 
   WSLDistribution(@NotNull WslDistributionDescriptor descriptor, @Nullable Path executablePath) {
@@ -108,6 +110,20 @@ public class WSLDistribution {
       LOG.warn(e);
     }
     return null;
+  }
+
+  void setVersion(@Nullable Integer version) {
+    myVersion = version;
+  }
+
+  /**
+   * @return version if it can be determined or -1 instead
+   */
+  public int getVersion() {
+    if (myVersion == null) {
+      myVersion = WSLUtil.getWslVersion(this);
+    }
+    return myVersion;
   }
 
   /**
@@ -231,7 +247,9 @@ public class WSLDistribution {
     boolean executeCommandInShell = wslExe == null || options.isExecuteCommandInShell();
     List<String> linuxCommand = buildLinuxCommand(commandLine, executeCommandInShell);
 
-    if (options.isSudo()) { // fixme shouldn't we sudo for every chunk? also, preserve-env, login?
+    final boolean isElevated = options.isSudo();
+    // use old approach in case of wsl.exe is not available
+    if (isElevated && wslExe == null) { // fixme shouldn't we sudo for every chunk? also, preserve-env, login?
       prependCommand(linuxCommand, "sudo", "-S", "-p", "''");
       //TODO[traff]: ask password only if it is needed. When user is logged as root, password isn't asked.
 
@@ -284,8 +302,16 @@ public class WSLDistribution {
     String linuxCommandStr = StringUtil.join(linuxCommand, " ");
     if (wslExe != null) {
       commandLine.setExePath(wslExe.toString());
+      if (isElevated) {
+        commandLine.addParameters("-u", "root");
+      }
       commandLine.addParameters("--distribution", getMsId());
       if (options.isExecuteCommandInShell()) {
+        // workaround WSL1 problem: https://github.com/microsoft/WSL/issues/4082
+        if (options.getSleepTimeoutSec() > 0 && getVersion() == 1) {
+          linuxCommandStr += "; exitcode=$?; sleep " + options.getSleepTimeoutSec() + "; (exit $exitcode)";
+        }
+
         if (options.isExecuteCommandInDefaultShell()) {
           commandLine.addParameters("$SHELL", "-c", linuxCommandStr);
         }
@@ -338,7 +364,7 @@ public class WSLDistribution {
     return file != null ? file.toPath() : null;
   }
 
-  public static @NotNull List<String> buildLinuxCommand(@NotNull GeneralCommandLine commandLine, boolean executeCommandInShell) {
+  private static @NotNull List<String> buildLinuxCommand(@NotNull GeneralCommandLine commandLine, boolean executeCommandInShell) {
     List<String> command = ContainerUtil.concat(List.of(commandLine.getExePath()), commandLine.getParametersList().getList());
     return new ArrayList<>(ContainerUtil.map(command, executeCommandInShell ? CommandLineUtil::posixQuote : Functions.identity()));
   }
@@ -449,11 +475,14 @@ public class WSLDistribution {
    * @return Windows-dependent path for a file, pointed by {@code wslPath} in WSL, or {@code null} if path is unmappable
    */
 
-  public @Nullable @NlsSafe String getWindowsPath(@NotNull String wslPath) {
+  public @NotNull @NlsSafe String getWindowsPath(@NotNull String wslPath) {
     if (wslPath.startsWith(getMntRoot())) {
-      return WSLUtil.getWindowsPath(wslPath, getMntRoot());
+      String windowsPath = WSLUtil.getWindowsPath(wslPath, getMntRoot());
+      if (windowsPath != null) {
+        return windowsPath;
+      }
     }
-    return getUNCRoot() + FileUtil.toSystemDependentName(wslPath);
+    return getUNCRoot() + FileUtil.toSystemDependentName(FileUtil.normalize(wslPath));
   }
 
   /**
@@ -467,7 +496,8 @@ public class WSLDistribution {
 
       String distName = windowsPath.substring(0, index);
       if (!distName.equalsIgnoreCase(myDescriptor.getMsId())) {
-        throw new IllegalArgumentException("Trying to get WSL path from a different WSL distribution");
+        throw new IllegalArgumentException(
+          "Trying to get WSL path from a different WSL distribution: in path: " + distName + "; mine is: " + myDescriptor.getMsId());
       }
       return FileUtil.toSystemIndependentName(windowsPath.substring(index));
     }
@@ -534,6 +564,7 @@ public class WSLDistribution {
   }
 
   /** @deprecated use {@link WSLDistribution#getUNCRootPath()} instead */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public @NotNull File getUNCRoot() {
     return new File(UNC_PREFIX + myDescriptor.getMsId());
@@ -585,7 +616,7 @@ public class WSLDistribution {
     if (wsl1LoopbackAddress != null) {
       return wsl1LoopbackAddress;
     }
-    if (Registry.is("wsl.obtain.windows.host.ip.alternatively")) {
+    if (Registry.is("wsl.obtain.windows.host.ip.alternatively", true)) {
       InetAddress wslAddr = getWslIpAddress();
       try (DatagramSocket datagramSocket = new DatagramSocket()) {
         datagramSocket.connect(wslAddr, 0);
@@ -673,6 +704,11 @@ public class WSLDistribution {
     // Let's print some unique message before executing the command to know where command output begins in the result output.
     String prefixText = "intellij: executing command...";
     options.addInitCommand("echo " + CommandLineUtil.posixQuote(prefixText));
+    if (options.isExecuteCommandInInteractiveShell()) {
+      // Disable oh-my-zsh auto update on shell initialization
+      commandLine.getEnvironment().put(EnvironmentUtil.DISABLE_OMZ_AUTO_UPDATE, "true");
+      options.setPassEnvVarsUsingInterop(true);
+    }
     ProcessOutput output = executeOnWsl(commandLine, options, timeout);
     String stdout = output.getStdout();
     String markerText = prefixText + LineSeparator.LF.getSeparatorString();

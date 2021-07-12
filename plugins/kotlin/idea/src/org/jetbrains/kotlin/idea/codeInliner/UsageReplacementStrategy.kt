@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInliner
 
@@ -16,7 +13,7 @@ import com.intellij.openapi.util.NlsContexts
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
-import com.intellij.ui.GuiUtils
+import com.intellij.util.ModalityUiUtil
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
@@ -60,14 +57,14 @@ fun UsageReplacementStrategy.replaceUsagesInWholeProject(
                         .map { ref -> ref.expression }
                 }
 
-                GuiUtils.invokeLaterIfNeeded(
-                    {
-                        project.executeWriteCommand(commandName) {
-                            this@replaceUsagesInWholeProject.replaceUsages(usages)
-                        }
-                    },
-                    ModalityState.NON_MODAL
-                )
+              ModalityUiUtil.invokeLaterIfNeeded(
+                {
+                  project.executeWriteCommand(commandName) {
+                    this@replaceUsagesInWholeProject.replaceUsages(usages)
+                  }
+                },
+                ModalityState.NON_MODAL
+              )
             }
         })
 }

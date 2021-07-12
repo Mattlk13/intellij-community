@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.util;
 
 import com.intellij.diagnostic.LoadingState;
@@ -11,6 +11,7 @@ import com.intellij.openapi.util.ThrowableComputable;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.util.containers.FList;
 import com.intellij.util.ui.EDT;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,8 +30,6 @@ public final class SlowOperations {
   private static final Set<String> ourReportedTraces = new HashSet<>();
   private static final String[] misbehavingFrames = {
     "org.jetbrains.kotlin.idea.refactoring.introduce.introduceVariable.KotlinIntroduceVariableHandler",
-    "org.jetbrains.kotlin.idea.actions.KotlinAddImportAction",
-    "org.jetbrains.kotlin.idea.codeInsight.KotlinCopyPasteReferenceProcessor",
     "com.intellij.apiwatcher.plugin.presentation.bytecode.UsageHighlighter",
   };
   private static int ourAlwaysAllow = -1;
@@ -81,15 +80,17 @@ public final class SlowOperations {
       return;
     }
     Application application = ApplicationManager.getApplication();
-    if (!application.isDispatchThread() ||
-        application.isWriteAccessAllowed() ||
-        ourStack.isEmpty() && !Registry.is("ide.slow.operations.assertion.other", false)) {
+    if (!application.isDispatchThread()) {
       return;
     }
-    for (String activity : ourStack) {
-      if (FAST_TRACK == activity) {
-        throw new ProcessCanceledException();
-      }
+    if (application.isWriteAccessAllowed() && !Registry.is("ide.slow.operations.assertion.write.action")) {
+      return;
+    }
+    if (ourStack.isEmpty() && !Registry.is("ide.slow.operations.assertion.other", false)) {
+      return;
+    }
+    if (isInsideActivity(FAST_TRACK)) {
+      throw new ProcessCanceledException();
     }
     for (String activity : ourStack) {
       if (!Registry.is("ide.slow.operations.assertion." + activity, true)) {
@@ -109,6 +110,17 @@ public final class SlowOperations {
     LOG.error("Slow operations are prohibited on EDT. See SlowOperations.assertSlowOperationsAreAllowed javadoc.");
   }
 
+  @ApiStatus.Internal
+  public static boolean isInsideActivity(@NotNull String activityName) {
+    ApplicationManager.getApplication().assertIsDispatchThread();
+    for (String activity : ourStack) {
+      if (activityName == activity) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean isAlwaysAllowed() {
     if (ourAlwaysAllow == 1) {
       return true;
@@ -120,7 +132,9 @@ public final class SlowOperations {
       return true;
     }
 
-    boolean result = System.getenv("TEAMCITY_VERSION") != null || ApplicationManager.getApplication().isUnitTestMode();
+    boolean result = System.getenv("TEAMCITY_VERSION") != null ||
+                     ApplicationManager.getApplication().isUnitTestMode() ||
+                     ApplicationManager.getApplication().isCommandLine();
     ourAlwaysAllow = result ? 1 : 0;
     return result;
   }

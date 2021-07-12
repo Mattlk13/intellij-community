@@ -139,7 +139,9 @@ final class MacDmgBuilder {
         zipfileset(dir: macAdditionalDirPath, prefix: zipRoot)
       }
     }
-    if (!buildContext.options.buildStepsToSkip.contains(BuildOptions.MAC_SIGN_STEP) || !isMac()) {
+
+    def signMacArtifacts = !buildContext.options.buildStepsToSkip.contains(BuildOptions.MAC_SIGN_STEP)
+    if (signMacArtifacts || !isMac()) {
       ftpAction("mkdir") {}
       try {
         signMacZip(sitFile, jreArchivePath, notarize)
@@ -147,23 +149,29 @@ final class MacDmgBuilder {
         if (customizer.publishArchive) {
           buildContext.notifyArtifactBuilt(sitFile.path)
         }
-        buildDmg(targetName)
+        buildContext.executeStep("Build .dmg artifact for macOS", BuildOptions.MAC_DMG_STEP) {
+          buildDmg(targetName)
+        }
       }
       finally {
         deleteRemoteDir()
       }
     }
     else {
-      bundleJBRLocally(sitFile, jreArchivePath)
+      if (jreArchivePath != null || signMacArtifacts) {
+        bundleJBRAndSignSitLocally(sitFile, jreArchivePath)
+      }
       if (customizer.publishArchive) {
         buildContext.notifyArtifactBuilt(sitFile.path)
       }
-      buildDmgLocally(sitFile, targetName)
+      buildContext.executeStep("Build .dmg artifact for macOS", BuildOptions.MAC_DMG_STEP) {
+        buildDmgLocally(sitFile, targetName)
+      }
     }
   }
 
   @CompileStatic(TypeCheckingMode.SKIP)
-  private void bundleJBRLocally(File targetFile, String jreArchivePath) {
+  private void bundleJBRAndSignSitLocally(File targetFile, String jreArchivePath) {
     buildContext.messages.progress("Bundling JBR")
     File tempDir = new File(new File(buildContext.paths.temp, targetFile.getName()), "mac.dist.bundled.jre")
     tempDir.mkdirs()

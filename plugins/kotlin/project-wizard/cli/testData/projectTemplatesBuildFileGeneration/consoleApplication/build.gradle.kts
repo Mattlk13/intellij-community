@@ -13,17 +13,17 @@ repositories {
 }
 
 dependencies {
-    testImplementation(kotlin("test-junit"))
+    testImplementation(kotlin("test"))
 }
 
 tasks.test {
-    useJUnit()
+    useJUnitPlatform()
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
 
 application {
-    mainClassName = "MainKt"
+    mainClass.set("MainKt")
 }

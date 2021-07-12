@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators
 
@@ -113,8 +110,9 @@ interface JsBrowserBasedConfigurator {
             }
             "browser" {
                 if (
-                    reader.isApplication(module) && reader.hasCssSupport(module) ||
-                    reader.settingValue(module, ModuleConfiguratorWithTests.testFramework) != KotlinTestFramework.NONE
+                    (reader.isApplication(module) ||
+                            reader.settingValue(module, ModuleConfiguratorWithTests.testFramework) != KotlinTestFramework.NONE) &&
+                    reader.hasCssSupport(module)
                 ) {
                     commonCssSupport()
                 }
@@ -179,7 +177,7 @@ object BrowserJsSinglePlatformModuleConfigurator : JsSinglePlatformModuleConfigu
     @NonNls
     override val suggestedModuleName = "browser"
 
-    override val moduleKind = ModuleKind.singleplatformJsBrowser
+    override val moduleKind = ModuleKind.singlePlatformJsBrowser
 
     override fun getConfiguratorSettings(): List<ModuleConfiguratorSetting<*, *>> {
         return super.getConfiguratorSettings() +
@@ -200,7 +198,7 @@ object NodeJsSinglePlatformModuleConfigurator : JsSinglePlatformModuleConfigurat
     @NonNls
     override val suggestedModuleName = "nodejs"
 
-    override val moduleKind = ModuleKind.singleplatformJsNode
+    override val moduleKind = ModuleKind.singlePlatformJsNode
 
     override fun GradleIRListBuilder.subTarget(module: Module, reader: Reader) {
         nodejsSubTarget(module, reader)

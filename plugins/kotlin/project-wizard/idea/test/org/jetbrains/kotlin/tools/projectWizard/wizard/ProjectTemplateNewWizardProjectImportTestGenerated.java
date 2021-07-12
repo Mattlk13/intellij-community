@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.wizard;
 
@@ -26,11 +23,6 @@ public abstract class ProjectTemplateNewWizardProjectImportTestGenerated extends
     public static class GradleKts extends AbstractProjectTemplateNewWizardProjectImportTest {
         private void runTest(String testDataFilePath) throws Exception {
             KotlinTestUtils.runTest(this::doTestGradleKts, this, testDataFilePath);
-        }
-
-        @TestMetadata("backendApplication")
-        public void testBackendApplication() throws Exception {
-            runTest("../cli/testData/projectTemplatesBuildFileGeneration/backendApplication/");
         }
 
         @TestMetadata("composeDesktopApplication")
@@ -91,11 +83,6 @@ public abstract class ProjectTemplateNewWizardProjectImportTestGenerated extends
             KotlinTestUtils.runTest(this::doTestGradleGroovy, this, testDataFilePath);
         }
 
-        @TestMetadata("backendApplication")
-        public void testBackendApplication() throws Exception {
-            runTest("../cli/testData/projectTemplatesBuildFileGeneration/backendApplication/");
-        }
-
         @TestMetadata("composeDesktopApplication")
         public void testComposeDesktopApplication() throws Exception {
             runTest("../cli/testData/projectTemplatesBuildFileGeneration/composeDesktopApplication/");
@@ -152,11 +139,6 @@ public abstract class ProjectTemplateNewWizardProjectImportTestGenerated extends
     public static class Maven extends AbstractProjectTemplateNewWizardProjectImportTest {
         private void runTest(String testDataFilePath) throws Exception {
             KotlinTestUtils.runTest(this::doTestMaven, this, testDataFilePath);
-        }
-
-        @TestMetadata("backendApplication")
-        public void testBackendApplication() throws Exception {
-            runTest("../cli/testData/projectTemplatesBuildFileGeneration/backendApplication/");
         }
 
         @TestMetadata("composeDesktopApplication")

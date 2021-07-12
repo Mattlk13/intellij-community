@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.run
 
@@ -13,6 +10,7 @@ import com.intellij.openapi.module.Module
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.idea.caches.project.isMPPModule
 import org.jetbrains.kotlin.idea.configuration.KotlinTargetData
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 import org.jetbrains.plugins.gradle.execution.test.runner.GradleTestTasksProvider
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverUtil
 import org.jetbrains.plugins.gradle.util.GradleConstants
@@ -57,6 +55,6 @@ class KotlinMPPGradleTestTasksProvider : GradleTestTasksProvider {
 
     private fun getTaskNames(task: TaskData, namePrefix: String): List<String> {
         val name = task.name
-        return listOf(namePrefix + CLEAN_NAME_PREFIX + name.capitalize(), namePrefix + name)
+        return listOf(namePrefix + CLEAN_NAME_PREFIX + name.capitalizeAsciiOnly(), namePrefix + name)
     }
 }

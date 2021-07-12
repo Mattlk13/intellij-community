@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.configuration
 
@@ -18,14 +15,12 @@ import com.intellij.openapi.roots.DependencyScope
 import com.intellij.openapi.roots.ExportableOrderEntry
 import com.intellij.openapi.roots.ModifiableRootModel
 import org.jetbrains.kotlin.cli.common.arguments.K2JSCompilerArguments
-import org.jetbrains.kotlin.config.CoroutineSupport
 import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.config.KotlinModuleKind
 import org.jetbrains.kotlin.gradle.KotlinCompilation
 import org.jetbrains.kotlin.gradle.KotlinModule
 import org.jetbrains.kotlin.gradle.KotlinPlatform
 import org.jetbrains.kotlin.gradle.KotlinSourceSet
-import org.jetbrains.kotlin.idea.configuration.KotlinSourceSetDataService.Companion.isRelevantFor
 import org.jetbrains.kotlin.idea.facet.*
 import org.jetbrains.kotlin.idea.inspections.gradle.findAll
 import org.jetbrains.kotlin.idea.inspections.gradle.findKotlinPluginVersion
@@ -184,9 +179,6 @@ class KotlinSourceSetDataService : AbstractProjectDataService<GradleSourceSetDat
 
             val platform = TargetPlatform(platformKinds)
 
-            val coroutinesProperty = CoroutineSupport.byCompilerArgument(
-                mainModuleNode.coroutines ?: findKotlinCoroutinesProperty(ideModule.project)
-            )
             val compilerArguments = kotlinSourceSet.compilerArguments
             // Used ID is the same as used in org/jetbrains/kotlin/idea/configuration/KotlinGradleSourceSetDataService.kt:280
             // because this DataService was separated from KotlinGradleSourceSetDataService for MPP projects only
@@ -194,7 +186,6 @@ class KotlinSourceSetDataService : AbstractProjectDataService<GradleSourceSetDat
             val kotlinFacet = ideModule.getOrCreateFacet(modelsProvider, false, id)
             kotlinFacet.configureFacet(
                 compilerVersion,
-                coroutinesProperty,
                 platform,
                 modelsProvider,
                 mainModuleNode.isHmpp,

@@ -52,9 +52,7 @@ import static com.intellij.openapi.util.text.StringUtil.join;
 import static com.intellij.openapi.util.text.StringUtil.notNullize;
 import static com.jetbrains.python.psi.PyUtil.as;
 
-/**
- * @author yole
- */
+
 public class PyClassImpl extends PyBaseElementImpl<PyClassStub> implements PyClass {
   public static class MROException extends Exception {
     public MROException(String s) {
@@ -1385,7 +1383,7 @@ public class PyClassImpl extends PyBaseElementImpl<PyClassStub> implements PyCla
         final PyReferenceExpression referenceExpr = as(expression, PyReferenceExpression.class);
         final PsiElement resolved;
         if (referenceExpr != null) {
-          resolved = referenceExpr.followAssignmentsChain(PyResolveContext.defaultContext().withTypeEvalContext(context)).getElement();
+          resolved = referenceExpr.followAssignmentsChain(PyResolveContext.defaultContext(context)).getElement();
         }
         else {
           final PsiReference ref = expression.getReference();

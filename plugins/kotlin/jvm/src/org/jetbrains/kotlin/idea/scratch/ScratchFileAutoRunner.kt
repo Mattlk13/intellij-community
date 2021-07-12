@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.scratch
 
@@ -37,7 +34,7 @@ class ScratchFileAutoRunner(private val project: Project) : DocumentListener, Di
         const val AUTO_RUN_DELAY_IN_SECONDS = 2
     }
 
-    private val myAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
+    private val myAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
     override fun documentChanged(event: DocumentEvent) {
         val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
@@ -46,7 +43,7 @@ class ScratchFileAutoRunner(private val project: Project) : DocumentListener, Di
         val scratchFile = getScratchFile(file, project) ?: return
         if (!scratchFile.options.isInteractiveMode) return
 
-        if (!event.newFragment.isBlank()) {
+        if (event.newFragment.isNotBlank()) {
             runScratch(scratchFile)
         }
     }
@@ -60,14 +57,14 @@ class ScratchFileAutoRunner(private val project: Project) : DocumentListener, Di
 
         myAlarm.addRequest(
             {
-                val psiFile = scratchFile.getPsiFile()
-                if (psiFile != null && psiFile.isValid && !scratchFile.hasErrors()) {
+                scratchFile.ktScratchFile?.takeIf { it.isValid && !scratchFile.hasErrors() }?.let {
                     if (scratchFile.options.isRepl) {
                         RunScratchFromHereAction.doAction(scratchFile)
                     } else {
                         RunScratchAction.doAction(scratchFile, true)
                     }
                 }
+
             }, AUTO_RUN_DELAY_IN_SECONDS * 1000, true
         )
     }

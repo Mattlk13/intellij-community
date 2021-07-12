@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.idea;
 
 import com.intellij.accessibility.AccessibilityUtils;
@@ -6,16 +6,9 @@ import com.intellij.concurrency.IdeaForkJoinWorkerThreadFactory;
 import com.intellij.diagnostic.Activity;
 import com.intellij.diagnostic.LoadingState;
 import com.intellij.diagnostic.StartUpMeasurer;
-import com.intellij.ide.AssertiveRepaintManager;
-import com.intellij.ide.BootstrapBundle;
-import com.intellij.ide.CliResult;
-import com.intellij.ide.IdeEventQueue;
-import com.intellij.ide.customize.AbstractCustomizeWizardStep;
+import com.intellij.ide.*;
 import com.intellij.ide.customize.CommonCustomizeIDEWizardDialog;
-import com.intellij.ide.customize.CustomizeIDEWizardDialog;
-import com.intellij.ide.customize.CustomizeIDEWizardStepsProvider;
 import com.intellij.ide.gdpr.Agreements;
-import com.intellij.ide.gdpr.ConsentOptions;
 import com.intellij.ide.gdpr.EndUserAgreement;
 import com.intellij.ide.instrument.WriteIntentLockInstrumenter;
 import com.intellij.ide.plugins.PluginManagerCore;
@@ -31,6 +24,7 @@ import com.intellij.openapi.application.impl.AWTExceptionHandler;
 import com.intellij.openapi.application.impl.ApplicationInfoImpl;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.ShutDownTracker;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.io.win32.IdeaWin32;
 import com.intellij.openapi.wm.WeakFocusStackManager;
@@ -41,7 +35,9 @@ import com.intellij.ui.IconManager;
 import com.intellij.ui.mac.MacOSApplicationProvider;
 import com.intellij.ui.scale.JBUIScale;
 import com.intellij.util.EnvironmentUtil;
+import com.intellij.util.lang.Java11Shim;
 import com.intellij.util.lang.ZipFilePool;
+import com.intellij.util.system.CpuArch;
 import com.intellij.util.ui.StartupUiUtil;
 import com.intellij.util.ui.accessibility.ScreenReader;
 import org.apache.log4j.ConsoleAppender;
@@ -81,6 +77,7 @@ import java.util.concurrent.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+@SuppressWarnings("LoggerInitializedWithForeignClass")
 @ApiStatus.Internal
 public final class StartupUtil {
   @SuppressWarnings("StaticNonFinalField")
@@ -89,6 +86,7 @@ public final class StartupUtil {
   private static final String IDEA_CLASS_BEFORE_APPLICATION_PROPERTY = "idea.class.before.app";
   // see `ApplicationImpl#USE_SEPARATE_WRITE_THREAD`
   private static final String USE_SEPARATE_WRITE_THREAD_PROPERTY = "idea.use.separate.write.thread";
+  private static final String PROJECTOR_LAUNCHER_CLASS_NAME = "org.jetbrains.projector.server.ProjectorLauncher";
 
   private static final String MAGIC_MAC_PATH = "/AppTranslocation/";
 
@@ -109,6 +107,7 @@ public final class StartupUtil {
     startupStart = StartUpMeasurer.startActivity("app initialization preparation");
 
     Main.setFlags(args);
+
     CommandLineArgs.parse(args);
 
     LoadingState.setStrictMode();
@@ -139,8 +138,24 @@ public final class StartupUtil {
     activity = activity.endAndStart("log4j configuration");
     configureLog4j();
 
-    activity = activity.endAndStart("LaF init scheduling");
+    if (args.length > 0 && (Main.CWM_HOST_COMMAND.equals(args[0]) || Main.CWM_HOST_NO_LOBBY_COMMAND.equals(args[0]))) {
+      activity = activity.endAndStart("Cwm Host init");
+      try {
+        Class<?> projectorMainClass = StartupUtil.class.getClassLoader().loadClass(PROJECTOR_LAUNCHER_CLASS_NAME);
+        MethodHandles.lookup().findStatic(projectorMainClass, "runProjectorServer", MethodType.methodType(boolean.class)).invoke();
+      } catch (RuntimeException e) {
+        throw e;
+      } catch (Throwable e) {
+        throw new RuntimeException(e);
+      }
+    }
 
+    activity = activity.endAndStart("Check graphics environment");
+    if (!Main.isHeadless() && !checkGraphics()) {
+      System.exit(Main.NO_GRAPHICS);
+    }
+
+    activity = activity.endAndStart("LaF init scheduling");
     Thread busyThread = Thread.currentThread();
     // EndUserAgreement.Document type is not specified to avoid class loading
     CompletableFuture<?> initUiTask = scheduleInitUi(busyThread);
@@ -202,6 +217,7 @@ public final class StartupUtil {
       ZipFilePool.POOL = new ZipFilePoolImpl();
       PluginManagerCore.scheduleDescriptorLoading();
     }
+    Java11Shim.INSTANCE = new Java11ShimImpl();
 
     forkJoinPool.execute(() -> {
       setupSystemLibraries();
@@ -209,12 +225,8 @@ public final class StartupUtil {
       loadSystemLibraries(log);
     });
 
-    // don't load EnvironmentUtil class in main thread
-    shellEnvLoadFuture = forkJoinPool.submit(() -> {
-      Activity subActivity = StartUpMeasurer.startActivity("environment loading");
-      Path envReaderFile = PathManager.findBinFile(EnvironmentUtil.READER_FILE_NAME);
-      return envReaderFile == null ? null : EnvironmentUtil.loadEnvironment(envReaderFile, subActivity);
-    });
+    // don't load EnvironmentUtil class in the main thread
+    shellEnvLoadFuture = forkJoinPool.submit(() -> EnvironmentUtil.loadEnvironment(StartUpMeasurer.startActivity("environment loading")));
 
     Thread.currentThread().setUncaughtExceptionHandler((__, e) -> {
       StartupAbortedException.processException(e);
@@ -284,6 +296,16 @@ public final class StartupUtil {
     AWTAutoShutdown.getInstance().notifyThreadFree(busyThread);
   }
 
+  private static boolean checkGraphics() {
+    if (GraphicsEnvironment.isHeadless()) {
+      Main.showMessage(BootstrapBundle.message("bootstrap.error.title.startup.error"),
+                  BootstrapBundle.message("bootstrap.error.message.no.graphics.environment"),
+                  true);
+      return false;
+    }
+    return true;
+  }
+
   /** Called via reflection from {@link com.intellij.ide.WindowsCommandLineProcessor#processWindowsLauncherCommandLine}. */
   @SuppressWarnings("UnusedDeclaration")
   public static int processWindowsLauncherCommandLine(String currentDirectory, String[] args) {
@@ -346,22 +368,11 @@ public final class StartupUtil {
     /* called from IDE init thread */
     default void beforeImportConfigs() {}
 
-    /* called from EDT */
-    default void beforeStartupWizard() {}
-
-    /* called from EDT */
-    default void startupWizardFinished(@NotNull CustomizeIDEWizardStepsProvider provider) {}
-
     /* called from IDE init thread */
     default void importFinished(@NotNull Path newConfigDir) {}
-
-    /* called from EDT */
-    default int customizeIdeWizardDialog(@NotNull List<? extends AbstractCustomizeWizardStep> steps) {
-      return -1;
-    }
   }
 
-  private static void runPreAppClass(@NotNull Logger log, @NotNull String[] args) {
+  private static void runPreAppClass(@NotNull Logger log, String @NotNull [] args) {
     String classBeforeAppProperty = System.getProperty(IDEA_CLASS_BEFORE_APPLICATION_PROPERTY);
     if (classBeforeAppProperty != null) {
       Activity activity = StartUpMeasurer.startActivity("pre app class running");
@@ -534,7 +545,7 @@ public final class StartupUtil {
 
   private static void loadSystemFontsAndDnDCursors() {
     Activity activity = StartUpMeasurer.startActivity("system fonts loading");
-    // This forces loading of all system fonts, the following statement itself might not do it (see JBR-1825)
+    // this forces loading of all system fonts, the following statement itself might not do it (see JBR-1825)
     new Font("N0nEx1st5ntF0nt", Font.PLAIN, 1).getFamily();
     // This caches available font family names (for the default locale) to make corresponding call
     // during editors reopening (in ComplementaryFontsRegistry's initialization code) instantaneous
@@ -555,7 +566,7 @@ public final class StartupUtil {
     if (document != null) {
       Agreements.showEndUserAndDataSharingAgreements(document);
     }
-    else if (ConsentOptions.getInstance().getConsents().getValue()) {
+    else if (AppUIUtil.needToShowUsageStatsConsent()){
       Agreements.showDataSharingAgreement();
     }
     activity.end();
@@ -793,7 +804,7 @@ public final class StartupUtil {
     if (Boolean.parseBoolean(System.getProperty("intellij.log.stdout", "true"))) {
       System.setOut(new PrintStreamLogger("STDOUT", System.out));
       System.setErr(new PrintStreamLogger("STDERR", System.err));
-      // Disabling output to System.err seems to be the only way to avoid deadlock (https://youtrack.jetbrains.com/issue/IDEA-243708)
+      // Disabling output to `System.err` seems to be the only way to avoid deadlock (https://youtrack.jetbrains.com/issue/IDEA-243708)
       // with Log4j 1.x if an internal error happens during logging (e.g. a disk space issue).
       // Should be revisited in case of migration to Log4j 2.
       LogLog.setQuietMode(true);
@@ -846,6 +857,10 @@ public final class StartupUtil {
     log.info("OS: " + SystemInfoRt.OS_NAME + " (" + SystemInfoRt.OS_VERSION + ", " + System.getProperty("os.arch") + ")");
     log.info("JRE: " + System.getProperty("java.runtime.version", "-") + " (" + System.getProperty("java.vendor", "-") + ")");
     log.info("JVM: " + System.getProperty("java.vm.version", "-") + " (" + System.getProperty("java.vm.name", "-") + ")");
+    if(SystemInfo.isMac && CpuArch.isIntel64()){
+      log.info("Under Rosetta: " + SystemInfo.isUnderRosetta());
+    }
+    log.info("");
 
     List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
     if (arguments != null) {
@@ -900,45 +915,24 @@ public final class StartupUtil {
     return path;
   }
 
+  /**
+   * Used in Rider
+   */
   private static void runStartupWizard(@NotNull AppStarter appStarter) {
-    String stepsProviderName = ApplicationInfoImpl.getShadowInstance().getCustomizeIDEWizardStepsProvider();
-    if (stepsProviderName == null) {
-      return;
-    }
+    String stepsDialogName = ApplicationInfoImpl.getShadowInstance().getWelcomeWizardDialog();
+    if (stepsDialogName == null) return;
 
-    CustomizeIDEWizardStepsProvider provider;
     try {
-      Class<?> providerClass = Class.forName(stepsProviderName);
-      provider = (CustomizeIDEWizardStepsProvider)providerClass.getDeclaredConstructor().newInstance();
+      Class<?> dialogClass = Class.forName(stepsDialogName);
+      Constructor<?> constr = dialogClass.getConstructor(AppStarter.class);
+      ((CommonCustomizeIDEWizardDialog) constr.newInstance(appStarter)).showIfNeeded();
     }
     catch (Throwable e) {
       Main.showMessage(BootstrapBundle.message("bootstrap.error.title.configuration.wizard.failed"), e);
       return;
     }
 
-    appStarter.beforeStartupWizard();
-
-    String stepsDialogName = ApplicationInfoImpl.getShadowInstance().getCustomizeIDEWizardDialog();
-    if (System.getProperty("idea.temp.change.ide.wizard") != null) { // temporary until 211 release
-      stepsDialogName = System.getProperty("idea.temp.change.ide.wizard");
-    }
-    if (stepsDialogName != null) {
-      try {
-        Class<?> dialogClass = Class.forName(stepsDialogName);
-        Constructor<?> constr = dialogClass.getConstructor(AppStarter.class);
-        ((CommonCustomizeIDEWizardDialog) constr.newInstance(appStarter)).showIfNeeded();
-      }
-      catch (Throwable e) {
-        Main.showMessage(BootstrapBundle.message("bootstrap.error.title.configuration.wizard.failed"), e);
-        return;
-      }
-    }
-    else if (Boolean.parseBoolean(System.getProperty("idea.show.customize.ide.wizard"))) {
-      new CustomizeIDEWizardDialog(provider, appStarter, true, false).showIfNeeded();
-    }
-
     PluginManagerCore.invalidatePlugins();
-    appStarter.startupWizardFinished(provider);
   }
 
   // must be called from EDT
@@ -989,6 +983,28 @@ public final class StartupUtil {
       catch (IOError ignored) {
         return file.normalize();
       }
+    }
+  }
+
+  public static final class Java11ShimImpl extends Java11Shim {
+    @Override
+    public <K, V> Map<K, V> copyOf(Map<? extends K, ? extends V> map) {
+      return Map.copyOf(map);
+    }
+
+    @Override
+    public <E> @NotNull Set<E> copyOf(Set<? extends E> collection) {
+      return Set.copyOf(collection);
+    }
+
+    @Override
+    public <E> @NotNull List<E> copyOf(List<? extends E> collection) {
+      return List.copyOf(collection);
+    }
+
+    @Override
+    public @NotNull <E> List<E> listOf(E[] collection) {
+      return List.of(collection);
     }
   }
 }

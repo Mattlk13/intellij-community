@@ -9,14 +9,14 @@ import com.intellij.openapi.project.LightEditActionFactory;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.ui.JBColor;
-import com.intellij.util.ObjectUtils;
 import com.jetbrains.cef.JCefAppConfig;
 import com.jetbrains.cef.JCefVersionDetails;
 import org.cef.browser.CefBrowser;
-import org.cef.browser.CefBrowserOsrWithHandler;
 import org.cef.browser.CefFrame;
-import org.cef.browser.CefRendering;
-import org.cef.handler.*;
+import org.cef.handler.CefFocusHandler;
+import org.cef.handler.CefFocusHandlerAdapter;
+import org.cef.handler.CefKeyboardHandler;
+import org.cef.handler.CefKeyboardHandlerAdapter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -134,19 +134,11 @@ public class JBCefBrowser extends JBCefBrowserBase {
     return new JBCefBrowserBuilder();
   }
 
-  static @NotNull JBCefBrowser create(@NotNull JBCefBrowserBuilder builder) {
-    JBCefBrowser browser = builder.myCefBrowser != null ?
-      new JBCefBrowser(ObjectUtils.notNull(builder.myRenderingType, RenderingType.EMBEDDED_WINDOW),
-                       builder.myCefBrowser,
-                       false,
-                       ObjectUtils.notNull(builder.myClient, JBCefApp.getInstance().createClient(true))) :
-      new JBCefBrowser(builder.myRenderingType,
-                       builder.myOSRHandlerFactory,
-                       builder.myClient,
-                       builder.myUrl);
-
-    if (builder.myCreateImmediately) browser.createImmediately();
-    return browser;
+  /**
+   * Creates a browser according to the provided builder options.
+   */
+  public static @NotNull JBCefBrowser create(@NotNull JBCefBrowserBuilder builder) {
+    return new JBCefBrowser(builder);
   }
 
   /**
@@ -155,14 +147,16 @@ public class JBCefBrowser extends JBCefBrowserBase {
    * @see #createBuilder
    */
   public JBCefBrowser() {
-    this(createBrowser(RenderingType.EMBEDDED_WINDOW, null, null, null));
+    this(createBuilder());
   }
 
   /**
+   * Creates a browser with the initial URL.
+   *
    * @see #createBuilder
    */
   public JBCefBrowser(@NotNull String url) {
-    this(createBrowser(RenderingType.EMBEDDED_WINDOW, null, null, url));
+    this(createBuilder().setUrl(url));
   }
 
   /**
@@ -171,40 +165,22 @@ public class JBCefBrowser extends JBCefBrowserBase {
    * @see #createBuilder
    */
   public JBCefBrowser(@NotNull JBCefClient client, @Nullable String url) {
-    this(createBrowser(RenderingType.EMBEDDED_WINDOW, null, client, url));
+    this(createBuilder().setClient(client).setUrl(url));
   }
 
   /**
+   * Creates a browser wrapping the provided {@link CefBrowser} with the provided {@link JBCefClient}.
+   *
    * @see #createBuilder
    */
   public JBCefBrowser(@NotNull CefBrowser cefBrowser, @NotNull JBCefClient client) {
-    this(RenderingType.EMBEDDED_WINDOW, cefBrowser, false, client);
+    this(createBuilder().setCefBrowser(cefBrowser).setClient(client));
   }
 
-  private JBCefBrowser(@NotNull CreateBrowserArtefacts artefacts) {
-    this(artefacts.renderingType, artefacts.cefBrowser, true, artefacts.client);
-  }
+  protected JBCefBrowser(@NotNull JBCefBrowserBuilder builder) {
+    super(builder);
 
-  protected JBCefBrowser(@Nullable RenderingType type,
-                         @Nullable JBCefOSRHandlerFactory factory,
-                         @Nullable JBCefClient client,
-                         @Nullable String url)
-  {
-    this(createBrowser(ObjectUtils.notNull(type, RenderingType.EMBEDDED_WINDOW), factory, client, url));
-    CefBrowser cefBrowser = getCefBrowser();
-    if (type == RenderingType.BUFFERED_IMAGE) {
-      CefBrowserOsrWithHandler cefOsrBrowser = (CefBrowserOsrWithHandler)cefBrowser;
-      ((JBCefOsrComponent)cefOsrBrowser.getUIComponent()).setBrowser(this);
-    }
-  }
-
-  private JBCefBrowser(@NotNull RenderingType type,
-                       @NotNull CefBrowser cefBrowser,
-                       boolean isNewBrowserCreated,
-                       @NotNull JBCefClient client)
-  {
-    super(type, cefBrowser, isNewBrowserCreated, client);
-    if (client.isDisposed()) {
+    if (myCefClient.isDisposed()) {
       throw new IllegalArgumentException("JBCefClient is disposed");
     }
 
@@ -242,7 +218,7 @@ public class JBCefBrowser extends JBCefBrowserBase {
         }
         if (!browser.getUIComponent().hasFocus()) {
           if (SystemInfo.isLinux) {
-            if (isProperty(JBCefBrowserBase.Properties.IS_LIGHTWEIGHT)) {
+            if (isOffScreenRendering()) {
               browser.getUIComponent().requestFocusInWindow();
             }
             else {
@@ -260,7 +236,7 @@ public class JBCefBrowser extends JBCefBrowserBase {
     myCefClient.addKeyboardHandler(myKeyboardHandler = new CefKeyboardHandlerAdapter() {
       @Override
       public boolean onKeyEvent(CefBrowser browser, CefKeyEvent cefKeyEvent) {
-        if (isProperty(JBCefBrowserBase.Properties.IS_LIGHTWEIGHT)) return false;
+        if (isOffScreenRendering()) return false;
 
         Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         boolean consume = focusOwner != browser.getUIComponent();
@@ -277,83 +253,9 @@ public class JBCefBrowser extends JBCefBrowserBase {
     }, myCefBrowser);
   }
 
-  // temporary possibility for debug (browser creation with empty url theoretically still can cause side-effects)
-  // TODO: remove after testing
-  private static final boolean USE_ABOUT_BLANK = Boolean.getBoolean("jcef.browser.use.about.blank");
-
-  private static @NotNull String validateUrl(@Nullable String url) {
-    if (url != null && !url.isEmpty())
-      return url;
-    return USE_ABOUT_BLANK ? BLANK_URI : "";
-  }
-
-  private static @NotNull CreateBrowserArtefacts createBrowser(@NotNull RenderingType type,
-                                                               @Nullable JBCefOSRHandlerFactory factory,
-                                                               @Nullable JBCefClient client,
-                                                               @Nullable String url)
-  {
-    if (client == null) {
-      client = JBCefApp.getInstance().createClient(true);
-    }
-    switch (type) {
-      case EMBEDDED_WINDOW:
-        return new CreateBrowserArtefacts(
-          type,
-          client.getCefClient().createBrowser(validateUrl(url), CefRendering.DEFAULT, false, null),
-          client);
-      case OGL_CANVAS:
-        return new CreateBrowserArtefacts(
-          type,
-          client.getCefClient().createBrowser(validateUrl(url), CefRendering.OFFSCREEN, false, null),
-          client);
-      case BUFFERED_IMAGE:
-        if (factory == null) factory = JBCefOSRHandlerFactory.DEFAULT;
-        JComponent comp = factory.createComponent();
-        CefRenderHandler handler = factory.createCefRenderHandler(comp);
-        return new CreateBrowserArtefacts(
-          type,
-          new CefBrowserOsrWithHandler(client.getCefClient(), validateUrl(url), null, handler, comp),
-          client);
-    }
-    throw new IllegalArgumentException("wrong RenderingType"); // unreachable
-  }
-
   private @NotNull JPanel createComponent() {
     Component uiComp = getCefBrowser().getUIComponent();
-    JPanel resultPanel = new JPanel(new BorderLayout()) {
-      {
-        enableEvents(AWTEvent.MOUSE_WHEEL_EVENT_MASK);
-      }
-      @Override
-      public void setBackground(Color bg) {
-        uiComp.setBackground(bg);
-        super.setBackground(bg);
-      }
-      @Override
-      public void removeNotify() {
-        if (SystemInfo.isWindows) {
-          if (myCefBrowser.getUIComponent().hasFocus()) {
-            // pass focus before removal
-            myCefBrowser.setFocus(false);
-          }
-        }
-        myFirstShow = true;
-        super.removeNotify();
-      }
-      @Override
-      public Dimension getPreferredSize() {
-        // Preferred size should not be zero, otherwise the content loading is not triggered
-        Dimension size = super.getPreferredSize();
-        return size.width > 0 && size.height > 0 ? size : DEF_PREF_SIZE;
-      }
-      @Override
-      protected void processFocusEvent(FocusEvent e) {
-        super.processFocusEvent(e);
-        if (e.getID() == FocusEvent.FOCUS_GAINED) {
-          uiComp.requestFocusInWindow();
-        }
-      }
-    };
+    JPanel resultPanel = new MyPanel(uiComp);
 
     resultPanel.setBackground(JBColor.background());
     resultPanel.putClientProperty(JBCEFBROWSER_INSTANCE_PROP, this);
@@ -469,6 +371,55 @@ public class JBCefBrowser extends JBCefBrowserBase {
     @Override
     public Component getDefaultComponent(Container aContainer) {
       return myCefBrowser.getUIComponent();
+    }
+  }
+
+  public class MyPanel extends JPanel {
+    private final Component myUiComp;
+
+    private MyPanel(Component uiComp) {
+      super(new BorderLayout());
+      myUiComp = uiComp;
+      myUiComp.setBackground(getBackground());
+      enableEvents(AWTEvent.MOUSE_WHEEL_EVENT_MASK);
+    }
+
+    @Override
+    public void setBackground(Color bg) {
+      if (myUiComp != null) myUiComp.setBackground(bg);
+      super.setBackground(bg);
+    }
+
+    @Override
+    public void removeNotify() {
+      if (SystemInfo.isWindows) {
+        if (myCefBrowser.getUIComponent().hasFocus()) {
+          // pass focus before removal
+          myCefBrowser.setFocus(false);
+        }
+      }
+      myFirstShow = true;
+      super.removeNotify();
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+      // Preferred size should not be zero, otherwise the content loading is not triggered
+      Dimension size = super.getPreferredSize();
+      return size.width > 0 && size.height > 0 ? size : DEF_PREF_SIZE;
+    }
+
+    @Override
+    protected void processFocusEvent(FocusEvent e) {
+      super.processFocusEvent(e);
+      if (e.getID() == FocusEvent.FOCUS_GAINED) {
+        myUiComp.requestFocusInWindow();
+      }
+    }
+
+    @NotNull
+    public JBCefBrowser getJBCefBrowser() {
+      return JBCefBrowser.this;
     }
   }
 }

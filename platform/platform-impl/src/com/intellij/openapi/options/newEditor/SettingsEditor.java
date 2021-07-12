@@ -1,10 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.options.newEditor;
 
 import com.intellij.ide.plugins.PluginManagerConfigurable;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionGroup;
+import com.intellij.openapi.actionSystem.ActionPlaces;
 import com.intellij.openapi.actionSystem.DataProvider;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.options.Configurable;
@@ -83,6 +84,24 @@ final class SettingsEditor extends AbstractEditor implements DataProvider, Place
       protected Promise<? super Object> selectImpl(Configurable configurable) {
         myFilter.update(null);
         return myTreeView.select(configurable);
+      }
+
+      @Override
+      protected @Nullable Configurable getConfigurableWithInitializedUiComponentImpl(@Nullable Configurable configurable,
+                                                                                     boolean initializeUiComponentIfNotYet) {
+        JComponent content = myEditor.getContent(configurable);
+        if (!initializeUiComponentIfNotYet || content != null) {
+          return content == null ? null : configurable;
+        }
+
+        myEditor.readContent(configurable); // calls Configurable.createComponent() and Configurable.reset()
+
+        return configurable;
+      }
+
+      @Override
+      protected void checkModifiedImpl(@NotNull Configurable configurable) {
+        SettingsEditor.this.checkModified(configurable);
       }
 
       @Override
@@ -341,7 +360,7 @@ final class SettingsEditor extends AbstractEditor implements DataProvider, Place
   private JComponent withHistoryToolbar(JComponent component) {
     ActionGroup group = ActionUtil.getActionGroup("Back", "Forward");
     if (group == null) return component;
-    JComponent toolbar = ActionUtil.createToolbarComponent(this, "SettingsHistory", group, true);
+    JComponent toolbar = ActionUtil.createToolbarComponent(this, ActionPlaces.SETTINGS_HISTORY, group, true);
     JPanel panel = new JPanel(new GridBagLayout());
     GridBagConstraints gbc = new GridBagConstraints();
     gbc.fill = GridBagConstraints.HORIZONTAL;

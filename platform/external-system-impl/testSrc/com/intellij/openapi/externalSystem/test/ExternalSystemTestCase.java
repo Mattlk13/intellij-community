@@ -60,6 +60,10 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
+import static com.intellij.compiler.artifacts.ArtifactsTestUtil.findArtifact;
+import static com.intellij.testFramework.assertions.Assertions.assertThat;
+import static com.intellij.util.PathUtil.toSystemIndependentName;
+
 /**
  * @author Vladislav.Soroka
  */
@@ -82,7 +86,8 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
     super.setUp();
     ensureTempDirCreated();
 
-    myTestDir = new File(ourTempDir, getTestName(false));
+    String testDirName = "testDir" + System.currentTimeMillis();
+    myTestDir = new File(ourTempDir, testDirName);
     FileUtil.ensureExists(myTestDir);
 
     setUpFixtures();
@@ -113,7 +118,7 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   protected void collectAllowedRoots(List<String> roots) {
   }
 
-  public static Collection<String> collectRootsInside(String root) {
+  public static Collection<String> collectRootsInside(@NotNull String root) {
     final List<String> roots = new SmartList<>();
     roots.add(root);
     FileUtil.processFilesRecursively(new File(root), file -> {
@@ -151,6 +156,10 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   }
 
   protected void setUpInWriteAction() throws Exception {
+    setUpProjectRoot();
+  }
+
+  protected void setUpProjectRoot() throws Exception {
     File projectDir = new File(myTestDir, "project");
     FileUtil.ensureExists(projectDir);
     myProjectRoot = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(projectDir);
@@ -175,8 +184,10 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   }
 
   protected void tearDownFixtures() throws Exception {
-    myTestFixture.tearDown();
-    myTestFixture = null;
+    RunAll.runAll(
+      () -> myTestFixture.tearDown(),
+      () -> myTestFixture = null
+    );
   }
 
   private void resetClassFields(final Class<?> aClass) {
@@ -255,7 +266,7 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
 
   @SystemIndependent
   protected String path(@NotNull String relativePath) {
-    return PathUtil.toSystemIndependentName(file(relativePath).getPath());
+    return toSystemIndependentName(file(relativePath).getPath());
   }
 
   protected File file(@NotNull String relativePath) {
@@ -386,7 +397,7 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   protected void buildArtifacts(String... artifactNames) {
     if (useProjectTaskManager) {
       Artifact[] artifacts = Arrays.stream(artifactNames)
-        .map(artifactName -> ArtifactsTestUtil.findArtifact(myProject, artifactName)).toArray(Artifact[]::new);
+        .map(artifactName -> findArtifact(myProject, artifactName)).toArray(Artifact[]::new);
       build(artifacts);
     }
     else {
@@ -449,9 +460,13 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   private CompileScope createArtifactsScope(String[] artifactNames) {
     List<Artifact> artifacts = new ArrayList<>();
     for (String name : artifactNames) {
-      artifacts.add(ArtifactsTestUtil.findArtifact(myProject, name));
+      artifacts.add(findArtifact(myProject, name));
     }
     return ArtifactCompileScope.createArtifactsScope(myProject, artifacts);
+  }
+
+  protected Artifact findArtifact(Project project, String artifactName) {
+    return ReadAction.compute(() -> ArtifactsTestUtil.findArtifact(project, artifactName));
   }
 
   protected Sdk setupJdkForModule(final String moduleName) {
@@ -483,7 +498,8 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   }
 
   protected void assertArtifactOutputPath(final String artifactName, final String expected) {
-    ArtifactsTestUtil.assertOutputPath(myProject, artifactName, expected);
+    Artifact artifact = findArtifact(myProject, artifactName);
+    assertThat(toSystemIndependentName(artifact.getOutputPath())).isEqualTo(expected);
   }
 
   protected void assertArtifactOutputFileName(final String artifactName, final String expected) {
@@ -491,7 +507,7 @@ public abstract class ExternalSystemTestCase extends UsefulTestCase {
   }
 
   protected void assertArtifactOutput(String artifactName, TestFileSystemItem fs) {
-    final Artifact artifact = ArtifactsTestUtil.findArtifact(myProject, artifactName);
+    final Artifact artifact = findArtifact(myProject, artifactName);
     final String outputFile = artifact.getOutputFilePath();
     assert outputFile != null;
     final File file = new File(outputFile);

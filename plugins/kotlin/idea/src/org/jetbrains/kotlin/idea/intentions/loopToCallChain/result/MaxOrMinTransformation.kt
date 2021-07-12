@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions.loopToCallChain.result
 
@@ -18,7 +15,7 @@ class MaxOrMinTransformation(
 ) : AssignToVariableResultTransformation(loop, initialization) {
 
     override val presentation: String
-        get() = if (isMax) "max()" else "min()"
+        get() = if (isMax) "maxOrNull()" else "minOrNull()"
 
     override fun generateCode(chainedCallGenerator: ChainedCallGenerator): KtExpression {
         val call = chainedCallGenerator.generate(presentation)

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -14,6 +11,7 @@ import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.util.addAnnotation
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.renderer.render
 
 open class AddAnnotationFix(
     element: KtModifierListOwner,
@@ -37,7 +35,7 @@ open class AddAnnotationFix(
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val declaration = element ?: return
         val annotationEntry = existingAnnotationEntry?.element
-        val annotationInnerText = argumentClassFqName?.let { "$it::class" }
+        val annotationInnerText = argumentClassFqName?.let { "${it.render()}::class" }
         if (annotationEntry != null) {
             if (annotationInnerText == null) return
             val psiFactory = KtPsiFactory(declaration)

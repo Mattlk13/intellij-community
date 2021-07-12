@@ -1,13 +1,11 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.ucache
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -27,8 +25,9 @@ import org.jetbrains.kotlin.idea.core.script.KotlinScriptDependenciesClassFinder
 import org.jetbrains.kotlin.idea.core.script.ScriptDependenciesModificationTracker
 import org.jetbrains.kotlin.idea.core.script.configuration.CompositeScriptConfigurationManager
 import org.jetbrains.kotlin.idea.core.script.scriptingDebugLog
+import org.jetbrains.kotlin.idea.core.util.CheckCanceledLock
 import org.jetbrains.kotlin.idea.core.util.EDT
-import org.jetbrains.kotlin.idea.util.application.runReadAction
+import org.jetbrains.kotlin.idea.util.FirPluginOracleService
 import org.jetbrains.kotlin.idea.util.application.runWriteAction
 import org.jetbrains.kotlin.psi.KtFile
 import java.util.concurrent.atomic.AtomicInteger
@@ -55,6 +54,7 @@ abstract class ScriptClassRootsUpdater(
     private var invalidated: Boolean = false
     private var syncUpdateRequired: Boolean = false
     private val concurrentUpdates = AtomicInteger()
+    private val lock = CheckCanceledLock()
 
     abstract fun gatherRoots(builder: ScriptClassRootsBuilder)
 
@@ -67,7 +67,7 @@ abstract class ScriptClassRootsUpdater(
     }
 
     /**
-     * Wee need CAS due to concurrent unblocking sync update in [checkInvalidSdks]
+     * We need CAS due to concurrent unblocking sync update in [checkInvalidSdks]
      */
     private val cache: AtomicReference<ScriptClassRootsCache> = AtomicReference(ScriptClassRootsCache.EMPTY)
 
@@ -81,22 +81,24 @@ abstract class ScriptClassRootsUpdater(
     /**
      * @param synchronous Used from legacy FS cache only, don't use
      */
-    @Synchronized
     @Suppress("UNUSED_PARAMETER")
     fun invalidate(file: VirtualFile, synchronous: Boolean = false) {
-        // todo: record invalided files for some optimisations in update
-        invalidate(synchronous)
+        lock.withLock {
+            // todo: record invalided files for some optimisations in update
+            invalidate(synchronous)
+        }
     }
 
     /**
      * @param synchronous Used from legacy FS cache only, don't use
      */
-    @Synchronized
     fun invalidate(synchronous: Boolean = false) {
-        checkInTransaction()
-        invalidated = true
-        if (synchronous) {
-            syncUpdateRequired = true
+        lock.withLock {
+            checkInTransaction()
+            invalidated = true
+            if (synchronous) {
+                syncUpdateRequired = true
+            }
         }
     }
 
@@ -129,36 +131,39 @@ abstract class ScriptClassRootsUpdater(
         scheduleUpdateIfInvalid()
     }
 
-    @Synchronized
     private fun scheduleUpdateIfInvalid() {
-        if (!invalidated) return
-        invalidated = false
+        lock.withLock {
+            if (!invalidated) return
+            invalidated = false
 
-        if (syncUpdateRequired || ApplicationManager.getApplication().isUnitTestMode) {
-            syncUpdateRequired = false
-            updateSynchronously()
-        } else {
-            ensureUpdateScheduled()
+            if (syncUpdateRequired || ApplicationManager.getApplication().isUnitTestMode) {
+                syncUpdateRequired = false
+                updateSynchronously()
+            } else {
+                ensureUpdateScheduled()
+            }
         }
     }
 
     private var scheduledUpdate: ProgressIndicator? = null
 
-    @Synchronized
     private fun ensureUpdateScheduled() {
-        scheduledUpdate?.cancel()
-        val disposable = KotlinPluginDisposable.getInstance(project)
-        if (!Disposer.isDisposed(disposable)) {
-            scheduledUpdate = BackgroundTaskUtil.executeOnPooledThread(disposable) {
-                doUpdate()
+        lock.withLock {
+            scheduledUpdate?.cancel()
+            val disposable = KotlinPluginDisposable.getInstance(project)
+            if (!Disposer.isDisposed(disposable)) {
+                scheduledUpdate = BackgroundTaskUtil.executeOnPooledThread(disposable) {
+                    doUpdate()
+                }
             }
         }
     }
 
-    @Synchronized
     private fun updateSynchronously() {
-        scheduledUpdate?.cancel()
-        doUpdate(false)
+        lock.withLock {
+            scheduledUpdate?.cancel()
+            doUpdate(false)
+        }
     }
 
     private fun doUpdate(underProgressManager: Boolean = true) {
@@ -192,9 +197,7 @@ abstract class ScriptClassRootsUpdater(
             ScriptCacheDependencies(scriptClassRootsCache).save(project)
             lastSeen = scriptClassRootsCache
         } finally {
-            synchronized(this) {
-                scheduledUpdate = null
-            }
+            scheduledUpdate = null
         }
     }
 
@@ -241,6 +244,14 @@ abstract class ScriptClassRootsUpdater(
         val openedScripts = openFiles.filter(filter)
 
         if (openedScripts.isEmpty()) return
+
+        /**
+         * Scripts guts are everywhere in the plugin code, without them some functionality does not work,
+         * And with them some other fir plugin related is broken
+         * As FIR plugin does not have scripts support yet, just disabling not working one for now
+         */
+        @Suppress("DEPRECATION")
+        if (project.service<FirPluginOracleService>().isFirPlugin()) return
 
         GlobalScope.launch(EDT(project)) {
             if (project.isDisposed) return@launch

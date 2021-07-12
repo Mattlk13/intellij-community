@@ -36,9 +36,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-/**
- * @author yole
- */
+
 public class PyClassTypeImpl extends UserDataHolderBase implements PyClassType {
 
   @NotNull protected final PyClass myClass;
@@ -352,7 +350,7 @@ public class PyClassTypeImpl extends UserDataHolderBase implements PyClassType {
   @Nullable
   @Override
   public List<PyCallableParameter> getParameters(@NotNull TypeEvalContext context) {
-    final var resolveContext = PyResolveContext.defaultContext().withTypeEvalContext(context);
+    final var resolveContext = PyResolveContext.defaultContext(context);
 
     return StreamEx
       .of(PyUtil.filterTopPriorityElements(PyCallExpressionHelper.resolveImplicitlyInvokedMethods(this, null, resolveContext)))

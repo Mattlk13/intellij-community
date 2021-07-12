@@ -1,7 +1,23 @@
 <html>
 <body>
-This inspection reports an equality check with <b>Double.NaN</b> which can be replaced with <b>a.isNaN()</b>.
-
-For every floating point value <b>a</b>, <b>a == NaN</b> will always result in <b>false</b>.
+Reports an equality check with <code>Float.NaN</code> or <code>Double.NaN</code> that should be replaced with an <code>isNaN()</code> check.
+<p>
+    According to IEEE 754, equality check against NaN always returns <code>false</code>, even for <code>NaN == NaN</code>.
+    Therefore, such a check is likely to be a mistake.
+</p>
+<p>A quick-fix replaces comparison with <code>isNaN()</code> check that uses a different comparison technique and handles <code>NaN</code> values correctly.</p>
+<p><b>Example:</b></p>
+<pre><code>
+  fun check(value: Double): Boolean {
+      return Double.NaN == value
+  }
+</code></pre>
+<p>After the fix is applied:</p>
+<pre><code>
+  fun check(value: Double): Boolean {
+      return value.isNaN()
+  }
+</code></pre>
+<!-- tooltip end -->
 </body>
 </html>

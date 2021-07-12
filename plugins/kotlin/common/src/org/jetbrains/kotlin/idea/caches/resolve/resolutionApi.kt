@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 @file:JvmName("ResolutionUtils")
 
@@ -13,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationDescriptor
 import org.jetbrains.kotlin.idea.FrontendInternals
+import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
@@ -167,8 +165,11 @@ inline fun <reified T> T.analyzeWithContent(): BindingContext where T : KtDeclar
  * @ref [org.jetbrains.kotlin.idea.caches.resolve.PerFileAnalysisCache]
  */
 fun KtFile.analyzeWithAllCompilerChecks(vararg extraFiles: KtFile): AnalysisResult =
+    this.analyzeWithAllCompilerChecks(null, *extraFiles)
+
+fun KtFile.analyzeWithAllCompilerChecks(callback: ((Diagnostic) -> Unit)?, vararg extraFiles: KtFile): AnalysisResult =
     KotlinCacheService.getInstance(project).getResolutionFacade(listOf(this) + extraFiles.toList())
-        .analyzeWithAllCompilerChecks(listOf(this))
+        .analyzeWithAllCompilerChecks(listOf(this), callback)
 
 /**
  * This function is expected to produce the same result as compiler for the given element and its children (including diagnostics,

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.perf
 
@@ -23,6 +20,7 @@ import org.jetbrains.kotlin.asJava.LightClassGenerationSupport
 import org.jetbrains.kotlin.asJava.PsiClassRenderer
 import org.jetbrains.kotlin.asJava.PsiClassRenderer.renderClass
 import org.jetbrains.kotlin.asJava.classes.*
+import org.jetbrains.kotlin.config.JvmAnalysisFlags
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.idea.project.languageVersionSettings
@@ -104,7 +102,9 @@ object UltraLightChecker {
     }
 
     fun checkClassEquivalence(ktClass: KtClassOrObject): KtUltraLightClass? {
-        val gold = KtLightClassForSourceDeclaration.createNoCache(ktClass, forceUsingOldLightClasses = true)
+        val gold = KtLightClassForSourceDeclaration.createNoCache(
+            ktClass, ktClass.languageVersionSettings.getFlag(JvmAnalysisFlags.jvmDefaultMode), forceUsingOldLightClasses = true
+        )
         val ultraLightClass = LightClassGenerationSupport.getInstance(ktClass.project).createUltraLightClass(ktClass) ?: return null
 
         val secondULInstance = LightClassGenerationSupport.getInstance(ktClass.project).createUltraLightClass(ktClass)

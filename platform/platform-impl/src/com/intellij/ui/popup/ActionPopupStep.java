@@ -4,12 +4,12 @@ package com.intellij.ui.popup;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.actionSystem.impl.PresentationFactory;
+import com.intellij.openapi.actionSystem.impl.Utils;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.ui.popup.*;
 import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.NlsContexts.PopupTitle;
-import com.intellij.util.ObjectUtils;
 import com.intellij.util.ui.StatusText;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
@@ -49,7 +49,7 @@ public class ActionPopupStep implements ListPopupStepEx<PopupFactoryImpl.ActionI
     myItems = items;
     myTitle = title;
     myContext = context;
-    myActionPlace = ObjectUtils.notNull(actionPlace, ActionPlaces.POPUP);
+    myActionPlace = ActionPlaces.getPopupPlace(actionPlace);
     myEnableMnemonics = enableMnemonics;
     myPresentationFactory = presentationFactory;
     myDefaultOptionIndex = getDefaultOptionIndexFromSelectCondition(preselectActionCondition, items);
@@ -116,9 +116,11 @@ public class ActionPopupStep implements ListPopupStepEx<PopupFactoryImpl.ActionI
                                                                     @Nullable PresentationFactory presentationFactory) {
     if (actionPlace != null && !ActionPlaces.isPopupPlace(actionPlace)) {
       LOG.error("ActionPlaces.isPopupPlace(" + actionPlace + ")==false. Use ActionPlaces.getPopupPlace.");
+      actionPlace = ActionPlaces.getPopupPlace(actionPlace);
     }
+    DataContext wrappedContext = Utils.wrapDataContext(dataContext);
     ActionStepBuilder builder = new ActionStepBuilder(
-      dataContext, showNumbers, useAlphaAsNumbers, showDisabledActions, honorActionMnemonics, actionPlace, presentationFactory);
+      wrappedContext, showNumbers, useAlphaAsNumbers, showDisabledActions, honorActionMnemonics, actionPlace, presentationFactory);
     builder.buildGroup(actionGroup);
     return builder.getItems();
   }

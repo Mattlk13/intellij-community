@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.roots
 
@@ -10,8 +7,6 @@ import com.intellij.conversion.impl.ConversionContextImpl
 import com.intellij.conversion.impl.ModuleSettingsImpl
 import com.intellij.openapi.roots.ExternalProjectSystemRegistry
 import com.intellij.openapi.roots.OrderRootType
-import com.intellij.openapi.roots.impl.ContentEntryImpl
-import com.intellij.openapi.roots.impl.SourceFolderImpl
 import com.intellij.openapi.roots.impl.libraries.ApplicationLibraryTable
 import com.intellij.openapi.roots.impl.libraries.LibraryEx
 import com.intellij.openapi.roots.libraries.Library
@@ -176,8 +171,8 @@ class KotlinNonJvmSourceRootConverterProvider : ConverterProvider("kotlin-non-jv
                 private fun ModuleSettings.getSourceFolderElements(): List<Element> {
                     val rootManagerElement = getComponentElement(ModuleSettings.MODULE_ROOT_MANAGER_COMPONENT) ?: return emptyList()
                     return rootManagerElement
-                        .getChildren(ContentEntryImpl.ELEMENT_NAME)
-                        .flatMap { it.getChildren(SourceFolderImpl.ELEMENT_NAME) }
+                        .getChildren(CONTENT_TAG)
+                        .flatMap { it.getChildren(SOURCE_FOLDER_TAG) }
                 }
 
                 @Suppress("UnstableApiUsage")

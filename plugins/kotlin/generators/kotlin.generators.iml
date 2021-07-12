@@ -7,7 +7,6 @@
           <option name="additionalArguments" value="-version -Xstrict-java-nullability-assertions -Xjvm-default=enable" />
         </compilerSettings>
         <compilerArguments>
-          <option name="jvmTarget" value="1.8" />
           <option name="languageVersion" value="1.4" />
           <option name="apiVersion" value="1.4" />
         </compilerArguments>
@@ -21,6 +20,7 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="intellij.platform.core" />
     <orderEntry type="library" name="kotlin-stdlib-jdk8" level="project" />
     <orderEntry type="library" scope="TEST" name="kotlin-reflect" level="project" />
     <orderEntry type="library" name="kotlinc.kotlin-compiler" level="project" />
@@ -30,7 +30,7 @@
     <orderEntry type="module" module-name="kotlin.idea.tests" />
     <orderEntry type="module" module-name="kotlin.fir" />
     <orderEntry type="module" module-name="kotlin.scripting-support" />
-    <orderEntry type="module" module-name="kotlin.maven" />
+    <orderEntry type="module" module-name="kotlin.maven.tests" />
     <orderEntry type="module" module-name="kotlin.gradle.gradle-idea" />
     <orderEntry type="module" module-name="kotlin.project-wizard.cli" />
     <orderEntry type="module" module-name="kotlin.project-wizard.idea" />
@@ -41,11 +41,12 @@
     <orderEntry type="module" module-name="kotlin.fir.fir-low-level-api" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.tests-common" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.test-framework" scope="TEST" />
-    <orderEntry type="module" module-name="kotlin.compiler-plugins.kotlinx-serialization" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.compiler-plugins.kotlinx-serialization.common" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.performance-tests" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.core" />
     <orderEntry type="module" module-name="intellij.platform.jps.build" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.common" scope="TEST" />
-    <orderEntry type="module" module-name="kotlin.compiler-plugins.parcelize" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.compiler-plugins.parcelize.tests" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.jps-plugin.tests" scope="TEST" />
   </component>
 </module>

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.util.ui;
 
 import com.intellij.BundleBase;
@@ -56,8 +56,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.font.FontRenderContext;
 import java.awt.font.GlyphVector;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.BufferedImageOp;
@@ -90,6 +88,10 @@ public final class UIUtil {
 
   public static final Key<Boolean> LAF_WITH_THEME_KEY = Key.create("Laf.with.ui.theme");
   public static final Key<String> PLUGGABLE_LAF_KEY = Key.create("Pluggable.laf.name");
+  private static final Key<Boolean> IS_SHOWING = Key.create("Component.isShowing");
+  private static final Key<Boolean> HAS_FOCUS = Key.create("Component.hasFocus");
+  @ApiStatus.Internal
+  public static final Key<Boolean> CLEARABLE_COMPONENT_KEY = Key.create("clearableComponent");
 
   // cannot be static because logging maybe not configured yet
   private static @NotNull Logger getLogger() {
@@ -115,7 +117,7 @@ public final class UIUtil {
       return;
     }
 
-    JBInsets topWindowInset =  JBUI.insetsTop("small".equals(rootPane.getClientProperty("Window.style")) ? 19 : 24);
+    JBInsets topWindowInset =  JBUI.insetsTop(getTransparentTitleBarHeight(rootPane));
 
     rootPane.putClientProperty("apple.awt.fullWindowContent", true);
     rootPane.putClientProperty("apple.awt.transparentTitleBar", true);
@@ -167,6 +169,14 @@ public final class UIUtil {
       window.removeWindowListener(windowAdapter);
       window.removePropertyChangeListener("title", propertyChangeListener);
     });
+  }
+
+  public static int getTransparentTitleBarHeight(JRootPane rootPane) {
+    Object property = rootPane.getClientProperty("Window.transparentTitleBarHeight");
+    if (property instanceof Integer) {
+      return (int)property;
+    }
+    return "small".equals(rootPane.getClientProperty("Window.style")) ? 19 : 24;
   }
 
   private static String getWindowTitle(Window window) {
@@ -348,13 +358,6 @@ public final class UIUtil {
     public static @NotNull GrayFilter namedFilter(@NotNull String resourceName, @NotNull GrayFilter defaultFilter) {
       return ObjectUtils.notNull((GrayFilter)UIManager.get(resourceName), defaultFilter);
     }
-  }
-
-  /** @deprecated use {@link JBUIScale} instead */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.1")
-  public static boolean isAppleRetina() {
-    return false;
   }
 
   public static @NotNull Couple<Color> getCellColors(@NotNull JTable table, boolean isSel, int row, int column) {
@@ -851,7 +854,6 @@ public final class UIUtil {
   public static int getCheckBoxTextHorizontalOffset(@NotNull JCheckBox cb) {
     // logic copied from javax.swing.plaf.basic.BasicRadioButtonUI.paint
     ButtonUI ui = cb.getUI();
-    String text = cb.getText();
 
     Icon buttonIcon = cb.getIcon();
     if (buttonIcon == null && ui != null) {
@@ -860,27 +862,28 @@ public final class UIUtil {
       }
     }
 
-    Dimension size = new Dimension();
+    return getButtonTextHorizontalOffset(cb, cb.getSize(new Dimension()), buttonIcon);
+  }
+
+  public static int getButtonTextHorizontalOffset(@NotNull AbstractButton button, @NotNull Dimension size, @Nullable Icon buttonIcon) {
+    String text = button.getText();
+
     Rectangle viewRect = new Rectangle();
     Rectangle iconRect = new Rectangle();
     Rectangle textRect = new Rectangle();
 
-    Insets i = cb.getInsets();
+    Insets i = button.getInsets();
 
-    size = cb.getSize(size);
-    viewRect.x = i.left;
     viewRect.y = i.top;
     viewRect.width = size.width - (i.right + viewRect.x);
     viewRect.height = size.height - (i.bottom + viewRect.y);
-    iconRect.x = iconRect.y = iconRect.width = iconRect.height = 0;
-    textRect.x = textRect.y = textRect.width = textRect.height = 0;
 
     SwingUtilities.layoutCompoundLabel(
-      cb, cb.getFontMetrics(cb.getFont()), text, buttonIcon,
-      cb.getVerticalAlignment(), cb.getHorizontalAlignment(),
-      cb.getVerticalTextPosition(), cb.getHorizontalTextPosition(),
+      button, button.getFontMetrics(button.getFont()), text, buttonIcon,
+      button.getVerticalAlignment(), button.getHorizontalAlignment(),
+      button.getVerticalTextPosition(), button.getHorizontalTextPosition(),
       viewRect, iconRect, textRect,
-      text == null ? 0 : cb.getIconTextGap());
+      text == null ? 0 : button.getIconTextGap());
 
     return textRect.x;
   }
@@ -1034,6 +1037,10 @@ public final class UIUtil {
 
   public static Color getTextFieldBackground() {
     return UIManager.getColor("TextField.background");
+  }
+
+  public static Color getTextFieldDisabledBackground() {
+    return UIManager.getColor("TextField.disabledBackground");
   }
 
   public static Font getButtonFont() {
@@ -1453,9 +1460,17 @@ public final class UIUtil {
                                      final float startX,
                                      final float endX,
                                      final int height) {
-    Color c1 = JBColor.namedColor("SearchMatch.startBackground", JBColor.namedColor("SearchMatch.startColor", new Color(0xb3ffeaa2, true)));
-    Color c2 = JBColor.namedColor("SearchMatch.endBackground", JBColor.namedColor("SearchMatch.endColor", new Color(0xb3ffd042, true)));
-    drawSearchMatch(g, startX, endX, height, c1, c2);
+    drawSearchMatch(g, startX, endX, height, getSearchMatchGradientStartColor(), getSearchMatchGradientEndColor());
+  }
+
+  @NotNull
+  public static JBColor getSearchMatchGradientStartColor() {
+    return JBColor.namedColor("SearchMatch.startBackground", JBColor.namedColor("SearchMatch.startColor", new Color(0xb3ffeaa2, true)));
+  }
+
+  @NotNull
+  public static JBColor getSearchMatchGradientEndColor() {
+    return JBColor.namedColor("SearchMatch.endBackground", JBColor.namedColor("SearchMatch.endColor", new Color(0xb3ffd042, true)));
   }
 
   public static void drawSearchMatch(@NotNull Graphics2D g, float startXf, float endXf, int height, Color c1, Color c2) {
@@ -1767,14 +1782,49 @@ public final class UIUtil {
 
   /**
    * @param component to check whether it has focus within its component hierarchy
-   * @return {@code true} if component or one of its children has focus
+   * @return {@code true} if component or one of its parents has focus in a more general sense than UI focuses,
+   * sometimes useful to limit various activities by checking the focus of the real UI,
+   * but it could be unneeded in headless mode or in other scenarios.
    * @see Component#isFocusOwner()
    */
   public static boolean isFocusAncestor(@NotNull Component component) {
     Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
     if (owner == null) return false;
-    if (owner == component) return true;
-    return SwingUtilities.isDescendingFrom(owner, component);
+    if (SwingUtilities.isDescendingFrom(owner, component)) return true;
+
+    while (component != null) {
+      if (hasFocus(component)) return true;
+      component = component.getParent();
+    }
+    return false;
+  }
+
+  /**
+   * Checks if a component is focused in a more general sense than UI focuses,
+   * sometimes useful to limit various activities by checking the focus of real UI,
+   * but it could be unneeded in headless mode or in other scenarios.
+   * @see UIUtil#isShowing(Component)
+   */
+  @ApiStatus.Experimental
+  public static boolean hasFocus(@NotNull Component component) {
+    if (Boolean.getBoolean("java.awt.headless") || component.hasFocus()) {
+      return true;
+    }
+
+    JComponent jComponent = component instanceof JComponent ? (JComponent)component : null;
+    return jComponent != null && Boolean.TRUE.equals(jComponent.getClientProperty(HAS_FOCUS));
+  }
+
+  /**
+   * Marks a component as focused
+   */
+  @ApiStatus.Internal
+  @ApiStatus.Experimental
+  public static void markAsFocused(@NotNull JComponent component, boolean value) {
+    if (Boolean.getBoolean("java.awt.headless")) {
+      return;
+    }
+    component.putClientProperty(HAS_FOCUS, value ? Boolean.TRUE : null);
   }
 
   public static boolean isCloseClick(@NotNull MouseEvent e) {
@@ -2126,8 +2176,8 @@ public final class UIUtil {
   }
 
   /**
-   * Please use Application.invokeLater() with a modality state (or GuiUtils, or TransactionGuard methods), unless you work with Swings internals
-   * and 'runnable' deals with Swings components only and doesn't access any PSI, VirtualFiles, project/module model or other project settings. For those, use GuiUtils, application.invoke* or TransactionGuard methods.<p/>
+   * Please use Application.invokeLater() with a modality state (or ModalityUiUtil, or TransactionGuard methods), unless you work with Swings internals
+   * and 'runnable' deals with Swings components only and doesn't access any PSI, VirtualFiles, project/module model or other project settings. For those, use ModalityUiUtil, application.invoke* or TransactionGuard methods.<p/>
    *
    * On AWT thread, invoked runnable immediately, otherwise do {@link SwingUtilities#invokeLater(Runnable)} on it.
    */
@@ -2136,7 +2186,7 @@ public final class UIUtil {
   }
 
   /**
-   * Please use Application.invokeAndWait() with a modality state (or GuiUtils, or TransactionGuard methods), unless you work with Swings internals
+   * Please use Application.invokeAndWait() with a modality state (or ModalityUiUtil, or TransactionGuard methods), unless you work with Swings internals
    * and 'runnable' deals with Swings components only and doesn't access any PSI, VirtualFiles, project/module model or other project settings.<p/>
    *
    * Invoke and wait in the event dispatch thread
@@ -2152,7 +2202,7 @@ public final class UIUtil {
   }
 
   /**
-   * Please use Application.invokeAndWait() with a modality state (or GuiUtils, or TransactionGuard methods), unless you work with Swings internals
+   * Please use Application.invokeAndWait() with a modality state (or ModalityUiUtil, or TransactionGuard methods), unless you work with Swings internals
    * and 'runnable' deals with Swings components only and doesn't access any PSI, VirtualFiles, project/module model or other project settings.<p/>
    *
    * Invoke and wait in the event dispatch thread
@@ -2170,7 +2220,7 @@ public final class UIUtil {
   }
 
   /**
-   * Please use Application.invokeAndWait() with a modality state (or GuiUtils, or TransactionGuard methods), unless you work with Swings internals
+   * Please use Application.invokeAndWait() with a modality state (or ModalityUiUtil, or TransactionGuard methods), unless you work with Swings internals
    * and 'runnable' deals with Swings components only and doesn't access any PSI, VirtualFiles, project/module model or other project settings.<p/>
    *
    * Invoke and wait in the event dispatch thread
@@ -2287,15 +2337,6 @@ public final class UIUtil {
   @SuppressWarnings("deprecation")
   public static void setComboBoxEditorBounds(int x, int y, int width, int height, @NotNull JComponent editor) {
     editor.reshape(x, y, width, height);
-  }
-
-  /**
-   * @deprecated the method was used to fix Aqua Look-n-Feel problems. Now it does not make sense
-   */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2020.3")
-  public static int fixComboBoxHeight(final int height) {
-    return height;
   }
 
   public static final int LIST_FIXED_CELL_HEIGHT = 20;
@@ -2652,7 +2693,7 @@ public final class UIUtil {
   }
 
   public static int getLcdContrastValue() {
-    int lcdContrastValue  = Registry.intValue("lcd.contrast.value", 0);
+    int lcdContrastValue = LoadingState.APP_STARTED.isOccurred() ? Registry.intValue("lcd.contrast.value", 0) : 0;
     if (lcdContrastValue == 0) {
       return StartupUiUtil.doGetLcdContrastValueForSplash(StartupUiUtil.isUnderDarcula());
     }
@@ -3320,30 +3361,20 @@ public final class UIUtil {
     return JreHiDpiUtil.isJreHiDPIEnabled();
   }
 
-  /**
-   * @deprecated use {@link JreHiDpiUtil#isJreHiDPI(Graphics2D)}
-   */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-  public static boolean isJreHiDPI(@Nullable Graphics2D g) {
-    return JreHiDpiUtil.isJreHiDPI(g);
-  }
-
-  /**
-   * @deprecated use {@link UIUtil#getPanelBackground()} instead
-   */
-  @SuppressWarnings("SpellCheckingInspection")
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-  public static @NotNull Color getPanelBackgound() {
-    return getPanelBackground();
-  }
-
   public static void doNotScrollToCaret(@NotNull JTextComponent textComponent) {
     textComponent.setCaret(new DefaultCaret() {
       @Override
-      protected void adjustVisibility(Rectangle nloc) {}
+      protected void adjustVisibility(Rectangle nloc) { }
     });
+  }
+
+  public static void convertToLabel(@NotNull JEditorPane editorPane) {
+    editorPane.setEditable(false);
+    editorPane.setFocusable(false);
+    editorPane.setOpaque(false);
+    editorPane.setBorder(null);
+    editorPane.setContentType("text/html");
+    editorPane.setEditorKit(getHTMLEditorKit());
   }
 
   /**
@@ -3385,6 +3416,41 @@ public final class UIUtil {
       }
     }
     editor.scrollToReference(reference);
+  }
+
+  /**
+   * Checks if a component is showing in a more general sense than UI visibility,
+   * sometimes it's useful to limit various activities by checking the visibility of the real UI,
+   * but it could be unneeded in headless mode or in other scenarios.
+   * @see UIUtil#hasFocus(Component)
+   */
+  @ApiStatus.Experimental
+  public static boolean isShowing(@NotNull Component component) {
+    if (Boolean.getBoolean("java.awt.headless") || component.isShowing()) {
+      return true;
+    }
+
+    while (component != null) {
+      JComponent jComponent = component instanceof JComponent ? (JComponent)component : null;
+      if (jComponent != null && Boolean.TRUE.equals(jComponent.getClientProperty(IS_SHOWING))) {
+        return true;
+      }
+      component = component.getParent();
+    }
+
+    return false;
+  }
+
+  /**
+   * Marks a component as showing
+   */
+  @ApiStatus.Internal
+  @ApiStatus.Experimental
+  public static void markAsShowing(@NotNull JComponent component, boolean value) {
+    if (Boolean.getBoolean("java.awt.headless")) {
+      return;
+    }
+    component.putClientProperty(IS_SHOWING, value ? Boolean.TRUE : null);
   }
 
   public static void runWhenFocused(@NotNull Component component, @NotNull Runnable runnable) {

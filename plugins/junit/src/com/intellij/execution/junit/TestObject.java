@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution.junit;
 
 import com.intellij.codeInsight.TestFrameworks;
@@ -70,6 +70,7 @@ import org.jetbrains.idea.maven.utils.library.RepositoryLibraryProperties;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.jar.Attributes;
@@ -332,7 +333,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
         if (isModularized) {
           //put engine and dependencies or api only (when engine is attached to the module path above) on the module path
           for (PsiJavaModule module : JavaModuleNameIndex.getInstance().get(moduleNameToMove, project, globalSearchScope)) {
-            putDependenciesOnModulePath(javaParameters.getModulePath(), javaParameters.getClassPath(), module);
+            JavaParametersUtil.putDependenciesOnModulePath(javaParameters, module, true);
           }
         }
       }
@@ -340,7 +341,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
       if (!hasPackageWithDirectories(psiFacade, "org.junit.vintage", globalSearchScope) &&
           hasPackageWithDirectories(psiFacade, "junit.framework", globalSearchScope)) {
         PsiClass junit4RunnerClass = dumbService.computeWithAlternativeResolveEnabled(() -> psiFacade.findClass("junit.runner.Version", globalSearchScope));
-        if (junit4RunnerClass != null) { //vintage engine would not detect tests for old junit versions, let's warn about them though
+        if (junit4RunnerClass != null && isAcceptableVintageVersion()) {
           String version = VersionComparatorUtil.compare(launcherVersion, "1.1.0") >= 0
                            ? jupiterVersion
                            : "4.12." + StringUtil.getShortName(launcherVersion);
@@ -358,6 +359,26 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
     }
   }
 
+  /**
+   * junit 4.12+ must be on the classpath for vintage engine to work correctly.
+   * Don't add engine when it will fail to detect tests anyway.
+   * 
+   * Reflection is needed for the case when no sources is attached
+   */
+  private boolean isAcceptableVintageVersion() {
+    ClassLoader loader = TestClassCollector.createUsersClassLoader(myConfiguration);
+    try {
+      Class<?> aClass = loader.loadClass("junit.runner.Version");
+      Method id = aClass.getDeclaredMethod("id");
+      Object result = id.invoke(null);
+      return result instanceof String && VersionComparatorUtil.compare("4.12", (String)result) <= 0;
+    }
+    catch (Throwable e) {
+      LOG.debug(e);
+      return false;
+    }
+  }
+
   public static boolean hasJUnit5EnginesAPI(GlobalSearchScope globalSearchScope, JavaPsiFacade psiFacade) {
     return hasPackageWithDirectories(psiFacade, "org.junit.platform.engine", globalSearchScope);
   }
@@ -371,7 +392,10 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
         VirtualFile manifestFile = root.findFileByRelativePath(JarFile.MANIFEST_NAME);
         if (manifestFile != null) {
           try (final InputStream inputStream = manifestFile.getInputStream()) {
-            return new Manifest(inputStream).getMainAttributes().getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+            Attributes mainAttributes = new Manifest(inputStream).getMainAttributes();
+            if ("junit.org".equals(mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VENDOR))) {
+              return mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+            }
           }
           catch (IOException ignored) { }
         }
@@ -594,6 +618,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
       if (testFramework instanceof JUnit3Framework) {
         return isClassConfiguration ? JUnitStarter.JUNIT4_PARAMETER : JUnitStarter.JUNIT3_PARAMETER;
       }
+      if (testFramework != null) return JUnitStarter.JUNIT4_PARAMETER;
     }
     return JUnitUtil.isJUnit5(globalSearchScope, project) || isCustomJUnit5(globalSearchScope) ? JUnitStarter.JUNIT5_PARAMETER : DEFAULT_RUNNER;
   }

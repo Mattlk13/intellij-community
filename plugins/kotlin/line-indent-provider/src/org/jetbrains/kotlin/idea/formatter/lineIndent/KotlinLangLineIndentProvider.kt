@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.formatter.lineIndent
 
@@ -123,12 +120,12 @@ abstract class KotlinLangLineIndentProvider : JavaLikeLangLineIndentProvider() {
         return before.controlFlowStatementBefore()?.let { controlFlowKeywordPosition ->
             val indent = when {
                 controlFlowKeywordPosition.similarToCatchKeyword() -> if (before.isAt(RightParenthesis)) Indent.getNoneIndent() else Indent.getNormalIndent()
-                after.isAt(LeftParenthesis) -> Indent.getContinuationIndent()
+                after.isAt(LeftParenthesis) -> if (before.isAt(BlockOpeningBrace)) Indent.getNormalIndent() else Indent.getContinuationIndent()
                 after.isAtAnyOf(BlockOpeningBrace, Arrow) || controlFlowKeywordPosition.isWhileInsideDoWhile() -> Indent.getNoneIndent()
                 else -> Indent.getNormalIndent()
             }
 
-            factory.createIndentCalculator(indent, IndentCalculator.LINE_BEFORE)
+            factory.createIndentCalculator(indent, controlFlowKeywordPosition.startOffset)
         }
     }
 
@@ -222,6 +219,10 @@ abstract class KotlinLangLineIndentProvider : JavaLikeLangLineIndentProvider() {
         ): IndentCalculator {
             val leftBrace = before.copyAnd {
                 it.moveToLeftParenthesisBackwardsSkippingNested(leftBraceType, rightBraceType)
+            }
+
+            if (leftBrace.isAtEnd) {
+                return createIndentCalculator(defaultIndent, 0)
             }
 
             if (after.after().afterOptionalMix(*WHITE_SPACE_OR_COMMENT_BIT_SET).isAt(Comma)) {

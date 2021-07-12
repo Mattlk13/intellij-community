@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.templates
 
@@ -60,11 +57,11 @@ class SimpleJsClientTemplate : JsClientTemplate() {
                     +(FileTemplateDescriptor("jsClient/index.html.vm") asResourceOf SourcesetType.main)
                 }
                 if (useKotlinxHtml.reference.settingValue()) {
-                    +(FileTemplateDescriptor("$id/client.kt.vm") asSrcOf SourcesetType.main)
+                    +(FileTemplateDescriptor("$id/client.kt.vm", "Client.kt".asPath()) asSrcOf SourcesetType.main)
                     +(FileTemplateDescriptor("$id/TestClient.kt.vm", "TestClient.kt".asPath()) asSrcOf SourcesetType.test)
                 } else {
-                    +(FileTemplateDescriptor("$id/simple.kt.vm") asSrcOf SourcesetType.main)
-                    +(FileTemplateDescriptor("$id/SimpleTest.kt.vm", "TestClient.kt".asPath()) asSrcOf SourcesetType.test)
+                    +(FileTemplateDescriptor("$id/simple.kt.vm", "Simple.kt".asPath()) asSrcOf SourcesetType.main)
+                    +(FileTemplateDescriptor("$id/SimpleTest.kt.vm", "SimpleTest.kt".asPath()) asSrcOf SourcesetType.test)
                 }
             }
         }

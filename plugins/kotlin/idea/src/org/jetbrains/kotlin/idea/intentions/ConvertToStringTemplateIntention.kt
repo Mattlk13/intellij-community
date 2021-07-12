@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
@@ -21,7 +18,8 @@ import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 
 class ConvertToStringTemplateInspection : IntentionBasedInspection<KtBinaryExpression>(
     ConvertToStringTemplateIntention::class,
-    { it -> ConvertToStringTemplateIntention.shouldSuggestToConvert(it) }
+    { it -> ConvertToStringTemplateIntention.shouldSuggestToConvert(it) },
+    problemText = KotlinBundle.message("convert.concatenation.to.template.before.text")
 )
 
 open class ConvertToStringTemplateIntention : SelfTargetingOffsetIndependentIntention<KtBinaryExpression>(

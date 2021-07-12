@@ -25,22 +25,22 @@ object PyExecuteInConsole {
     var existingConsole: RunContentDescriptor? = null
     var isDebug = false
     var newConsoleListener: PydevConsoleRunner.ConsoleListener? = null
+    val virtualFile = (editor as? EditorImpl)?.virtualFile
     if (canUseExistingConsole) {
-      if (canUseDebugConsole) {
-        existingConsole = getCurrentDebugConsole(project)
-      }
-      if (existingConsole != null) {
-        isDebug = true
+      if (virtualFile != null && PyExecuteConsoleCustomizer.instance.isCustomDescriptorSupported(virtualFile)) {
+        val (descriptor, listener) = getCustomDescriptor(project, editor)
+        existingConsole = descriptor
+        newConsoleListener = listener
       }
       else {
-        val virtualFile = (editor as? EditorImpl)?.virtualFile
-        if (virtualFile != null && PyExecuteConsoleCustomizer.instance.isCustomDescriptorSupported(virtualFile)) {
-          val (descriptor, listener) = getCustomDescriptor(project, editor)
-          existingConsole = descriptor
-          newConsoleListener = listener
-        }
-        else {
-          existingConsole = getSelectedPythonConsole(project)
+        existingConsole = getSelectedPythonConsole(project)
+      }
+      if (canUseDebugConsole) {
+        val pythonConsoleView = existingConsole?.executionConsole as? PythonConsoleView
+        if (pythonConsoleView == null || PythonConsoleToolWindow.getInstance(project)?.toolWindow?.isVisible != true) {
+          // PY-48207 Currently visible Python Console has a higher priority than a Debug console
+          existingConsole = getCurrentDebugConsole(project)
+          isDebug = true
         }
       }
     }
@@ -51,7 +51,9 @@ object PyExecuteInConsole {
       requestFocus(requestFocusToConsole, editor, consoleView)
     }
     else {
-      startNewConsoleInstance(project, commandText, config, newConsoleListener)
+      if (!PyExecuteConsoleCustomizer.instance.isConsoleStarting(virtualFile, commandText)) {
+        startNewConsoleInstance(project, virtualFile, commandText, config, newConsoleListener)
+      }
     }
   }
 
@@ -70,6 +72,9 @@ object PyExecuteInConsole {
         else {
           return Pair(null, createNewConsoleListener(project, executeCustomizer, virtualFile))
         }
+      }
+      DescriptorType.STARTING -> {
+        return Pair(null, null)
       }
       else -> {
         throw IllegalStateException("Custom descriptor for ${virtualFile} is null")
@@ -119,6 +124,7 @@ object PyExecuteInConsole {
   }
 
   private fun startNewConsoleInstance(project: Project,
+                                      virtualFile: VirtualFile?,
                                       runFileText: String?,
                                       config: PythonRunConfiguration?,
                                       listener: PydevConsoleRunner.ConsoleListener?) {
@@ -138,6 +144,9 @@ object PyExecuteInConsole {
     }
     if (listener != null) {
       runner.addConsoleListener(listener)
+    }
+    virtualFile?.let {
+      PyExecuteConsoleCustomizer.instance.notifyRunnerStart(it, runner)
     }
     runner.run(false)
   }

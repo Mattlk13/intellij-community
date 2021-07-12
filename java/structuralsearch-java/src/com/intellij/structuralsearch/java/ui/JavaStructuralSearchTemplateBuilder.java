@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.structuralsearch.java.ui;
 
 import com.intellij.codeInsight.lookup.LookupElement;
@@ -10,7 +10,6 @@ import com.intellij.openapi.fileTypes.LanguageFileType;
 import com.intellij.openapi.util.IntRef;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
-import com.intellij.structuralsearch.MatchOptions;
 import com.intellij.structuralsearch.impl.matcher.MatcherImplUtil;
 import com.intellij.structuralsearch.impl.matcher.PatternTreeContext;
 import com.intellij.structuralsearch.plugin.ui.StructuralSearchTemplateBuilder;
@@ -18,7 +17,7 @@ import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public final class JavaStructuralSearchTemplateBuilder extends StructuralSearchTemplateBuilder {
+final class JavaStructuralSearchTemplateBuilder extends StructuralSearchTemplateBuilder {
   @Override
   public TemplateBuilder buildTemplate(@NotNull PsiFile psiFile) {
     TemplateBuilder builder = TemplateBuilderFactory.getInstance().createTemplateBuilder(psiFile);
@@ -55,14 +54,12 @@ public final class JavaStructuralSearchTemplateBuilder extends StructuralSearchT
       }
     };
 
-    MatchOptions matchOptions = new MatchOptions();
     String text = psiFile.getText();
     int textOffset = 0;
     while (textOffset < text.length() && StringUtil.isWhiteSpace(text.charAt(textOffset))) {
       textOffset++;
     }
     shift.set(shift.get() - textOffset);
-    matchOptions.setSearchPattern(text);
     PsiElement[] elements =
       MatcherImplUtil.createTreeFromText(text, PatternTreeContext.Block, (LanguageFileType)psiFile.getFileType(), psiFile.getProject());
     if (elements.length > 0) {

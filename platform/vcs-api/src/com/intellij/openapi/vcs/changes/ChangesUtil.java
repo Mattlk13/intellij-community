@@ -345,7 +345,7 @@ public final class ChangesUtil {
   }
 
   /**
-   * Find common ancestor for changes (included both before and after files)
+   * Find common ancestor for changes (including both before and after files)
    */
   @Nullable
   public static File findCommonAncestor(@NotNull Collection<? extends Change> changes) {
@@ -384,5 +384,18 @@ public final class ChangesUtil {
       if (content == null) throw new VcsException(VcsBundle.message("vcs.error.failed.to.load.file.content.from.vcs"));
       return content.getBytes(revision.getFile().getCharset());
     }
+  }
+
+  public static boolean hasMeaningfulChangelists(@NotNull Project project) {
+    ChangeListManager changeListManager = ChangeListManager.getInstance(project);
+    if (!changeListManager.areChangeListsEnabled()) return false;
+
+    if (VcsApplicationSettings.getInstance().CREATE_CHANGELISTS_AUTOMATICALLY) return true;
+
+    List<LocalChangeList> changeLists = changeListManager.getChangeLists();
+    if (changeLists.size() != 1) return true;
+    if (!changeLists.get(0).isBlank()) return true;
+
+    return false;
   }
 }

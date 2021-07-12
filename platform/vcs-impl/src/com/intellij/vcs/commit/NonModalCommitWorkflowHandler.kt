@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.vcs.commit
 
 import com.intellij.openapi.actionSystem.ActionGroup
@@ -13,6 +13,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.util.AbstractProgressIndicatorExBase
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.DumbService.isDumb
 import com.intellij.openapi.util.registry.Registry
@@ -25,6 +26,8 @@ import com.intellij.openapi.vcs.changes.CommitResultHandler
 import com.intellij.openapi.vcs.changes.actions.DefaultCommitExecutorAction
 import com.intellij.openapi.vcs.checkin.*
 import com.intellij.openapi.vcs.checkin.CheckinHandler.ReturnResult
+import com.intellij.openapi.wm.ex.ProgressIndicatorEx
+import com.intellij.util.progress.DelegatingProgressIndicatorEx
 import com.intellij.vcs.commit.AbstractCommitWorkflow.Companion.getCommitExecutors
 import kotlinx.coroutines.*
 import java.lang.Runnable
@@ -74,7 +77,7 @@ abstract class NonModalCommitWorkflowHandler<W : NonModalCommitWorkflow, U : Non
 
   override fun vcsesChanged() {
     initCommitHandlers()
-    workflow.initCommitExecutors(getCommitExecutors(project, workflow.vcses))
+    workflow.initCommitExecutors(getCommitExecutors(project, workflow.vcses) + RunCommitChecksExecutor)
 
     updateDefaultCommitActionEnabled()
     updateDefaultCommitActionName()
@@ -156,11 +159,17 @@ abstract class NonModalCommitWorkflowHandler<W : NonModalCommitWorkflow, U : Non
 
     coroutineScope.launch {
       workflow.executeDefault {
-        if (isSkipCommitChecks()) return@executeDefault ReturnResult.COMMIT
+        val isOnlyRunCommitChecks = commitContext.isOnlyRunCommitChecks
+        commitContext.isOnlyRunCommitChecks = false
 
-        val indicator = ui.commitProgressUi.startProgress()
+        if (isSkipCommitChecks() && !isOnlyRunCommitChecks) return@executeDefault ReturnResult.COMMIT
+
+        val indicator = IndeterminateIndicator(ui.commitProgressUi.startProgress())
+        indicator.addStateDelegate(object : AbstractProgressIndicatorExBase() {
+          override fun cancel() = this@launch.cancel()
+        })
         try {
-          runAllHandlers(executor, indicator)
+          runAllHandlers(executor, indicator, isOnlyRunCommitChecks)
         }
         finally {
           indicator.stop()
@@ -171,7 +180,11 @@ abstract class NonModalCommitWorkflowHandler<W : NonModalCommitWorkflow, U : Non
     return true
   }
 
-  private suspend fun runAllHandlers(executor: CommitExecutor?, indicator: ProgressIndicator): ReturnResult {
+  private suspend fun runAllHandlers(
+    executor: CommitExecutor?,
+    indicator: ProgressIndicator,
+    isOnlyRunCommitChecks: Boolean
+  ): ReturnResult {
     workflow.runMetaHandlers(indicator)
     FileDocumentManager.getInstance().saveAllDocuments()
 
@@ -179,8 +192,9 @@ abstract class NonModalCommitWorkflowHandler<W : NonModalCommitWorkflow, U : Non
     if (handlersResult != ReturnResult.COMMIT) return handlersResult
 
     val checksResult = runCommitChecks(indicator)
-    if (checksResult != ReturnResult.COMMIT) isCommitChecksResultUpToDate = true
-    return checksResult
+    if (checksResult != ReturnResult.COMMIT || isOnlyRunCommitChecks) isCommitChecksResultUpToDate = true
+
+    return if (isOnlyRunCommitChecks) ReturnResult.CANCEL else checksResult
   }
 
   private suspend fun runCommitChecks(indicator: ProgressIndicator): ReturnResult {
@@ -249,4 +263,9 @@ abstract class NonModalCommitWorkflowHandler<W : NonModalCommitWorkflow, U : Non
       updateDefaultCommitActionName()
     }
   }
+}
+
+private class IndeterminateIndicator(indicator: ProgressIndicatorEx) : DelegatingProgressIndicatorEx(indicator) {
+  override fun setIndeterminate(indeterminate: Boolean) = Unit
+  override fun setFraction(fraction: Double) = Unit
 }

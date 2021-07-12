@@ -1,10 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.util.ui;
 
 import com.intellij.diagnostic.Activity;
 import com.intellij.diagnostic.StartUpMeasurer;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfoRt;
+import com.intellij.openapi.util.registry.Registry;
 import com.intellij.ui.JreHiDpiUtil;
 import com.intellij.ui.scale.JBUIScale;
 import com.intellij.ui.scale.ScaleContext;
@@ -38,7 +39,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 public final class StartupUiUtil {
-  private static String ourSystemLaFClassName;
   private static volatile StyleSheet ourDefaultHtmlKitCss;
 
   @ApiStatus.Internal
@@ -50,37 +50,6 @@ public final class StartupUiUtil {
     "TitledBorder.font", "ToolBar.font", "ToolTip.font", "Tree.font"};
 
   public static final String ARIAL_FONT_NAME = "Arial";
-
-  public static @NotNull String getSystemLookAndFeelClassName() {
-    if (ourSystemLaFClassName != null) {
-      return ourSystemLaFClassName;
-    }
-
-    if (SystemInfoRt.isLinux) {
-      // Normally, GTK LaF is considered "system" when:
-      // 1) Gnome session is run
-      // 2) gtk lib is available
-      // Here we weaken the requirements to only 2) and force GTK LaF
-      // installation in order to let it properly scale default font
-      // based on Xft.dpi value.
-      try {
-        @SuppressWarnings("SpellCheckingInspection")
-        String name = "com.sun.java.swing.plaf.gtk.GTKLookAndFeel";
-        Class<?> cls = Class.forName(name);
-        LookAndFeel laf = (LookAndFeel)cls.getDeclaredConstructor().newInstance();
-        // if gtk lib is available
-        if (laf.isSupportedLookAndFeel()) {
-          ourSystemLaFClassName = name;
-          return ourSystemLaFClassName;
-        }
-      }
-      catch (Exception ignore) {
-      }
-    }
-
-    ourSystemLaFClassName = UIManager.getSystemLookAndFeelClassName();
-    return ourSystemLaFClassName;
-  }
 
   public static void configureHtmlKitStylesheet() {
     if (ourDefaultHtmlKitCss != null) {
@@ -251,8 +220,22 @@ public final class StartupUiUtil {
       if (delegate != null) image = delegate;
       scale = hidpiImage.getScale();
 
+      double delta = 0;
+      if (Registry.is("ide.icon.scale.useAccuracyDelta", true)) {
+        // Calculate the delta based on the image size. The bigger the size - the smaller the delta.
+        int maxSize = Math.max(userWidth, userHeight);
+        if (maxSize < Integer.MAX_VALUE / 2) { // sanity check
+          int dotAccuracy = 1;
+          double pow;
+          while (maxSize > (pow = Math.pow(10, dotAccuracy))) dotAccuracy++;
+          delta = 1 / pow;
+        }
+      }
+
       AffineTransform tx = ((Graphics2D)g).getTransform();
-      if (scale == tx.getScaleX()) {
+      if (Math.abs(scale - tx.getScaleX()) <= delta) {
+        scale = tx.getScaleX();
+
         // The image has the same original scale as the graphics scale. However, the real image
         // scale - userSize/realSize - can suffer from inaccuracy due to the image user size
         // rounding to int (userSize = (int)realSize/originalImageScale). This may case quality

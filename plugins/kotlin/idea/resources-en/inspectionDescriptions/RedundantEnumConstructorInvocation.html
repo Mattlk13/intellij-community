@@ -1,14 +1,21 @@
 <html>
 <body>
-This inspection reports redundant enum entry constructor invocation:
-
-<pre>
-enum class Foo {
-    A(), // This '()' is redundant.
-    B(),
-    C
-}
-</pre>
-
+<p>Reports redundant constructor invocation on an enum entry.</p>
+<p><b>Example:</b></p>
+<pre><code>
+  enum class Baz(i: Int = 0) {
+      A(1),
+      B<b>()</b>,
+      C<b>()</b>,
+  }
+</code></pre>
+<p>After the quick-fix is applied:</p>
+<pre><code>
+  enum class Baz(i: Int = 0) {
+      A(1),
+      B,
+      C,
+  }
+</code></pre>
 </body>
 </html>

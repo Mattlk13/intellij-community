@@ -132,12 +132,14 @@ public class XDebuggerTreeInlayPopup<D> {
       wrappedActions.add(actionLink);
     }
 
-    myToolbar = new ActionToolbarImpl(ACTION_PLACE, wrappedActions, true);
+    var toolbarImpl = new ActionToolbarImpl(ACTION_PLACE, wrappedActions, true);
+    toolbarImpl.setTargetComponent(null);
     for (AnAction action : wrappedActions.getChildren(null)) {
       action.registerCustomShortcutSet(action.getShortcutSet(), mainPanel);
     }
 
-    myToolbar.setBorder(BorderFactory.createEmptyBorder());
+    toolbarImpl.setBorder(BorderFactory.createEmptyBorder());
+    myToolbar = toolbarImpl;
     return myToolbar;
   }
 
@@ -151,10 +153,10 @@ public class XDebuggerTreeInlayPopup<D> {
 
     @Override
     protected void perform(XValueNodeImpl node, @NotNull String nodeName, AnActionEvent e) {
-      node.getValueContainer().calculateEvaluationExpression()
+      node.calculateEvaluationExpression()
         .thenAsync(expr -> {
           if (expr == null && node != myValueNode) {
-            return myValueNode.getValueContainer().calculateEvaluationExpression();
+            return myValueNode.calculateEvaluationExpression();
           } else {
             return Promises.resolvedPromise(expr);
           }

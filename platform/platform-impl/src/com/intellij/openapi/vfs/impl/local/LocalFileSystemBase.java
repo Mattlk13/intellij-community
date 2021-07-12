@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.vfs.impl.local;
 
 import com.intellij.core.CoreBundle;
@@ -6,8 +6,10 @@ import com.intellij.ide.IdeBundle;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.io.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
@@ -19,13 +21,14 @@ import com.intellij.openapi.vfs.newvfs.VfsImplUtil;
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent;
 import com.intellij.openapi.vfs.newvfs.impl.FakeVirtualFile;
 import com.intellij.openapi.vfs.newvfs.persistent.PersistentFS;
+import com.intellij.util.ArrayUtil;
 import com.intellij.util.ArrayUtilRt;
 import com.intellij.util.PathUtilRt;
 import com.intellij.util.ThrowableConsumer;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.io.PreemptiveSafeFileOutputStream;
 import com.intellij.util.io.SafeFileOutputStream;
-import one.util.streamex.StreamEx;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -34,15 +37,15 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * @author Dmitry Avdeev
  */
 public abstract class LocalFileSystemBase extends LocalFileSystem {
+  @ApiStatus.Internal
+  public static final ExtensionPointName<PluggableLocalFileSystemContentLoader> PLUGGABLE_CONTENT_LOADER_EP_NAME =
+    ExtensionPointName.create("com.intellij.vfs.local.pluggableContentLoader");
   protected static final Logger LOG = Logger.getInstance(LocalFileSystemBase.class);
 
   private final FileAttributes FAKE_ROOT_ATTRIBUTES =
@@ -66,7 +69,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     return VfsImplUtil.refreshAndFindFileByPath(this, path);
   }
 
-  private static @NotNull String toIoPath(@NotNull VirtualFile file) {
+  protected static @NotNull String toIoPath(@NotNull VirtualFile file) {
     String path = file.getPath();
     if (StringUtil.endsWithChar(path, ':') && path.length() == 2 && SystemInfo.isWindows) {
       // makes 'C:' resolve to a root directory of the drive C:, not the current directory on that drive
@@ -84,7 +87,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     return file.getFileSystem() == this ? Paths.get(toIoPath(file)) : null;
   }
 
-  private static @NotNull File convertToIOFileAndCheck(@NotNull VirtualFile file) throws FileNotFoundException {
+  protected static @NotNull File convertToIOFileAndCheck(@NotNull VirtualFile file) throws FileNotFoundException {
     File ioFile = convertToIOFile(file);
 
     if (SystemInfo.isUnix) { // avoid opening fifo files
@@ -135,7 +138,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
   @Override
   public String resolveSymLink(@NotNull VirtualFile file) {
     String result = FileSystemUtil.resolveSymLink(file.getPath());
-    return result != null ? FileUtil.toSystemIndependentName(result) : null;
+    return result != null ? FileUtilRt.toSystemIndependentName(result) : null;
   }
 
   @Override
@@ -156,7 +159,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
 
   @Override
   protected @Nullable String normalize(@NotNull String path) {
-    if (SystemInfo.isWindows) {
+    if (SystemInfoRt.isWindows) {
       if (path.length() > 1 && path.charAt(0) == '/' && path.charAt(1) != '/') {
         path = path.substring(1);  // hack around `new File(path).toURI().toURL().getFile()`
       }
@@ -170,7 +173,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     }
 
     try {
-      Path file = Paths.get(path);
+      Path file = Path.of(path);
       if (!file.isAbsolute() && !(SystemInfo.isWindows && path.length() == 2 && path.charAt(1) == ':')) {
         path = file.toAbsolutePath().toString();
       }
@@ -185,8 +188,8 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
 
   @Override
   public void refreshIoFiles(@NotNull Iterable<? extends File> files, boolean async, boolean recursive, @Nullable Runnable onFinish) {
-    Stream<VirtualFile> iterator = StreamEx.of(files.iterator()).map(f -> refreshAndFindFileByIoFile(f));
-    refreshFiles(iterator, async, recursive, onFinish);
+    List<VirtualFile> virtualFiles = ContainerUtil.mapNotNull(files, f1 -> refreshAndFindFileByIoFile(f1));
+    refreshFiles(async, recursive, virtualFiles, onFinish);
   }
 
   @Override
@@ -194,11 +197,14 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
                               boolean async,
                               boolean recursive,
                               @Nullable Runnable onFinish) {
-    Stream<VirtualFile> iterator = StreamEx.of(files.iterator()).map(f -> refreshAndFindFileByNioFile(f));
-    refreshFiles(iterator, async, recursive, onFinish);
+    List<VirtualFile> virtualFiles = ContainerUtil.mapNotNull(files, f1 -> refreshAndFindFileByNioFile(f1));
+    refreshFiles(async, recursive, virtualFiles, onFinish);
   }
 
-  private static void refreshFiles(@NotNull Stream<VirtualFile> files, boolean async, boolean recursive, @Nullable Runnable onFinish) {
+  private static void refreshFiles(boolean async,
+                                   boolean recursive,
+                                   List<? extends VirtualFile> virtualFiles,
+                                   @Nullable Runnable onFinish) {
     VirtualFileManagerEx manager = (VirtualFileManagerEx)VirtualFileManager.getInstance();
 
     Application app = ApplicationManager.getApplication();
@@ -206,7 +212,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     if (fireCommonRefreshSession) manager.fireBeforeRefreshStart(false);
 
     try {
-      RefreshQueue.getInstance().refresh(async, recursive, onFinish, files.filter(f -> f != null).collect(Collectors.toList()));
+      RefreshQueue.getInstance().refresh(async, recursive, onFinish, virtualFiles);
     }
     finally {
       if (fireCommonRefreshSession) manager.fireAfterRefreshFinish(false);
@@ -331,7 +337,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     if (!auxCreateFile(parent, name)) {
       File ioFile = new File(ioParent, name);
       VirtualFile existing = parent.findChild(name);
-      boolean created = FileUtil.createIfDoesntExist(ioFile);
+      boolean created = FileUtilRt.createIfNotExists(ioFile);
       if (!created) {
         if (existing != null) {
           throw new IOException(IdeBundle.message("vfs.target.already.exists.error", parent.getPath() + "/" + name));
@@ -386,12 +392,30 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
 
   @Override
   public @NotNull InputStream getInputStream(@NotNull VirtualFile file) throws IOException {
-    return new BufferedInputStream(new FileInputStream(convertToIOFileAndCheck(file)));
+    File ioFile = convertToIOFileAndCheck(file);
+
+    for (PluggableLocalFileSystemContentLoader loader : PLUGGABLE_CONTENT_LOADER_EP_NAME.getExtensionList()) {
+      InputStream is = loader.getInputStream(ioFile);
+      if (is != null) {
+        return is;
+      }
+    }
+
+    return new BufferedInputStream(new FileInputStream(ioFile));
   }
 
   @Override
   public byte @NotNull [] contentsToByteArray(@NotNull VirtualFile file) throws IOException {
-    try (InputStream stream = new FileInputStream(convertToIOFileAndCheck(file))) {
+    File ioFile = convertToIOFileAndCheck(file);
+
+    for (PluggableLocalFileSystemContentLoader loader : PLUGGABLE_CONTENT_LOADER_EP_NAME.getExtensionList()) {
+      byte[] bytes = loader.contentToByteArray(ioFile);
+      if (bytes != null) {
+        return bytes;
+      }
+    }
+
+    try (InputStream stream = new FileInputStream(ioFile)) {
       long l = file.getLength();
       if (l >= FileUtilRt.LARGE_FOR_CONTENT_LOADING) throw new FileTooBigException(file.getPath());
       int length = (int)l;
@@ -403,7 +427,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
   }
 
   private static byte @NotNull [] loadBytes(@NotNull InputStream stream, int length) throws IOException {
-    byte[] bytes = new byte[length];
+    byte[] bytes = ArrayUtil.newByteArray(length);
     int count = 0;
     while (count < length) {
       int n = stream.read(bytes, count, length - count);
@@ -573,7 +597,7 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
 
   @Override
   public void setWritable(@NotNull VirtualFile file, boolean writableFlag) throws IOException {
-    String path = FileUtil.toSystemDependentName(file.getPath());
+    String path = FileUtilRt.toSystemDependentName(file.getPath());
     FileUtil.setReadOnlyAttribute(path, !writableFlag);
     if (FileUtil.canWrite(path) != writableFlag) {
       throw new IOException("Failed to change read-only flag for " + path);
@@ -678,11 +702,11 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
   }
 
   protected FileAttributes getAttributes(@NotNull String path) {
-    return myAttrGetter.accessDiskWithCheckCanceled(FileUtil.toSystemDependentName(path));
+    return myAttrGetter.accessDiskWithCheckCanceled(FileUtilRt.toSystemDependentName(path));
   }
 
   private final DiskQueryRelay<String, FileAttributes> myAttrGetter = new DiskQueryRelay<>(FileSystemUtil::getAttributes);
-  private final DiskQueryRelay<File, String[]> myChildrenGetter = new DiskQueryRelay<>(dir -> dir.list(DirectoryAccessChecker.getFileFilter(dir)));
+  private final DiskQueryRelay<File, String[]> myChildrenGetter = new DiskQueryRelay<>(dir -> dir.list());
 
   @Override
   public void refresh(boolean asynchronous) {

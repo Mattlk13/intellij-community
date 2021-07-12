@@ -9,11 +9,15 @@ import com.intellij.execution.configurations.RunConfigurationBase;
 import com.intellij.execution.configurations.RunProfile;
 import com.intellij.execution.ui.*;
 import com.intellij.execution.ui.layout.PlaceInGrid;
+import com.intellij.execution.ui.layout.impl.RunnerLayoutUiImpl;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.impl.ActionButton;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.registry.Registry;
+import com.intellij.openapi.wm.impl.content.SingleContentSupplier;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.terminal.TerminalExecutionConsole;
 import com.intellij.ui.content.Content;
@@ -22,8 +26,9 @@ import com.intellij.util.SmartList;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class RunContentBuilder extends RunTab {
   private static final String JAVA_RUNNER = "JavaRunner";
@@ -37,6 +42,8 @@ public final class RunContentBuilder extends RunTab {
     myExecutionResult = executionResult;
     myUi.getOptions().setMoveToGridActionEnabled(false).setMinimizeActionEnabled(false);
   }
+
+  private @Nullable SingleContentSupplier mySupplier;
 
   @NotNull
   public static ExecutionEnvironment fix(@NotNull ExecutionEnvironment environment, @Nullable ProgramRunner runner) {
@@ -82,7 +89,22 @@ public final class RunContentBuilder extends RunTab {
       // clear console toolbar actions to remove the console toolbar
       consoleContent.setActions(new DefaultActionGroup(), ActionPlaces.RUNNER_TOOLBAR, console.getComponent());
     }
-    myUi.getOptions().setLeftToolbar(createActionToolbar(contentDescriptor, consoleActionsToMerge), ActionPlaces.RUNNER_TOOLBAR);
+    ActionGroup toolbar = createActionToolbar(contentDescriptor, consoleActionsToMerge);
+    if (Registry.is("debugger.new.tool.window.layout")) {
+      mySupplier = new RunTabSupplier(toolbar) {
+        @Override
+        public @NotNull List<AnAction> getContentActions() {
+          return Collections.singletonList(myUi.getOptions().getLayoutActions());
+        }
+      };
+      if (myUi instanceof RunnerLayoutUiImpl) {
+        ((RunnerLayoutUiImpl)myUi).setLeftToolbarVisible(false);
+      }
+      myUi.getOptions().setTopLeftToolbar(toolbar, ActionPlaces.RUNNER_TOOLBAR);
+
+    } else {
+      myUi.getOptions().setLeftToolbar(toolbar, ActionPlaces.RUNNER_TOOLBAR);
+    }
 
     if (profile instanceof RunConfigurationBase) {
       if (console instanceof ObservableConsoleView && !ApplicationManager.getApplication().isUnitTestMode()) {
@@ -95,6 +117,11 @@ public final class RunContentBuilder extends RunTab {
     }
 
     return contentDescriptor;
+  }
+
+  @Override
+  protected @Nullable SingleContentSupplier getSupplier() {
+    return mySupplier;
   }
 
   @NotNull
@@ -134,18 +161,26 @@ public final class RunContentBuilder extends RunTab {
 
   @NotNull
   private ActionGroup createActionToolbar(@NotNull RunContentDescriptor contentDescriptor, AnAction @NotNull [] consoleActions) {
+    boolean isNewLayout = Registry.is("debugger.new.tool.window.layout");
+
     final DefaultActionGroup actionGroup = new DefaultActionGroup();
     actionGroup.add(ActionManager.getInstance().getAction(IdeActions.ACTION_RERUN));
     final AnAction[] actions = contentDescriptor.getRestartActions();
     actionGroup.addAll(actions);
-    actionGroup.add(new CreateAction(AllIcons.General.Settings));
-    actionGroup.addSeparator();
+    if (!isNewLayout) {
+      actionGroup.add(new CreateAction(AllIcons.General.Settings));
+      actionGroup.addSeparator();
+    }
 
     actionGroup.add(ActionManager.getInstance().getAction(IdeActions.ACTION_STOP_PROGRAM));
     actionGroup.addAll(myExecutionResult.getActions());
     if (consoleActions.length > 0) {
       actionGroup.addSeparator();
       actionGroup.addAll(consoleActions);
+    }
+
+    if (isNewLayout) {
+      actionGroup.addSeparator();
     }
 
     for (AnAction anAction : myRunnerActions) {
@@ -157,10 +192,31 @@ public final class RunContentBuilder extends RunTab {
       }
     }
 
-    actionGroup.addSeparator();
-    actionGroup.add(myUi.getOptions().getLayoutActions());
-    actionGroup.addSeparator();
-    actionGroup.add(PinToolwindowTabAction.getPinAction());
+    if (!isNewLayout) {
+      actionGroup.addSeparator();
+      actionGroup.add(myUi.getOptions().getLayoutActions());
+      actionGroup.addSeparator();
+      actionGroup.add(PinToolwindowTabAction.getPinAction());
+    } else {
+      DefaultActionGroup more = new DefaultActionGroup() {
+        {
+          setPopup(true);
+          getTemplatePresentation().setIcon(AllIcons.Actions.More);
+          getTemplatePresentation().putClientProperty(ActionButton.HIDE_DROPDOWN_ICON, true);
+        }
+
+        @Override
+        public boolean isDumbAware() {
+          return true;
+        }
+
+        @Override
+        public boolean hideIfNoVisibleChildren() {
+          return true;
+        }
+      };
+      actionGroup.add(more);
+    }
     return actionGroup;
   }
 
@@ -183,6 +239,7 @@ public final class RunContentBuilder extends RunTab {
     @NotNull private final RunnerLayoutUi myUi;
     private final boolean myShowConsoleOnStdOut;
     private final boolean myShowConsoleOnStdErr;
+    private final AtomicBoolean myFocused = new AtomicBoolean();
 
     public ConsoleToFrontListener(@NotNull RunConfigurationBase runConfigurationBase,
                                   @NotNull Project project,
@@ -198,16 +255,14 @@ public final class RunContentBuilder extends RunTab {
     }
 
     @Override
-    public void contentAdded(@NotNull Collection<? extends ConsoleViewContentType> types) {
-      if (myProject.isDisposed() || myUi.isDisposed())
+    public void textAdded(@NotNull String text, @NotNull ConsoleViewContentType type) {
+      if (myProject.isDisposed() || myUi.isDisposed()) {
         return;
-      for (ConsoleViewContentType type : types) {
-        if ((type == ConsoleViewContentType.NORMAL_OUTPUT) && myShowConsoleOnStdOut
-            || (type == ConsoleViewContentType.ERROR_OUTPUT) && myShowConsoleOnStdErr) {
-          RunContentManager.getInstance(myProject).toFrontRunContent(myExecutor, myRunContentDescriptor);
-          myUi.selectAndFocus(myUi.findContent(ExecutionConsole.CONSOLE_CONTENT_ID), false, false);
-          return;
-        }
+      }
+      if (((type == ConsoleViewContentType.NORMAL_OUTPUT) && myShowConsoleOnStdOut
+           || (type == ConsoleViewContentType.ERROR_OUTPUT) && myShowConsoleOnStdErr) && myFocused.compareAndSet(false, true)) {
+        RunContentManager.getInstance(myProject).toFrontRunContent(myExecutor, myRunContentDescriptor);
+        myUi.selectAndFocus(myUi.findContent(ExecutionConsole.CONSOLE_CONTENT_ID), false, false);
       }
     }
   }

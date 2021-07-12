@@ -8,6 +8,7 @@ import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.xmlb.annotations.Tag;
+import com.intellij.util.xmlb.annotations.Transient;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -102,6 +103,25 @@ public class ExternalSystemTaskExecutionSettings implements Cloneable {
 
   public void setScriptParameters(@NlsSafe String scriptParameters) {
     myScriptParameters = scriptParameters;
+  }
+
+  @Transient
+  public void setCommandLine(@NotNull String commandLine) {
+    setTaskNames(new ArrayList<>());
+    setScriptParameters(commandLine);
+  }
+
+  @Transient
+  public @NotNull String getCommandLine() {
+    StringJoiner commandLine = new StringJoiner(" ");
+    for (String taskName : getTaskNames()) {
+      commandLine.add(taskName);
+    }
+    String scriptParameters = getScriptParameters();
+    if (StringUtil.isNotEmpty(scriptParameters)) {
+      commandLine.add(scriptParameters);
+    }
+    return commandLine.toString();
   }
 
   @NotNull

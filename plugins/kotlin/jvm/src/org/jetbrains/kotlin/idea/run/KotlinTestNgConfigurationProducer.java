@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.run;
 
@@ -183,7 +169,7 @@ public class KotlinTestNgConfigurationProducer extends TestNGConfigurationProduc
     @Nullable
     private static KtNamedDeclaration getDeclarationToRun(@NotNull PsiElement leaf) {
         if (!(leaf.getContainingFile() instanceof KtFile)) return null;
-        KtFile jetFile = (KtFile) leaf.getContainingFile();
+        KtFile ktFile = (KtFile) leaf.getContainingFile();
 
         KtNamedFunction function = PsiTreeUtil.getParentOfType(leaf, KtNamedFunction.class, false);
         if (function != null) return function;
@@ -191,7 +177,7 @@ public class KotlinTestNgConfigurationProducer extends TestNGConfigurationProduc
         KtClass ktClass = PsiTreeUtil.getParentOfType(leaf, KtClass.class, false);
         if (ktClass != null) return ktClass;
 
-        return getClassDeclarationInFile(jetFile);
+        return getClassDeclarationInFile(ktFile);
     }
 
     private boolean configure(
@@ -219,10 +205,10 @@ public class KotlinTestNgConfigurationProducer extends TestNGConfigurationProduc
     }
 
     @Nullable
-    static KtClass getClassDeclarationInFile(KtFile jetFile) {
+    static KtClass getClassDeclarationInFile(KtFile ktFile) {
         KtClass tempSingleDeclaration = null;
 
-        for (KtDeclaration ktDeclaration : jetFile.getDeclarations()) {
+        for (KtDeclaration ktDeclaration : ktFile.getDeclarations()) {
             if (ktDeclaration instanceof KtClass) {
                 KtClass declaration = (KtClass) ktDeclaration;
 

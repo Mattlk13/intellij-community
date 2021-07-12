@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.util;
 
 import com.intellij.CommonBundle;
+import com.intellij.DynamicBundle;
 import com.intellij.featureStatistics.FeatureDescriptor;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.IdeBundle;
@@ -59,6 +60,7 @@ import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.HashMap;
 
+import static com.intellij.DynamicBundle.findLanguageBundle;
 import static com.intellij.util.ui.UIUtil.drawImage;
 
 /**
@@ -128,6 +130,11 @@ public final class TipUIUtil {
         PluginDescriptor pluginDescriptor = tip.getPluginDescriptor();
         ClassLoader tipLoader = pluginDescriptor == null ? TipUIUtil.class.getClassLoader() :
                                 ObjectUtils.notNull(pluginDescriptor.getPluginClassLoader(), TipUIUtil.class.getClassLoader());
+
+        DynamicBundle.LanguageBundleEP langBundle = findLanguageBundle();
+        if (langBundle != null) {
+          tipLoader = langBundle.pluginDescriptor.getPluginClassLoader();
+        }
 
         InputStream tipStream = ResourceUtil.getResourceAsStream(tipLoader, "/tips/", tip.fileName);
         if (tipStream == null) {
@@ -286,7 +293,7 @@ public final class TipUIUtil {
       final String actionId = text.substring(actionIdStart, actionIdEnd);
       String shortcutText = getShortcutText(actionId, KeymapManager.getInstance().getActiveKeymap());
       if (shortcutText == null) {
-        Keymap defKeymap = KeymapManager.getInstance().getKeymap(DefaultKeymap.getInstance().getDefaultKeymapName());
+        Keymap defKeymap = KeymapManager.getInstance().getKeymap(DefaultKeymap.Companion.getInstance().getDefaultKeymapName());
         if (defKeymap != null) {
           shortcutText = getShortcutText(actionId, defKeymap);
           if (shortcutText != null) {

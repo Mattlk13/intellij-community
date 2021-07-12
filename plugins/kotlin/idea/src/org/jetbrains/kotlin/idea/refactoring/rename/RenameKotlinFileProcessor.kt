@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.rename
 
@@ -38,21 +35,21 @@ class RenameKotlinFileProcessor : RenamePsiFileProcessor() {
         allRenames: MutableMap<PsiElement, String>,
         scope: SearchScope
     ) {
-        val jetFile = element as? KtFile ?: return
+        val ktFile = element as? KtFile ?: return
         if (FileTypeManager.getInstance().getFileTypeByFileName(newName) != KotlinFileType.INSTANCE) {
             return
         }
 
         val module = ModuleUtilCore.findModuleForPsiElement(element) ?: return
 
-        val fileInfo = JvmFileClassUtil.getFileClassInfoNoResolve(jetFile)
+        val fileInfo = JvmFileClassUtil.getFileClassInfoNoResolve(ktFile)
         if (!fileInfo.withJvmName) {
             val facadeFqName = fileInfo.facadeClassFqName
-            val project = jetFile.project
+            val project = ktFile.project
             val facadeClass = JavaPsiFacade.getInstance(project)
                 .findClass(facadeFqName.asString(), GlobalSearchScope.moduleScope(module)) as? KtLightClass
             if (facadeClass != null) {
-                allRenames[FileRenamingPsiClassWrapper(facadeClass, jetFile)] = PackagePartClassUtils.getFilePartShortName(newName)
+                allRenames[FileRenamingPsiClassWrapper(facadeClass, ktFile)] = PackagePartClassUtils.getFilePartShortName(newName)
             }
         }
     }

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.test;
 
@@ -300,7 +297,18 @@ public class KotlinTestUtils {
 
         JvmContentRootsKt.addJvmClasspathRoots(configuration, classpath);
 
+        configuration.put(
+                CLIConfigurationKeys.INTELLIJ_PLUGIN_ROOT,
+                KotlinArtifacts.getInstance().getKotlinCompiler().getAbsolutePath()
+        );
+
+        setupIdeaStandaloneExecution();
+
         return configuration;
+    }
+
+    private static void setupIdeaStandaloneExecution() {
+        System.getProperties().setProperty("psi.incremental.reparse.depth.limit", "1000");
     }
 
     @NotNull
@@ -653,7 +661,7 @@ public class KotlinTestUtils {
                     }
                 }
 
-                throw new AssertionError("Looks like this test can be unmuted. Remove IGNORE_BACKEND directive.");
+                throw new AssertionError(String.format("Looks like this test can be unmuted. Remove \"%s%s\" directive.", ignoreDirective, targetBackend));
             }
         };
     }

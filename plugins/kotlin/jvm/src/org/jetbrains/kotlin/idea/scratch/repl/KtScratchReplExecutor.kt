@@ -1,15 +1,14 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.scratch.repl
 
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessOutputTypes
+import com.intellij.execution.target.TargetProgressIndicator
+import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.util.Key
 import org.jetbrains.kotlin.cli.common.repl.replInputAsXml
 import org.jetbrains.kotlin.cli.common.repl.replNormalizeLineBreaks
@@ -35,11 +34,14 @@ class KtScratchReplExecutor(file: ScratchFile) : SequentialScratchExecutor(file)
 
     override fun startExecution() {
         val module = file.module
-        val cmdLine = KotlinConsoleKeeper.createReplCommandLine(file.project, module)
+        val (environmentRequest, cmdLine) = KotlinConsoleKeeper.createReplCommandLine(file.project, module)
+        val environment = environmentRequest.prepareEnvironment(TargetProgressIndicator.EMPTY)
 
-        LOG.printDebugMessage("Execute REPL: ${cmdLine.commandLineString}")
+        val commandPresentation = cmdLine.getCommandPresentation(environment)
+        LOG.printDebugMessage("Execute REPL: $commandPresentation")
 
-        osProcessHandler = ReplOSProcessHandler(cmdLine)
+
+        osProcessHandler = ReplOSProcessHandler(environment.createProcess(cmdLine, EmptyProgressIndicator()), commandPresentation)
         osProcessHandler?.startNotify()
     }
 
@@ -82,7 +84,7 @@ class KtScratchReplExecutor(file: ScratchFile) : SequentialScratchExecutor(file)
 
         history.addEntry(expression)
         try {
-            sendCommandToProcess(expression.element.text)
+            sendCommandToProcess(runReadAction { expression.element.text })
         } catch (e: Throwable) {
             errorOccurs(KotlinJvmBundle.message("couldn.t.execute.statement.0", expression.element.text), e, true)
         }
@@ -136,7 +138,7 @@ class KtScratchReplExecutor(file: ScratchFile) : SequentialScratchExecutor(file)
         fun isAllProcessed() = entries.size == processedEntriesCount
     }
 
-    private inner class ReplOSProcessHandler(cmd: GeneralCommandLine) : OSProcessHandler(cmd) {
+    private inner class ReplOSProcessHandler(process: Process, commandLine: String) : OSProcessHandler(process, commandLine) {
         private val factory = DocumentBuilderFactory.newInstance()
 
         override fun notifyTextAvailable(text: String, outputType: Key<*>) {
@@ -153,8 +155,7 @@ class KtScratchReplExecutor(file: ScratchFile) : SequentialScratchExecutor(file)
             // would try to stop process again (after stop in tests 'stopReplProcess`)
             // via `stopExecution` (because handler is not null) with next exception:
             //
-            // Caused by: com.intellij.testFramework.LoggedErrorProcessor$TestLoggerAssertionError: The pipe is being closed
-            // at com.intellij.testFramework.LoggedErrorProcessor.processError(LoggedErrorProcessor.java:66)
+            // Caused by: com.intellij.testFramework.TestLogger$TestLoggerAssertionError: The pipe is being closed
             // at com.intellij.testFramework.TestLogger.error(TestLogger.java:40)
             // at com.intellij.openapi.diagnostic.Logger.error(Logger.java:170)
             // at org.jetbrains.kotlin.idea.scratch.ScratchExecutor.errorOccurs(ScratchExecutor.kt:50)

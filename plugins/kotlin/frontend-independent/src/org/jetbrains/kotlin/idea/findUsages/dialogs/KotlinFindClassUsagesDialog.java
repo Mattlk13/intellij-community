@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.findUsages.dialogs;
 
@@ -33,7 +19,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.idea.asJava.LightClassProvider;
 import org.jetbrains.kotlin.asJava.LightClassUtilsKt;
-import org.jetbrains.kotlin.idea.KotlinBundleIndependent;
+import org.jetbrains.kotlin.idea.KotlinIndependentBundle;
 import org.jetbrains.kotlin.idea.findUsages.KotlinClassFindUsagesOptions;
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport;
 import org.jetbrains.kotlin.psi.KtClass;
@@ -72,7 +58,7 @@ public class KotlinFindClassUsagesDialog extends FindClassUsagesDialog {
 
         String name = classOrObject.getName();
         if (name == null || name.isEmpty()) {
-            name = KotlinBundleIndependent.message("find.usages.class.name.anonymous");
+            name = KotlinIndependentBundle.message("find.usages.class.name.anonymous");
         }
 
         PsiClass javaClass;
@@ -105,36 +91,36 @@ public class KotlinFindClassUsagesDialog extends FindClassUsagesDialog {
         assert findWhatPanel != null;
 
         Utils.renameCheckbox(
-                findWhatPanel,
-                JavaBundle.message("find.what.methods.usages.checkbox"),
-                KotlinBundleIndependent.message("find.declaration.functions.usages.checkbox")
+          findWhatPanel,
+          JavaBundle.message("find.what.methods.usages.checkbox"),
+          KotlinIndependentBundle.message("find.declaration.functions.usages.checkbox")
         );
         Utils.renameCheckbox(
-                findWhatPanel,
-                JavaBundle.message("find.what.fields.usages.checkbox"),
-                KotlinBundleIndependent.message("find.declaration.properties.usages.checkbox")
+          findWhatPanel,
+          JavaBundle.message("find.what.fields.usages.checkbox"),
+          KotlinIndependentBundle.message("find.declaration.properties.usages.checkbox")
         );
         Utils.removeCheckbox(findWhatPanel, JavaBundle.message("find.what.implementing.classes.checkbox"));
         Utils.removeCheckbox(findWhatPanel, JavaBundle.message("find.what.derived.interfaces.checkbox"));
         Utils.removeCheckbox(findWhatPanel, JavaBundle.message("find.what.derived.classes.checkbox"));
 
         derivedClasses = addCheckboxToPanel(
-                KotlinBundleIndependent.message("find.declaration.derived.classes.checkbox"),
-                getFindUsagesOptions().isDerivedClasses,
-                findWhatPanel,
-                true
+          KotlinIndependentBundle.message("find.declaration.derived.classes.checkbox"),
+          getFindUsagesOptions().isDerivedClasses,
+          findWhatPanel,
+          true
         );
         derivedTraits = addCheckboxToPanel(
-                KotlinBundleIndependent.message("find.declaration.derived.interfaces.checkbox"),
-                getFindUsagesOptions().isDerivedInterfaces,
-                findWhatPanel,
-                true
+          KotlinIndependentBundle.message("find.declaration.derived.interfaces.checkbox"),
+          getFindUsagesOptions().isDerivedInterfaces,
+          findWhatPanel,
+          true
         );
         constructorUsages = addCheckboxToPanel(
-                KotlinBundleIndependent.message("find.declaration.constructor.usages.checkbox"),
-                getFindUsagesOptions().getSearchConstructorUsages(),
-                findWhatPanel,
-                true
+          KotlinIndependentBundle.message("find.declaration.constructor.usages.checkbox"),
+          getFindUsagesOptions().getSearchConstructorUsages(),
+          findWhatPanel,
+          true
         );
         return findWhatPanel;
     }
@@ -167,10 +153,10 @@ public class KotlinFindClassUsagesDialog extends FindClassUsagesDialog {
         KotlinClassFindUsagesOptions options = getFindUsagesOptions();
         if (isActual) {
             expectedUsages = addCheckboxToPanel(
-                    KotlinBundleIndependent.message("find.usages.checkbox.name.expected.classes"),
-                    options.getSearchExpected(),
-                    optionsPanel,
-                    false
+              KotlinIndependentBundle.message("find.usages.checkbox.name.expected.classes"),
+              options.getSearchExpected(),
+              optionsPanel,
+              false
             );
         }
     }

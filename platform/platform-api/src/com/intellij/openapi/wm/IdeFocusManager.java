@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.wm;
 
 import com.intellij.diagnostic.LoadingState;
@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.ActionCallback;
 import com.intellij.openapi.util.ExpirableRunnable;
 import com.intellij.ui.ComponentUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,17 +52,25 @@ public abstract class IdeFocusManager implements FocusRequestor {
   public abstract @Nullable JComponent getFocusTargetFor(@NotNull JComponent comp);
 
   /**
-   * Executes given runnable after all focus activities are finished.
+   * Executes given {@code runnable} after all focus activities are finished.
+   *
+   * @apiNote be careful with this method. It may run {@code runnable} synchronously in the context of the current thread, or may queue
+   * runnable until the focus events queue is empty. In the latter case runnable is going to be run while processing the last focus
+   * event from the queue, without any context, e.g. outside the write-safe context. Consider using safer {@link #doWhenFocusSettlesDown(Runnable, ModalityState)}
    */
   public abstract void doWhenFocusSettlesDown(@NotNull Runnable runnable);
 
   /**
-   * Executes given runnable after all focus activities are finished, immediately or later with the given modality state.
+   * Executes given {@code runnable} after all focus activities are finished, immediately or later with the given {@code modality} state.
    */
   public abstract void doWhenFocusSettlesDown(@NotNull Runnable runnable, @NotNull ModalityState modality);
 
   /**
-   * Executes given runnable after all focus activities are finished.
+   * Executes given {@code runnable} after all focus activities are finished.
+   *
+   * @apiNote be careful with this method. It may run {@code runnable} synchronously in the context of the current thread, or may queue
+   * runnable until the focus events queue is empty. In the latter case runnable is going to be run while processing the last focus
+   * event from the queue, without any context, e.g. outside the write-safe context. Consider using safer {@link #doWhenFocusSettlesDown(Runnable, ModalityState)}
    */
   public abstract void doWhenFocusSettlesDown(@NotNull ExpirableRunnable runnable);
 
@@ -71,18 +80,16 @@ public abstract class IdeFocusManager implements FocusRequestor {
   public abstract @Nullable Component getFocusedDescendantFor(@NotNull Component comp);
 
   /**
-   * @deprecated use {@link #typeAheadUntil(ActionCallback, String)} instead
+   * @deprecated This method does nothing currently.
    */
   @Deprecated
-  public void typeAheadUntil(ActionCallback done) {
-    typeAheadUntil(done, "No cause has been provided");
-  }
+  @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
+  public void typeAheadUntil(ActionCallback done) {}
 
   /**
-   * Aggregates all key events until given callback object is processed.
-   *
-   * @param done action callback
+   * @deprecated This method does nothing currently.
    */
+  @Deprecated
   public void typeAheadUntil(ActionCallback done, @NotNull String cause) {}
 
   /**
@@ -99,11 +106,10 @@ public abstract class IdeFocusManager implements FocusRequestor {
   public abstract boolean isFocusTransferEnabled();
 
   /**
-   * Enables or disables typeahead.
-   *
-   * @see #typeAheadUntil(ActionCallback)
+   * @deprecated This method does nothing currently
    */
-  public abstract void setTypeaheadEnabled(boolean enabled);
+  @Deprecated
+  public void setTypeaheadEnabled(boolean enabled) {}
 
   /**
    * Computes effective focus owner.

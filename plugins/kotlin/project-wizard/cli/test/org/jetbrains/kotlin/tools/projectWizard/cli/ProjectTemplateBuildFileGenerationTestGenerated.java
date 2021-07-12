@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.cli;
 
@@ -24,11 +21,6 @@ import org.junit.runner.RunWith;
 public class ProjectTemplateBuildFileGenerationTestGenerated extends AbstractProjectTemplateBuildFileGenerationTest {
     private void runTest(String testDataFilePath) throws Exception {
         KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
-    }
-
-    @TestMetadata("backendApplication")
-    public void testBackendApplication() throws Exception {
-        runTest("testData/projectTemplatesBuildFileGeneration/backendApplication/");
     }
 
     @TestMetadata("composeDesktopApplication")

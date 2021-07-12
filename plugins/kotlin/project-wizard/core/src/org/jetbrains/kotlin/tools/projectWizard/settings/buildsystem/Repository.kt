@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem
 
 interface Repository {
@@ -30,7 +31,7 @@ data class DefaultRepository(val type: Type) : Repository {
 
 interface CustomMavenRepository : Repository
 
-data class BintrayRepository(val repository: String, val base: String = "https://dl.bintray.com") : CustomMavenRepository {
+data class CustomMavenRepositoryImpl(val repository: String, val base: String) : CustomMavenRepository {
     override val url: String = "$base/$repository"
 
     override val idForMaven: String
@@ -47,7 +48,7 @@ data class JetBrainsSpace(val repository: String) : CustomMavenRepository {
 object Repositories {
     val KTOR = DefaultRepository.MAVEN_CENTRAL
     val KOTLINX_HTML = DefaultRepository.JCENTER
-    val KOTLIN_JS_WRAPPERS = JetBrainsSpace("kotlin/p/kotlin/kotlin-js-wrappers")
+    val KOTLIN_JS_WRAPPERS = DefaultRepository.MAVEN_CENTRAL
     val KOTLIN_EAP_MAVEN_CENTRAL = DefaultRepository.MAVEN_CENTRAL
     val JETBRAINS_COMPOSE_DEV = JetBrainsSpace("public/p/compose/dev")
     val JETBRAINS_KOTLIN_DEV = JetBrainsSpace("kotlin/p/kotlin/dev")

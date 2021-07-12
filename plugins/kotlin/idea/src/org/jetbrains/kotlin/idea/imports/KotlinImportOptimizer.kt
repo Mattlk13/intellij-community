@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.imports
 
@@ -136,7 +133,11 @@ class KotlinImportOptimizer : ImportOptimizer {
         override fun visitElement(element: PsiElement) {
             ProgressIndicatorProvider.checkCanceled()
             elementProgress += 1
-            progressIndicator?.fraction = elementProgress / elementsSize.toDouble()
+            progressIndicator?.apply {
+                if (elementsSize != 0) {
+                    fraction = elementProgress / elementsSize.toDouble()
+                }
+            }
 
             element.acceptChildren(this)
         }

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.maven
 
@@ -35,6 +32,7 @@ import org.jetbrains.kotlin.config.TestSourceKotlinRootType
 import org.jetbrains.kotlin.idea.configuration.RepositoryDescription
 import org.jetbrains.kotlin.idea.maven.configuration.KotlinMavenConfigurator
 import org.jetbrains.kotlin.psi.psiUtil.getChildrenOfType
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.toLowerCaseAsciiOnly
 import org.jetbrains.kotlin.utils.SmartList
 import java.util.*
 
@@ -116,7 +114,7 @@ class PomFile private constructor(private val xmlFile: XmlFile, val domModel: Ma
         dependency.classifier.stringValue = classifier
 
         if (scope != null && scope != MavenArtifactScope.COMPILE) {
-            dependency.scope.stringValue = scope.name.toLowerCase()
+            dependency.scope.stringValue = scope.name.toLowerCaseAsciiOnly()
         }
 
         if (optional) {
@@ -635,7 +633,8 @@ internal fun MavenDomDependencies.findDependencies(artifacts: List<MavenId>, sco
 }
 
 private fun MavenDomDependency.matches(artifact: MavenId, scope: MavenArtifactScope?) =
-    this.matches(artifact) && (this.scope.stringValue == scope?.name?.toLowerCase() || scope == null && this.scope.stringValue == "compile")
+    this.matches(artifact) &&
+            (this.scope.stringValue == scope?.name?.toLowerCaseAsciiOnly() || scope == null && this.scope.stringValue == "compile")
 
 private fun MavenDomArtifactCoordinates.matches(artifact: MavenId) =
     (artifact.groupId == null || groupId.stringValue == artifact.groupId)

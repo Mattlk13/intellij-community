@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.nj2k.types
 
@@ -26,6 +23,7 @@ import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.jvm.JvmPrimitiveType
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
+import java.util.Locale
 
 fun JKType.asTypeElement(annotationList: JKAnnotationList = JKAnnotationList()) =
     JKTypeElement(this, annotationList)
@@ -127,7 +125,6 @@ fun JKJavaPrimitiveType.toLiteralType(): JKLiteralExpression.LiteralType? =
         JKJavaPrimitiveType.BOOLEAN -> JKLiteralExpression.LiteralType.BOOLEAN
         JKJavaPrimitiveType.INT -> JKLiteralExpression.LiteralType.INT
         JKJavaPrimitiveType.LONG -> JKLiteralExpression.LiteralType.LONG
-        JKJavaPrimitiveType.CHAR -> JKLiteralExpression.LiteralType.CHAR
         JKJavaPrimitiveType.DOUBLE -> JKLiteralExpression.LiteralType.DOUBLE
         JKJavaPrimitiveType.FLOAT -> JKLiteralExpression.LiteralType.FLOAT
         else -> null
@@ -153,6 +150,9 @@ fun JKJavaPrimitiveType.isNumberType() =
             this == JKJavaPrimitiveType.LONG ||
             this == JKJavaPrimitiveType.FLOAT ||
             this == JKJavaPrimitiveType.DOUBLE
+
+fun JKJavaPrimitiveType.kotlinName() =
+    jvmPrimitiveType.javaKeywordName.capitalize(Locale.US)
 
 
 val primitiveTypes =

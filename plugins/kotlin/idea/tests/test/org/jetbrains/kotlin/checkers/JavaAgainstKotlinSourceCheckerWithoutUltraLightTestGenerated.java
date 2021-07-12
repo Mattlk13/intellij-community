@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.checkers;
 
@@ -76,6 +73,26 @@ public abstract class JavaAgainstKotlinSourceCheckerWithoutUltraLightTestGenerat
         @TestMetadata("ExtendClassWithJvmDefaultImplementation.kt")
         public void testExtendClassWithJvmDefaultImplementation() throws Exception {
             runTest("testData/kotlinAndJavaChecker/javaAgainstKotlin/ExtendClassWithJvmDefaultImplementation.kt");
+        }
+
+        @TestMetadata("ExtendInterfaceWithAJvmStaticMethodInCompanion.kt")
+        public void testExtendInterfaceWithAJvmStaticMethodInCompanion() throws Exception {
+            runTest("testData/kotlinAndJavaChecker/javaAgainstKotlin/ExtendInterfaceWithAJvmStaticMethodInCompanion.kt");
+        }
+
+        @TestMetadata("ExtendInterfaceWithDefaultMethodAndCompatibilityAll.kt")
+        public void testExtendInterfaceWithDefaultMethodAndCompatibilityAll() throws Exception {
+            runTest("testData/kotlinAndJavaChecker/javaAgainstKotlin/ExtendInterfaceWithDefaultMethodAndCompatibilityAll.kt");
+        }
+
+        @TestMetadata("ExtendInterfaceWithDefaultMethodAndCompatibilityAllCompatibility.kt")
+        public void testExtendInterfaceWithDefaultMethodAndCompatibilityAllCompatibility() throws Exception {
+            runTest("testData/kotlinAndJavaChecker/javaAgainstKotlin/ExtendInterfaceWithDefaultMethodAndCompatibilityAllCompatibility.kt");
+        }
+
+        @TestMetadata("ExtendInterfaceWithDefaultMethodAndCompatibilityDisabled.kt")
+        public void testExtendInterfaceWithDefaultMethodAndCompatibilityDisabled() throws Exception {
+            runTest("testData/kotlinAndJavaChecker/javaAgainstKotlin/ExtendInterfaceWithDefaultMethodAndCompatibilityDisabled.kt");
         }
 
         @TestMetadata("ExtendingMutableInterfaces.kt")

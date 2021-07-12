@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.updateSettings.impl
 
 import com.intellij.execution.process.ProcessIOExecutorService
@@ -31,7 +31,9 @@ import com.intellij.openapi.wm.impl.welcomeScreen.WelcomeFrame
 import com.intellij.reference.SoftReference
 import com.intellij.util.Urls
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresEdt
+import com.intellij.util.concurrency.annotations.RequiresNoReadLock
 import com.intellij.util.containers.MultiMap
 import com.intellij.util.io.HttpRequests
 import com.intellij.util.io.URLUtil
@@ -59,7 +61,7 @@ object UpdateChecker {
 
   private const val DISABLED_UPDATE = "disabled_update.txt"
   private const val DISABLED_PLUGIN_UPDATE = "plugin_disabled_updates.txt"
-  private const val PRODUCT_DATA_TTL_MS = 300_000L
+  private const val PRODUCT_DATA_TTL_MIN = 5L
   private const val MACHINE_ID_DISABLED_PROPERTY = "machine.id.disabled"
   private const val MACHINE_ID_PARAMETER = "mid"
 
@@ -245,14 +247,13 @@ object UpdateChecker {
   ): PlatformUpdates =
     try {
       indicator?.text = IdeBundle.message("updates.checking.platform")
-
-      loadProductData(indicator)?.let { product ->
-        if (product.disableMachineId) {
-          PropertiesComponent.getInstance().setValue(MACHINE_ID_DISABLED_PROPERTY, true)
-          UpdateRequestParameters.removeParameter(MACHINE_ID_PARAMETER)
-        }
-        UpdateStrategy(ApplicationInfo.getInstance().build, product, settings).checkForUpdates()
-      } ?: PlatformUpdates.Empty
+      val productData = loadProductData(indicator)
+      if (!settings.isPlatformUpdateEnabled || productData == null) {
+        PlatformUpdates.Empty
+      }
+      else {
+        UpdateStrategy(ApplicationInfo.getInstance().build, productData, settings).checkForUpdates()
+      }
     }
     catch (e: Exception) {
       LOG.infoWithDebug(e)
@@ -275,11 +276,19 @@ object UpdateChecker {
           url = UpdateRequestParameters.amendUpdateRequest(url)
         }
         LOG.debug { "loading ${url}" }
-        parseUpdateData(HttpRequests.request(url).connect { JDOMUtil.load(it.getReader(indicator)) })
+        HttpRequests.request(url)
+          .connect { JDOMUtil.load(it.getReader(indicator)) }
+          .let { parseUpdateData(it) }
+          ?.also {
+            if (it.disableMachineId) {
+              PropertiesComponent.getInstance().setValue(MACHINE_ID_DISABLED_PROPERTY, true)
+              UpdateRequestParameters.removeParameter(MACHINE_ID_PARAMETER)
+            }
+        }
       }
 
       productDataCache = SoftReference(result)
-      AppExecutorUtil.getAppScheduledExecutorService().schedule(this::clearProductDataCache, PRODUCT_DATA_TTL_MS, TimeUnit.MILLISECONDS)
+      AppExecutorUtil.getAppScheduledExecutorService().schedule(this::clearProductDataCache, PRODUCT_DATA_TTL_MIN, TimeUnit.MINUTES)
       return@withLock result.getOrThrow()
     }
 
@@ -294,9 +303,11 @@ object UpdateChecker {
   @JvmStatic
   fun updateDescriptorsForInstalledPlugins(state: InstalledPluginsState) {
     if (ApplicationInfoEx.getInstanceEx().usesJetBrainsPluginRepository()) {
-      val updateable = collectUpdateablePlugins()
-      if (updateable.isNotEmpty()) {
-        findUpdatesInJetBrainsRepository(updateable, mutableMapOf(), mutableMapOf(), null, state, null)
+      ApplicationManager.getApplication().executeOnPooledThread {
+        val updateable = collectUpdateablePlugins()
+        if (updateable.isNotEmpty()) {
+          findUpdatesInJetBrainsRepository(updateable, mutableMapOf(), mutableMapOf(), null, state, null)
+        }
       }
     }
   }
@@ -305,6 +316,8 @@ object UpdateChecker {
    * When [buildNumber] is null, returns new versions of plugins compatible with the current IDE version,
    * otherwise, returns versions compatible with the specified build.
    */
+  @RequiresBackgroundThread
+  @RequiresNoReadLock
   @JvmOverloads
   @JvmStatic
   fun getInternalPluginUpdates(
@@ -408,21 +421,23 @@ object UpdateChecker {
     return updateable
   }
 
+  @RequiresBackgroundThread
+  @RequiresNoReadLock
   private fun findUpdatesInJetBrainsRepository(updateable: MutableMap<PluginId, IdeaPluginDescriptor?>,
                                                toUpdate: MutableMap<PluginId, PluginDownloader>,
                                                toUpdateDisabled: MutableMap<PluginId, PluginDownloader>,
                                                buildNumber: BuildNumber?,
                                                state: InstalledPluginsState,
                                                indicator: ProgressIndicator?) {
-    val requests = MarketplaceRequests.Instance
-    val marketplacePluginIds = requests.getMarketplacePlugins(indicator)
+    val marketplacePluginIds = MarketplaceRequests.Instance.getMarketplacePlugins(indicator)
     val idsToUpdate = updateable.keys.filter { it in marketplacePluginIds }.toSet()
-    val updates = requests.getLastCompatiblePluginUpdate(idsToUpdate, buildNumber)
+    val updates = MarketplaceRequests.getLastCompatiblePluginUpdate(idsToUpdate, buildNumber)
     updateable.forEach { (id, descriptor) ->
       val lastUpdate = updates.find { it.pluginId == id.idString }
       if (lastUpdate != null &&
-          (descriptor == null || PluginDownloader.compareVersionsSkipBrokenAndIncompatible(lastUpdate.version, descriptor, buildNumber) > 0)) {
-        runCatching { requests.loadPluginDescriptor(id.idString, lastUpdate, indicator) }
+          (descriptor == null || PluginDownloader.compareVersionsSkipBrokenAndIncompatible(lastUpdate.version, descriptor,
+                                                                                           buildNumber) > 0)) {
+        runCatching { MarketplaceRequests.loadPluginDescriptor(id.idString, lastUpdate, indicator) }
           .onFailure { if (it !is HttpRequests.HttpStatusException || it.statusCode != HttpURLConnection.HTTP_NOT_FOUND) throw it }
           .onSuccess { prepareDownloader(state, it, buildNumber, toUpdate, toUpdateDisabled, indicator, null) }
       }
@@ -586,9 +601,12 @@ object UpdateChecker {
         NoUpdatesDialog(showSettingsLink).show()
       }
       else if (userInitiated) {
-        val message = IdeBundle.message("updates.no.updates.notification")
-        showNotification(project, NotificationKind.PLUGINS,
-                         "no.updates.available", "", message)
+        if (UpdateSettings.getInstance().isPlatformUpdateEnabled) {
+          showNotification(project, NotificationKind.PLUGINS, "no.updates.available", "", IdeBundle.message("updates.no.updates.notification"))
+        }
+        else {
+          showNotification(project, NotificationKind.PLUGINS, "no.updates.available", "", IdeBundle.message("updates.no.plugin.updates.notification"))
+        }
       }
     }
   }
@@ -655,8 +673,9 @@ object UpdateChecker {
                                @NlsContexts.NotificationContent message: String,
                                vararg actions: NotificationAction) {
     val type = if (kind == NotificationKind.PLATFORM) NotificationType.IDE_UPDATE else NotificationType.INFORMATION
-    val notification = getNotificationGroup().createNotification(title, XmlStringUtil.wrapInHtml(message), type, null, displayId)
-    notification.collapseActionsDirection = Notification.CollapseActionsDirection.KEEP_LEFTMOST
+    val notification = getNotificationGroup().createNotification(title, XmlStringUtil.wrapInHtml(message), type)
+      .setDisplayId(displayId)
+      .setCollapseDirection(Notification.CollapseActionsDirection.KEEP_LEFTMOST)
     notification.whenExpired { ourShownNotifications.remove(kind, notification) }
     actions.forEach { notification.addAction(it) }
     notification.notify(project)

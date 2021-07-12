@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.asJava
 
@@ -44,8 +41,8 @@ class KotlinLightClassInheritorTest : KotlinLightCodeInsightFixtureTestCase() {
 
     private fun doTestInheritorByText(text: String, superQName: String, checkDeep: Boolean, result: Boolean = true) {
         val file = myFixture.configureByText("A.kt", text) as KtFile
-        val jetClass = file.declarations.filterIsInstance<KtClass>().single()
-        val psiClass = KotlinAsJavaSupport.getInstance(project).getLightClass(jetClass)!!
+        val ktClass = file.declarations.filterIsInstance<KtClass>().single()
+        val psiClass = KotlinAsJavaSupport.getInstance(project).getLightClass(ktClass)!!
         val baseClass = JavaPsiFacade.getInstance(project).findClass(superQName, GlobalSearchScope.allScope(project))!!
         Assert.assertEquals(psiClass.isInheritor(baseClass, checkDeep), result)
     }

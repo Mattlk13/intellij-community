@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ui.win;
 
 import com.intellij.ide.RecentProjectListActionProvider;
@@ -20,6 +20,9 @@ import org.jetbrains.annotations.SystemIndependent;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -33,35 +36,45 @@ public final class WinDockDelegate implements SystemDock.Delegate {
 
   @Override
   public void updateRecentProjectsMenu() {
-    final List<AnAction> recentProjectActions = RecentProjectListActionProvider.getInstance().getActions(false);
+    final var stackTraceHolder = new Throwable("Asynchronously launched from here");
 
-    final @NotNull Task @NotNull [] tasks = convertToJumpTasks(recentProjectActions);
+    ForkJoinPool.commonPool().execute(() -> {
+      try {
+        final var wsi = wsiFuture.get(30, TimeUnit.SECONDS);
+        if (wsi == null) {
+          return;
+        }
 
-    try {
-      wsi.postShellTask((@NotNull final WinShellIntegration.ShellContext ctx) -> {
-        ctx.clearRecentTasksList();
-        ctx.setRecentTasksList(tasks);
-      }).get();
-    }
-    catch (final InterruptedException e) {
-      LOG.warn(e);
-    }
-    catch (final Throwable e) {
-      LOG.error(e);
-    }
+        final List<AnAction> recentProjectActions = RecentProjectListActionProvider.getInstance().getActions(false);
+        final @NotNull JumpTask @NotNull [] jumpTasks = convertToJumpTasks(recentProjectActions);
+
+        wsi.postShellTask((final @NotNull WinShellIntegration.ShellContext ctx) -> {
+          ctx.clearRecentTasksList();
+          ctx.setRecentTasksList(jumpTasks);
+        }).get();
+      }
+      catch (final InterruptedException e) {
+        e.addSuppressed(stackTraceHolder);
+        LOG.warn(e);
+      }
+      catch (final Throwable e) {
+        e.addSuppressed(stackTraceHolder);
+        LOG.error(e);
+      }
+    });
   }
 
 
-  private WinDockDelegate(@NotNull final WinShellIntegration wsi) {
-    this.wsi = wsi;
+  private WinDockDelegate(final @NotNull Future<@Nullable WinShellIntegration> wsiFuture) {
+    this.wsiFuture = wsiFuture;
   }
 
 
-  private static @NotNull Task @NotNull [] convertToJumpTasks(final @NotNull List<AnAction> actions) {
+  private static @NotNull JumpTask @NotNull [] convertToJumpTasks(final @NotNull List<AnAction> actions) {
     final String launcherFileName = ApplicationNamesInfo.getInstance().getScriptName() + (CpuArch.isIntel64() ? "64" : "") + ".exe";
     final String launcherPath = Paths.get(PathManager.getBinPath(), launcherFileName).toString();
 
-    final @NotNull Task @NotNull [] result = new Task[actions.size()];
+    final @NotNull JumpTask @NotNull [] result = new JumpTask[actions.size()];
 
     int i = 0;
     for (final var action : actions) {
@@ -82,24 +95,28 @@ public final class WinDockDelegate implements SystemDock.Delegate {
       }
 
       final @NotNull String taskTitle;
+      final @NotNull String taskTooltip;
       {
         final @Nullable String presentationText;
         final @Nullable String projectName;
 
         if (!Strings.isEmptyOrSpaces(presentationText = reopenProjectAction.getTemplatePresentation().getText())) {
           taskTitle = presentationText;
+          taskTooltip = presentationText + " (" + projectPathSystem + ")";
         }
-        else if (!Strings.isEmptyOrSpaces(projectName = reopenProjectAction.getProjectName())) {
+        else if (!Strings.isEmptyOrSpaces(projectName = reopenProjectAction.getProjectNameToDisplay())) {
           taskTitle = projectName;
+          taskTooltip = projectName + " (" + projectPathSystem + ")";
         }
         else {
           taskTitle = projectPathSystem;
+          taskTooltip = projectPathSystem;
         }
       }
 
       final String taskArgs = "\"" + projectPathSystem + "\"";
 
-      result[i++] = new Task(launcherPath, taskArgs, taskTitle);
+      result[i++] = new JumpTask(taskTitle, launcherPath, taskArgs, taskTooltip);
     }
 
     if (i < result.length) {
@@ -110,28 +127,31 @@ public final class WinDockDelegate implements SystemDock.Delegate {
   }
 
 
-  private final @NotNull WinShellIntegration wsi;
+  private final @NotNull Future<@Nullable WinShellIntegration> wsiFuture;
 
 
   private static final Logger LOG = Logger.getInstance(WinDockDelegate.class);
   private static final @Nullable WinDockDelegate instance;
 
   static {
-    @Nullable WinDockDelegate instanceInitializer = null;
+    final var stackTraceHolder = new Throwable("Asynchronously launched from here");
 
-    try {
-      if (Registry.is("windows.jumplist")) {
-        final @Nullable var wsi = WinShellIntegration.getInstance();
-        if (wsi != null) {
-          instanceInitializer = new WinDockDelegate(WinShellIntegration.getInstance());
+    //                                                          Not AppExecutorUtil.getAppExecutorService() for class loading optimization
+    final @NotNull Future<@Nullable WinShellIntegration> wsiFuture = ForkJoinPool.commonPool().submit(() -> {
+      try {
+        if (!Registry.is("windows.jumplist")) {
+          return null;
         }
-      }
-    }
-    catch (Throwable err) {
-      LOG.error(err);
-      instanceInitializer = null;
-    }
 
-    instance = instanceInitializer;
+        return WinShellIntegration.getInstance();
+      }
+      catch (final Throwable err) {
+        err.addSuppressed(stackTraceHolder);
+        LOG.error("Failed to initialize com.intellij.ui.win.WinShellIntegration instance", err);
+        return null;
+      }
+    });
+
+    instance = new WinDockDelegate(wsiFuture);
   }
 }

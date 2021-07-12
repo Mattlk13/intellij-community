@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.util;
 
 import com.intellij.icons.AllIcons;
@@ -567,8 +567,8 @@ public class IconUtil {
    *
    * @see CopyableIcon
    */
-  @Contract("null, _->null; !null, _->!null")
-  public static Icon copy(@Nullable Icon icon, @Nullable Component ancestor) {
+  @NotNull
+  public static Icon copy(@NotNull Icon icon, @Nullable Component ancestor) {
     return IconLoader.copy(icon, ancestor, false);
   }
 
@@ -577,8 +577,8 @@ public class IconUtil {
    *
    * @see CopyableIcon
    */
-  @Contract("null, _->null; !null, _->!null")
-  public static Icon deepCopy(@Nullable Icon icon, @Nullable Component ancestor) {
+  @NotNull
+  public static Icon deepCopy(@NotNull Icon icon, @Nullable Component ancestor) {
     return IconLoader.copy(icon, ancestor, true);
   }
 
@@ -953,4 +953,15 @@ public class IconUtil {
     return icon;
   }
 
+  public static @Nullable Icon rowIcon(@Nullable Icon left, @Nullable Icon right) {
+    if (left != null && right != null) {
+      return new RowIcon(left, right);
+    }
+    else if (left != null) {
+      return left;
+    }
+    else {
+      return right;
+    }
+  }
 }

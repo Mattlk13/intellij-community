@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.java.psi.formatter.java;
 
 import com.intellij.JavaTestUtil;
@@ -763,7 +763,7 @@ public class JavaFormatterSpaceTest extends AbstractJavaFormatterTest {
                  "    case 4: yield  ;\n" +
                  "}",
                  "String s = switch (i) {\n" +
-                 "    case 0: yield(foo);\n" +
+                 "    case 0: yield (foo);\n" +
                  "    case 1: yield 42;\n" +
                  "    case 3: yield label;\n" +
                  "    case 4: yield ;\n" +
@@ -843,5 +843,20 @@ public class JavaFormatterSpaceTest extends AbstractJavaFormatterTest {
 
       "public Long getId() { return id; }"
     );
+  }
+
+  public void testAndAndInGuardedPattern() {
+    doClassTest(
+      "void test(Object obj){\n" +
+      "  switch(obj){\n" +
+      "  case String s&&s.isEmpty()->System.out.println();\n" +
+      "  }\n" +
+      "}\n",
+
+      "void test(Object obj) {\n" +
+      "    switch (obj) {\n" +
+      "        case String s && s.isEmpty() -> System.out.println();\n" +
+      "    }\n" +
+      "}\n");
   }
 }

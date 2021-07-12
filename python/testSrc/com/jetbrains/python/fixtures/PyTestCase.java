@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.jetbrains.python.fixtures;
 
 import com.google.common.base.Joiner;
@@ -66,9 +66,7 @@ import java.io.File;
 import java.util.*;
 import java.util.function.Consumer;
 
-/**
- * @author yole
- */
+
 @TestDataPath("$CONTENT_ROOT/../testData/")
 public abstract class PyTestCase extends UsefulTestCase {
 
@@ -449,20 +447,6 @@ public abstract class PyTestCase extends UsefulTestCase {
     final Editor editor = myFixture.getEditor();
     assertInstanceOf(editor, EditorEx.class);
     handler.invoke(myFixture.getProject(), editor, myFixture.getFile(), ((EditorEx)editor).getDataContext());
-  }
-
-  /**
-   * Configures project by some path. It is here to emulate {@link com.intellij.platform.PlatformProjectOpenProcessor}
-   *
-   * @param path         path to open
-   * @param configurator configurator to use
-   */
-  protected void configureProjectByProjectConfigurators(@NotNull final String path,
-                                                        @NotNull final DirectoryProjectConfigurator configurator) {
-    final VirtualFile newPath =
-      myFixture.copyDirectoryToProject(path, String.format("%s%s%s", "temp_for_project_conf", File.pathSeparator, path));
-    final Ref<Module> moduleRef = new Ref<>(myFixture.getModule());
-    configurator.configureProject(myFixture.getProject(), newPath, moduleRef, false);
   }
 
   public static String getHelpersPath() {

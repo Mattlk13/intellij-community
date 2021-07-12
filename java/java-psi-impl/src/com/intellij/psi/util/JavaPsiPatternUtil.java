@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.psi.util;
 
 import com.intellij.psi.*;
@@ -57,12 +57,110 @@ public final class JavaPsiPatternUtil {
     if (pattern instanceof PsiTypeTestPattern) {
       PsiExpression operand = instanceOf.getOperand();
       PsiTypeElement checkType = ((PsiTypeTestPattern)pattern).getCheckType();
+      if (checkType == null) return null;
       if (checkType.getType().equals(operand.getType())) {
         return operand.getText();
       }
       return "(" + checkType.getText() + ")" + operand.getText();
     }
     return null;
+  }
+
+  @Contract("null -> null")
+  @Nullable
+  public static PsiPattern skipParenthesizedPatternDown(PsiPattern pattern) {
+    while (pattern instanceof PsiParenthesizedPattern) {
+      pattern = ((PsiParenthesizedPattern)pattern).getPattern();
+    }
+    return pattern;
+  }
+
+  /**
+   * @param pattern
+   * @return type of variable in pattern, or null if pattern is incomplete
+   */
+  @Contract(value = "null -> null", pure = true)
+  @Nullable
+  public static PsiType getPatternType(@Nullable PsiPattern pattern) {
+    if (pattern == null) return null;
+    if (pattern instanceof PsiGuardedPattern) {
+      return getPatternType(((PsiGuardedPattern)pattern).getPrimaryPattern());
+    }
+    else if (pattern instanceof PsiParenthesizedPattern) {
+      return getPatternType(((PsiParenthesizedPattern)pattern).getPattern());
+    }
+    else if (pattern instanceof PsiTypeTestPattern) {
+      PsiTypeElement checkType = ((PsiTypeTestPattern)pattern).getCheckType();
+      if (checkType != null) return checkType.getType();
+    }
+    return null;
+  }
+
+  /**
+   * 14.30.3 Pattern Totality and Dominance
+   */
+  @Contract(value = "null, _ -> false", pure = true)
+  public static boolean isTotalForType(@Nullable PsiPattern pattern, @NotNull PsiType type) {
+    if (pattern == null) return false;
+    if (pattern instanceof PsiGuardedPattern) {
+      PsiGuardedPattern guarded = (PsiGuardedPattern)pattern;
+      Object constVal = evaluateConstant(guarded.getGuardingExpression());
+      return isTotalForType(guarded.getPrimaryPattern(), type) && Boolean.TRUE.equals(constVal);
+    }
+    else if (pattern instanceof PsiParenthesizedPattern) {
+      return isTotalForType(((PsiParenthesizedPattern)pattern).getPattern(), type);
+    }
+    else if (pattern instanceof PsiTypeTestPattern) {
+      type = TypeConversionUtil.erasure(type);
+      PsiType baseType = TypeConversionUtil.erasure(getPatternType(pattern));
+      if (type instanceof PsiArrayType || baseType instanceof PsiArrayType) {
+        return baseType != null && TypeConversionUtil.isAssignable(baseType, type);
+      }
+      PsiClass typeClass = PsiTypesUtil.getPsiClass(type);
+      PsiClass baseTypeClass = PsiTypesUtil.getPsiClass(baseType);
+      return typeClass != null && baseTypeClass != null && InheritanceUtil.isInheritorOrSelf(typeClass, baseTypeClass, true);
+    }
+    return false;
+  }
+
+  /**
+   * 14.30.3 Pattern Totality and Dominance
+   */
+  @Contract(value = "null, _ -> false", pure = true)
+  public static boolean dominates(@Nullable PsiPattern who, @NotNull PsiPattern overWhom) {
+    if (who == null) return false;
+    if (overWhom instanceof PsiGuardedPattern) {
+      if (who instanceof PsiTypeTestPattern) {
+        PsiType whoType = getPatternType(who);
+        PsiType overWhomType = getPatternType(overWhom);
+        if (whoType != null && overWhomType != null && whoType.equalsToText(overWhomType.getCanonicalText())) {
+          return true;
+        }
+      }
+      else if (who instanceof PsiParenthesizedPattern) {
+        return dominates(((PsiParenthesizedPattern)who).getPattern(), overWhom);
+      }
+      else if (who instanceof PsiGuardedPattern) {
+        boolean dominates = dominates(((PsiGuardedPattern)who).getPrimaryPattern(), overWhom);
+        if (!dominates) return false;
+        Object constVal = evaluateConstant(((PsiGuardedPattern)who).getGuardingExpression());
+        return Boolean.TRUE.equals(constVal);
+      }
+      else {
+        return false;
+      }
+      return dominates(who, ((PsiGuardedPattern)overWhom).getPrimaryPattern());
+    }
+    else if (overWhom instanceof PsiParenthesizedPattern) {
+      PsiPattern pattern = ((PsiParenthesizedPattern)overWhom).getPattern();
+      if (pattern == null) return false;
+      return dominates(who, pattern);
+    }
+    else if (overWhom instanceof PsiTypeTestPattern) {
+      PsiType overWhomType = getPatternType(overWhom);
+      return overWhomType != null && isTotalForType(who, overWhomType);
+    }
+    return false;
   }
 
   private static void collectPatternVariableCandidates(@NotNull PsiExpression scope, @NotNull PsiExpression expression,
@@ -97,5 +195,12 @@ public final class JavaPsiPatternUtil {
         }
       }
     }
+  }
+
+  @Nullable
+  private static Object evaluateConstant(@Nullable PsiExpression expression) {
+    if (expression == null) return null;
+    return JavaPsiFacade.getInstance(expression.getProject()).getConstantEvaluationHelper()
+      .computeConstantExpression(expression, false);
   }
 }

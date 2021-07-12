@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight.hints
 
@@ -14,7 +11,6 @@ import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.ConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
-import org.jetbrains.kotlin.idea.parameterInfo.TYPE_INFO_PREFIX
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.KtCallElement
 import org.jetbrains.kotlin.psi.KtCallExpression
@@ -60,12 +56,7 @@ class KotlinInlayParameterHintsProvider : InlayParameterHintsProvider {
 
     override fun getBlackListDependencyLanguage(): Language = JavaLanguage.INSTANCE
 
-    override fun getInlayPresentation(inlayText: String): String =
-        if (inlayText.startsWith(TYPE_INFO_PREFIX)) {
-            inlayText.substring(TYPE_INFO_PREFIX.length)
-        } else {
-            super.getInlayPresentation(inlayText)
-        }
+    override fun getInlayPresentation(inlayText: String): String = inlayText
 
     private fun getMethodInfo(elem: KtCallElement): HintInfo.MethodInfo? {
         val resolvedCall = elem.resolveToCall()

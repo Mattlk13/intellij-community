@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 /*
  * Class DebuggerUtilsEx
@@ -14,6 +14,7 @@ import com.intellij.debugger.engine.evaluation.*;
 import com.intellij.debugger.engine.evaluation.expression.ExpressionEvaluator;
 import com.intellij.debugger.engine.evaluation.expression.UnBoxingEvaluator;
 import com.intellij.debugger.engine.requests.RequestManagerImpl;
+import com.intellij.debugger.jdi.GeneratedLocation;
 import com.intellij.debugger.jdi.JvmtiError;
 import com.intellij.debugger.jdi.VirtualMachineProxyImpl;
 import com.intellij.debugger.requests.Requestor;
@@ -884,8 +885,12 @@ public abstract class DebuggerUtilsEx extends DebuggerUtils {
     if (type != null) {
       res.append(type.name()).append('.');
     }
-    res.append(location.method().name());
+    res.append(getLocationMethodName(location));
     return res.toString();
+  }
+
+  public static String getLocationMethodName(@NotNull Location location) {
+    return location instanceof GeneratedLocation ? ((GeneratedLocation)location).methodName() : location.method().name();
   }
 
   private static PsiElement getNextElement(PsiElement element) {
@@ -1087,7 +1092,7 @@ public abstract class DebuggerUtilsEx extends DebuggerUtils {
 
   public static void enableCollection(ObjectReference reference) {
     if (reference instanceof ObjectReferenceImpl) {
-      ((ObjectReferenceImpl)reference).enableCollection(false);
+      ((ObjectReferenceImpl)reference).enableCollectionAsync();
     }
     else {
       try {

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.updateSettings.impl;
 
 import com.intellij.ide.IdeBundle;
@@ -31,7 +31,6 @@ import com.intellij.ui.components.panels.Wrapper;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.JBDimension;
 import com.intellij.util.ui.JBUI;
-import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -46,11 +45,9 @@ import java.util.stream.Collectors;
 /**
  * @author Alexander Lobas
  */
-public class PluginUpdateDialog extends DialogWrapper {
-
+final class PluginUpdateDialog extends DialogWrapper {
   private final @NotNull Collection<PluginDownloader> myDownloaders;
   private final boolean myPlatformUpdate;
-
   private final MyPluginModel myPluginModel;
   private final PluginsGroupComponent myPluginsPanel;
   private final PluginsGroup myGroup = new PluginsGroup("");
@@ -60,21 +57,20 @@ public class PluginUpdateDialog extends DialogWrapper {
 
   private @Nullable Runnable myFinishCallback;
 
-  public PluginUpdateDialog(@Nullable Project project,
-                            @NotNull Collection<PluginDownloader> downloaders,
-                            @Nullable Collection<PluginNode> customRepositoryPlugins) {
+  PluginUpdateDialog(@Nullable Project project,
+                     @NotNull Collection<PluginDownloader> downloaders,
+                     @Nullable Collection<PluginNode> customRepositoryPlugins) {
     this(project, downloaders, customRepositoryPlugins, false);
     setTitle(IdeBundle.message("dialog.title.plugin.updates"));
   }
 
-  PluginUpdateDialog(@Nullable Project project,
-                     @NotNull Collection<PluginDownloader> updatedPlugins) {
+  PluginUpdateDialog(@Nullable Project project, @NotNull Collection<PluginDownloader> updatedPlugins) {
     this(project, updatedPlugins, null, true);
     setTitle(IdeBundle.message("updates.dialog.title", ApplicationNamesInfo.getInstance().getFullProductName()));
   }
 
   private PluginUpdateDialog(@Nullable Project project,
-                             @NotNull Collection<PluginDownloader> downloaders,
+                             Collection<PluginDownloader> downloaders,
                              @Nullable Collection<PluginNode> customRepositoryPlugins,
                              boolean platformUpdate) {
     super(project, true);
@@ -111,13 +107,17 @@ public class PluginUpdateDialog extends DialogWrapper {
 
     MultiSelectionEventHandler eventHandler = new MultiSelectionEventHandler();
 
-    myPluginsPanel = new PluginsGroupComponent(new PluginListLayout(), eventHandler, descriptor -> createListComponent(descriptor));
+    myPluginsPanel = new PluginsGroupComponent(eventHandler) {
+      @Override
+      protected @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor descriptor) {
+        @SuppressWarnings("unchecked") ListPluginComponent component = new ListPluginComponent(myPluginModel, descriptor, LinkListener.NULL, true);
+        component.setOnlyUpdateMode();
+        component.getChooseUpdateButton().addActionListener(e -> updateButtons());
+        return component;
+      }
+    };
     PluginManagerConfigurable.registerCopyProvider(myPluginsPanel);
-    myPluginsPanel.setSelectionListener(__ -> {
-      List<ListPluginComponent> selection = myPluginsPanel.getSelection();
-      int size = selection.size();
-      myDetailsPage.showPlugin(size == 1 ? selection.get(0) : null, size > 1);
-    });
+    myPluginsPanel.setSelectionListener(__ -> myDetailsPage.showPlugins(myPluginsPanel.getSelection()));
 
     for (PluginDownloader plugin : downloaders) {
       myGroup.descriptors.add(plugin.getDescriptor());
@@ -142,20 +142,17 @@ public class PluginUpdateDialog extends DialogWrapper {
     for (ListPluginComponent plugin : myGroup.ui.plugins) {
       if (plugin.getChooseUpdateButton().isSelected()) {
         count++;
-        try {
-          total += Long.parseLong(((PluginNode)plugin.getPluginDescriptor()).getSize());
-        }
-        catch (NumberFormatException ignore) {
+
+        IdeaPluginDescriptor descriptor = plugin.getPluginDescriptor();
+        if (descriptor instanceof PluginNode) {
+          total += ((PluginNode)descriptor).getIntegerSize();
         }
       }
     }
 
-    String text = null;
-    if (total > 0) {
-      text = IdeBundle.message("plugin.update.dialog.total.label", StringUtilRt.formatFileSize(total).toUpperCase(Locale.ENGLISH));
-    }
-
-    myTotalLabel.setText(text);
+    myTotalLabel.setText(IdeBundle.message("plugin.update.dialog.total.label",
+                                           StringUtilRt.formatFileSize(total).toUpperCase(Locale.ENGLISH)));
+    myTotalLabel.setVisible(total > 0);
     getOKAction().setEnabled(count > 0);
   }
 
@@ -182,41 +179,46 @@ public class PluginUpdateDialog extends DialogWrapper {
     runUpdateAll(toDownloads, getContentPanel(), myFinishCallback);
   }
 
-  public static void runUpdateAll(@NotNull Collection<PluginDownloader> toDownloads,
+  public static void runUpdateAll(@NotNull Collection<PluginDownloader> toDownload,
                                   @Nullable JComponent ownerComponent,
                                   @Nullable Runnable finishCallback) {
     String message = IdeBundle.message("updates.notification.title", ApplicationNamesInfo.getInstance().getFullProductName());
     new Task.Backgroundable(null, message, true, PerformInBackgroundOption.DEAF) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        List<PluginDownloader> downloaders = downloadPluginUpdates(toDownloads, indicator);
-        if (!downloaders.isEmpty()) {
-          ApplicationManager.getApplication().invokeLater(() -> {
-            PluginUpdateResult result = UpdateInstaller.installDownloadedPluginUpdates(downloaders, ownerComponent, true);
-            if (result.getPluginsInstalled().size() > 0) {
-              if (!result.getRestartRequired()) {
-                String message;
-                if (result.getPluginsInstalled().size() == 1) {
-                  IdeaPluginDescriptor plugin = result.getPluginsInstalled().get(0);
-                  message = IdeBundle.message("notification.content.updated.plugin.to.version", plugin.getName(), plugin.getVersion());
-                }
-                else {
-                  String names = result.getPluginsInstalled().stream().map(PluginDescriptor::getName).collect(Collectors.joining(", "));
-                  message = IdeBundle.message("notification.content.updated.plugins", names);
-                }
-                UpdateChecker.getNotificationGroupForUpdateResults()
-                  .createNotification(message, NotificationType.INFORMATION, "plugins.updated.without.restart")
-                  .notify(myProject);
-              }
-              else if (WelcomeFrame.getInstance() == null) {
-                PluginManagerMain.notifyPluginsUpdated(null);
-              }
-              else {
-                PluginManagerConfigurable.shutdownOrRestartApp();
-              }
-            }
-          });
+        List<PluginDownloader> downloaders = downloadPluginUpdates(toDownload, indicator);
+        if (downloaders.isEmpty()) {
+          return;
         }
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+          PluginUpdateResult result = UpdateInstaller.installDownloadedPluginUpdates(downloaders, dl -> !dl.tryInstallWithoutRestart(ownerComponent));
+          if (result.getPluginsInstalled().isEmpty()) {
+            return;
+          }
+
+          if (!result.getRestartRequired()) {
+            String message;
+            if (result.getPluginsInstalled().size() == 1) {
+              IdeaPluginDescriptor plugin = result.getPluginsInstalled().get(0);
+              message = IdeBundle.message("notification.content.updated.plugin.to.version", plugin.getName(), plugin.getVersion());
+            }
+            else {
+              String names = result.getPluginsInstalled().stream().map(PluginDescriptor::getName).collect(Collectors.joining(", "));
+              message = IdeBundle.message("notification.content.updated.plugins", names);
+            }
+            UpdateChecker.getNotificationGroupForUpdateResults()
+              .createNotification(message, NotificationType.INFORMATION)
+              .setDisplayId("plugins.updated.without.restart")
+              .notify(myProject);
+          }
+          else if (WelcomeFrame.getInstance() == null) {
+            PluginManagerMain.notifyPluginsUpdated(null);
+          }
+          else {
+            PluginManagerConfigurable.shutdownOrRestartApp();
+          }
+        }, ownerComponent != null ? ModalityState.stateForComponent(ownerComponent) : ModalityState.defaultModalityState());
       }
 
       @Override
@@ -228,19 +230,17 @@ public class PluginUpdateDialog extends DialogWrapper {
     }.queue();
   }
 
-  private static @NotNull List<PluginDownloader> downloadPluginUpdates(Collection<PluginDownloader> toDownloads,
-                                                                       @NotNull ProgressIndicator indicator) {
+  private static List<PluginDownloader> downloadPluginUpdates(Collection<PluginDownloader> toDownload, ProgressIndicator indicator) {
     List<String> errors = new ArrayList<>();
-
     try {
-      for (PluginDownloader download : toDownloads) {
-        download.setErrorsCollector(errors);
+      for (PluginDownloader downloader : toDownload) {
+        downloader.setErrorsCollector(errors);
       }
-      return UpdateInstaller.downloadPluginUpdates(toDownloads, indicator);
+      return UpdateInstaller.downloadPluginUpdates(toDownload, indicator);
     }
     finally {
-      for (PluginDownloader download : toDownloads) {
-        download.setErrorsCollector(null);
+      for (PluginDownloader downloader : toDownload) {
+        downloader.setErrorsCollector(null);
       }
       if (!errors.isEmpty()) {
         String text = StringUtil.join(errors, "\n\n");
@@ -256,14 +256,14 @@ public class PluginUpdateDialog extends DialogWrapper {
   }
 
   @Override
-  protected @Nullable JPanel createSouthAdditionalPanel() {
+  protected JPanel createSouthAdditionalPanel() {
     JPanel panel = new Wrapper(myIgnoreAction);
     panel.setBorder(JBUI.Borders.emptyLeft(10));
     return panel;
   }
 
   @Override
-  protected @NonNls @Nullable String getHelpId() {
+  protected String getHelpId() {
     return "plugin.update.dialog";
   }
 
@@ -277,16 +277,8 @@ public class PluginUpdateDialog extends DialogWrapper {
     return "#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog";
   }
 
-  private @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor updateDescriptor) {
-    //noinspection unchecked
-    ListPluginComponent component = new ListPluginComponent(myPluginModel, updateDescriptor, LinkListener.NULL, true);
-    component.setOnlyUpdateMode();
-    component.getChooseUpdateButton().addActionListener(e -> updateButtons());
-    return component;
-  }
-
   @Override
-  protected @Nullable JComponent createCenterPanel() {
+  protected JComponent createCenterPanel() {
     OnePixelSplitter splitter = new OnePixelSplitter(false, 0.45f) {
       @Override
       protected Divider createDivider() {

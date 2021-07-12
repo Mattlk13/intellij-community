@@ -1,13 +1,11 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.nj2k
 
 import org.jetbrains.kotlin.lexer.KtKeywordToken
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.load.java.JvmAbi
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.decapitalizeAsciiOnly
 
 fun <T> List<T>.replace(element: T, replacer: T): List<T> {
     val mutableList = toMutableList()
@@ -22,14 +20,14 @@ fun String.asGetterName() =
         ?.takeIf {
             it.isNotEmpty() && it.first().isUpperCase()
                     || it.startsWith("is") && it.length > 2 && it[2].isUpperCase()
-        }?.decapitalize()
+        }?.decapitalizeAsciiOnly()
         ?.escaped()
 
 fun String.asSetterName() =
     takeIf { JvmAbi.isSetterName(it) }
         ?.removePrefix("set")
         ?.takeIf { it.isNotEmpty() && it.first().isUpperCase() }
-        ?.decapitalize()
+        ?.decapitalizeAsciiOnly()
         ?.escaped()
 
 fun String.isPossiblyGetterOrSetterName() =

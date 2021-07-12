@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.introduce;
 
@@ -1012,6 +1009,11 @@ public abstract class ExtractionTestGenerated extends AbstractExtractionTest {
             @TestMetadata("traitFunction.kt")
             public void testTraitFunction() throws Exception {
                 runTest("testData/refactoring/extractFunction/basic/traitFunction.kt");
+            }
+
+            @TestMetadata("unnecessaryNullabilityAnnotation.kt")
+            public void testUnnecessaryNullabilityAnnotation() throws Exception {
+                runTest("testData/refactoring/extractFunction/basic/unnecessaryNullabilityAnnotation.kt");
             }
 
             @TestMetadata("unresolvedWrongReceiver.kt")

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.resolve;
 
@@ -251,6 +248,16 @@ public class ReferenceResolveTestGenerated extends AbstractReferenceResolveTest 
         runTest("testData/resolve/references/JavaReference.kt");
     }
 
+    @TestMetadata("KotlinPropertyAssignment.kt")
+    public void testKotlinPropertyAssignment() throws Exception {
+        runTest("testData/resolve/references/KotlinPropertyAssignment.kt");
+    }
+
+    @TestMetadata("KotlinPropertyWithGetterAndSetterAssignment.kt")
+    public void testKotlinPropertyWithGetterAndSetterAssignment() throws Exception {
+        runTest("testData/resolve/references/KotlinPropertyWithGetterAndSetterAssignment.kt");
+    }
+
     @TestMetadata("MultiDeclarationExtension.kt")
     public void testMultiDeclarationExtension() throws Exception {
         runTest("testData/resolve/references/MultiDeclarationExtension.kt");
@@ -274,6 +281,11 @@ public class ReferenceResolveTestGenerated extends AbstractReferenceResolveTest 
     @TestMetadata("PackageReferenceInImport.kt")
     public void testPackageReferenceInImport() throws Exception {
         runTest("testData/resolve/references/PackageReferenceInImport.kt");
+    }
+
+    @TestMetadata("parameterByName.kt")
+    public void testParameterByName() throws Exception {
+        runTest("testData/resolve/references/parameterByName.kt");
     }
 
     @TestMetadata("PropertyPlaceInClassObjectInObject.kt")

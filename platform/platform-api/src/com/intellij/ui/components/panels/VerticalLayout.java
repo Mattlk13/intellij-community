@@ -1,6 +1,7 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ui.components.panels;
 
+import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.JBInsets;
 import com.intellij.util.ui.JBValue;
 import org.jetbrains.annotations.NotNull;
@@ -185,7 +186,7 @@ public final class VerticalLayout implements LayoutManager2 {
     int gap = myGap.get();
     for (Component component : list) {
       if (component.isVisible()) {
-        Dimension size = component.getPreferredSize();
+        Dimension size = LayoutUtil.getPreferredSize(component);
         int x = 0;
         if (myAlignment == FILL) {
           size.width = width;
@@ -222,7 +223,7 @@ public final class VerticalLayout implements LayoutManager2 {
     Dimension result = null;
     for (Component component : list) {
       if (component.isVisible()) {
-        result = join(result, gap, component.getPreferredSize());
+        result = join(result, gap, LayoutUtil.getPreferredSize(component));
       }
     }
     return result;
@@ -241,10 +242,15 @@ public final class VerticalLayout implements LayoutManager2 {
       else if (aligned && center != null) {
         int topHeight = top == null ? 0 : top.height;
         int bottomHeight = bottom == null ? 0 : bottom.height;
-        result.width += Math.abs(topHeight - bottomHeight);
+        result.height += Math.abs(topHeight - bottomHeight);
       }
       JBInsets.addTo(result, container.getInsets());
       return result;
     }
+  }
+
+  @NotNull
+  public List<? extends Component> getComponents() {
+    return ContainerUtil.concat(myTop, myCenter, myBottom);
   }
 }

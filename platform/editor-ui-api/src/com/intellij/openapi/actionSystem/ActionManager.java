@@ -139,17 +139,29 @@ public abstract class ActionManager {
    * @param messageActionGroup the action group from which the toolbar is created.
    * @return the created panel.
    *
-   * @deprecated use {@link #createActionToolbar(String, ActionGroup, boolean)} or {@link com.intellij.ui.ToolbarDecorator} instead.
+   * @deprecated use regular Swing {@link Action},
+   *   {@link com.intellij.openapi.ui.DialogWrapper#createActions()},
+   *   {@link com.intellij.openapi.ui.DialogWrapper#createLeftSideActions()},
+   *   {@link #createActionToolbar(String, ActionGroup, boolean)}, or
+   *   {@link com.intellij.ui.ToolbarDecorator} instead.
    */
   @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
+  @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
   @NotNull
   public abstract JComponent createButtonToolbar(@NotNull String actionPlace, @NotNull ActionGroup messageActionGroup);
 
   @Nullable
   public abstract AnAction getActionOrStub(@NotNull @NonNls String id);
 
-  public abstract void addTimerListener(int unused, @NotNull TimerListener listener);
+  public abstract void addTimerListener(@NotNull TimerListener listener);
+
+  /**
+   * @deprecated use {@link #addTimerListener(TimerListener)}
+   */
+  @Deprecated
+  public void addTimerListener(int unused, @NotNull TimerListener listener) {
+    addTimerListener(listener);
+  }
 
   public abstract void removeTimerListener(@NotNull TimerListener listener);
 

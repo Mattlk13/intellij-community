@@ -16,16 +16,12 @@ import org.jetbrains.annotations.TestOnly;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
-
-import static com.intellij.util.io.FileChannelUtil.unInterruptible;
 
 public final class PersistentHashMapValueStorage {
   @Nullable
@@ -46,8 +42,6 @@ public final class PersistentHashMapValueStorage {
   static final int BLOCK_SIZE_TO_WRITE_WHEN_SOFT_MAX_RETAINED_LIMIT_IS_HIT = 1024;
 
   public static final class CreationTimeOptions {
-    public static final ThreadLocal<IOCancellationCallback> EXCEPTIONAL_IO_CANCELLATION =
-      new ThreadLocal<>();
     public static final ThreadLocal<Boolean> READONLY = new ThreadLocal<>();
     public static final ThreadLocal<Boolean> COMPACT_CHUNKS_WITH_VALUE_DESERIALIZATION = new ThreadLocal<>();
     public static final ThreadLocal<Boolean> HAS_NO_CHUNKS = new ThreadLocal<>();
@@ -59,13 +53,13 @@ public final class PersistentHashMapValueStorage {
       }
     };
 
-    private final IOCancellationCallback myIOCancellationCallback;
+    private final @NotNull IOCancellationCallback myIOCancellationCallback;
     private final boolean myReadOnly;
     private final boolean myCompactChunksWithValueDeserialization;
     private final boolean myHasNoChunks;
     private final boolean myDoCompression;
 
-    private CreationTimeOptions(IOCancellationCallback callback,
+    private CreationTimeOptions(@NotNull IOCancellationCallback callback,
                                 boolean readOnly,
                                 boolean compactChunksWithValueDeserialization,
                                 boolean hasNoChunks,
@@ -99,7 +93,7 @@ public final class PersistentHashMapValueStorage {
     @NotNull
     static CreationTimeOptions threadLocalOptions() {
       return new CreationTimeOptions(
-        EXCEPTIONAL_IO_CANCELLATION.get(),
+        IOCancellationCallbackHolder.INSTANCE.getUsedIoCallback(),
         READONLY.get() == Boolean.TRUE,
         COMPACT_CHUNKS_WITH_VALUE_DESERIALIZATION.get() == Boolean.TRUE,
         HAS_NO_CHUNKS.get() == Boolean.TRUE,
@@ -264,11 +258,10 @@ public final class PersistentHashMapValueStorage {
   private static final ThreadLocalCachedByteArray myBuffer = new ThreadLocalCachedByteArray();
   private static final int ourBufferLength = 1024;
 
-  private long compactValuesWithoutChunks(@NotNull List<? extends CompactionRecordInfo> infos, @NotNull PersistentHashMapValueStorage storage)
+  private long compactValuesWithoutChunks(@NotNull List<CompactionRecordInfo> infos, @NotNull PersistentHashMapValueStorage storage)
     throws IOException {
     //infos = new ArrayList<PersistentHashMap.CompactionRecordInfo>(infos);
-    infos
-      .sort((Comparator<CompactionRecordInfo>)(info, info2) -> Comparing.compare(info.valueAddress, info2.valueAddress));
+    infos.sort((info, info2) -> Comparing.compare(info.valueAddress, info2.valueAddress));
 
     final int fileBufferLength = 256 * 1024;
     final byte[] buffer = new byte[fileBufferLength];
@@ -329,7 +322,7 @@ public final class PersistentHashMapValueStorage {
     return fragments | ((long)newFragments << 32);
   }
 
-  long compactValues(@NotNull List<? extends CompactionRecordInfo> infos, @NotNull PersistentHashMapValueStorage storage) throws IOException {
+  long compactValues(@NotNull List<CompactionRecordInfo> infos, @NotNull PersistentHashMapValueStorage storage) throws IOException {
     if (myOptions.myHasNoChunks) {
       return compactValuesWithoutChunks(infos, storage);
     }
@@ -640,10 +633,10 @@ public final class PersistentHashMapValueStorage {
 
   // hook for exceptional termination of long io operation
   private void checkCancellation() {
-    if (myOptions.myIOCancellationCallback != null) myOptions.myIOCancellationCallback.checkCancelled();
+    myOptions.myIOCancellationCallback.checkCancelled();
   }
 
-  private int readChunkSize(@NotNull DataInputStream in) throws IOException {
+  private static int readChunkSize(@NotNull DataInputStream in) throws IOException {
     final int chunkSize = DataInputOutputUtil.readINT(in);
     if (chunkSize < 0) {
       throw new IOException("Value storage corrupted: negative chunk size: " + chunkSize);
@@ -720,7 +713,7 @@ public final class PersistentHashMapValueStorage {
     }
   }
 
-  void switchToCompactionMode() {
+  void switchToCompactionMode() throws IOException {
     ourReadersCache.remove(myPath);
     ourFileChannelCache.remove(myPath);
 
@@ -802,15 +795,10 @@ public final class PersistentHashMapValueStorage {
   }
 
   private static final class FileReader implements RAReader {
-    private final FileChannel myFile;
+    private final UnInterruptibleFileChannel myFile;
 
-    private FileReader(Path file) {
-      try {
-        myFile = unInterruptible(FileChannel.open(file, StandardOpenOption.READ));
-      }
-      catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+    private FileReader(Path file) throws IOException {
+      myFile = new UnInterruptibleFileChannel(file, StandardOpenOption.READ);
     }
 
     @Override

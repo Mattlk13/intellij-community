@@ -14,6 +14,7 @@ kotlin {
         compilations.all {
             kotlinOptions.jvmTarget = "1.8"
         }
+        withJava()
         testRuns["test"].executionTask.configure {
             useJUnit()
         }
@@ -22,7 +23,7 @@ kotlin {
         val jvmMain by getting
         val jvmTest by getting {
             dependencies {
-                implementation(kotlin("test-junit"))
+                implementation(kotlin("test"))
             }
         }
     }

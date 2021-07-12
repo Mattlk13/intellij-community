@@ -2,6 +2,7 @@
 package com.intellij.util.indexing;
 
 import com.intellij.openapi.util.Condition;
+import com.intellij.util.io.IOCancellationCallbackHolder;
 import it.unimi.dsi.fastutil.ints.IntIterator;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
@@ -23,6 +24,8 @@ public final class InvertedIndexUtil {
     IntSet mainIntersection = null;
 
     for (K dataKey : dataKeys) {
+      IOCancellationCallbackHolder.checkCancelled();
+
       if (keyChecker != null && !keyChecker.value(dataKey)) continue;
 
       IntSet copy = new IntOpenHashSet();
@@ -33,6 +36,7 @@ public final class InvertedIndexUtil {
         if (valueChecker != null && !valueChecker.value(value)) {
           continue;
         }
+        IOCancellationCallbackHolder.checkCancelled();
 
         ValueContainer.IntIterator iterator = valueIt.getInputIdsIterator();
 
@@ -41,8 +45,7 @@ public final class InvertedIndexUtil {
           while (iterator.hasNext()) {
             final int id = iterator.next();
             if (mainIntersection == null && (idChecker == null || idChecker.test(id)) ||
-                mainIntersection != null && mainIntersection.contains(id)
-              ) {
+                mainIntersection != null && mainIntersection.contains(id)) {
               copy.add(id);
             }
           }

@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.conversion.copy
 
@@ -35,11 +21,16 @@ import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.idea.util.application.runWriteAction
+import org.jetbrains.kotlin.idea.util.runReadActionInSmartMode
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtImportDirective
 import org.jetbrains.kotlin.psi.psiUtil.referenceExpression
+import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 
+/**
+ * Tested with TextJavaToKotlinCopyPasteConversionTestGenerated
+ */
 class PlainTextPasteImportResolver(private val dataForConversion: DataForConversion, val targetFile: KtFile) {
     private val file = dataForConversion.file
     private val project = targetFile.project
@@ -211,21 +202,25 @@ class PlainTextPasteImportResolver(private val dataForConversion: DataForConvers
             }
 
 
-            val elementsWithUnresolvedRef = runReadAction {
+            val smartPointerManager = SmartPointerManager.getInstance(file.project)
+            val elementsWithUnresolvedRef = project.runReadActionInSmartMode {
                 PsiTreeUtil.collectElements(file) { element ->
                     element.reference != null
                             && element.reference is PsiQualifiedReference
                             && element.reference?.resolve() == null
-                }
+                }.map { smartPointerManager.createSmartPsiElementPointer(it) }
             }
 
-            val reversed = elementsWithUnresolvedRef.reversedArray()
+            val reversed = elementsWithUnresolvedRef.reversed()
+            val progressIndicator = ProgressManager.getInstance().progressIndicator
+            progressIndicator?.isIndeterminate = false
             reversed.forEachIndexed { index, value ->
-                ProgressManager.getInstance().progressIndicator?.fraction = 1.0 * index / reversed.size
-                val reference = value.reference as PsiQualifiedReference
-                if (!tryResolveReference(reference)) {
-                    runReadAction { reference.referenceName }?.let {
-                        failedToResolveReferenceNames += it
+                progressIndicator?.fraction = 1.0 * index / reversed.size
+                runReadAction { value.element?.reference?.safeAs<PsiQualifiedReference>() }?.let { reference ->
+                    if (!tryResolveReference(reference)) {
+                        runReadAction { reference.referenceName }?.let {
+                            failedToResolveReferenceNames += it
+                        }
                     }
                 }
             }

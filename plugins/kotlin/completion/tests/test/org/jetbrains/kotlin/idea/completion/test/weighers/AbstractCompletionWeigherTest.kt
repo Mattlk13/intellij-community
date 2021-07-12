@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.completion.test.weighers
 
@@ -26,10 +23,16 @@ abstract class AbstractCompletionWeigherTest(val completionType: CompletionType,
         val items = InTextDirectivesUtils.findArrayWithPrefixes(text, "// ORDER:")
         Assert.assertTrue("""Some items should be defined with "// ORDER:" directive""", items.isNotEmpty())
 
-        withCustomCompilerOptions(text, project, module) {
-            myFixture.complete(completionType, InTextDirectivesUtils.getPrefixedInt(text, "// INVOCATION_COUNT:") ?: 1)
-            myFixture.assertPreferredCompletionItems(InTextDirectivesUtils.getPrefixedInt(text, "// SELECTED:") ?: 0, *items)
+        executeTest {
+            withCustomCompilerOptions(text, project, module) {
+                myFixture.complete(completionType, InTextDirectivesUtils.getPrefixedInt(text, "// INVOCATION_COUNT:") ?: 1)
+                myFixture.assertPreferredCompletionItems(InTextDirectivesUtils.getPrefixedInt(text, "// SELECTED:") ?: 0, *items)
+            }
         }
+    }
+
+    open fun executeTest(test: () -> Unit) {
+        test()
     }
 }
 

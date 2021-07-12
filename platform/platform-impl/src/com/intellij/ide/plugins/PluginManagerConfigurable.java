@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.plugins;
 
 import com.intellij.execution.process.ProcessIOExecutorService;
@@ -33,12 +33,12 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupListener;
 import com.intellij.openapi.ui.popup.LightweightWindowEvent;
+import com.intellij.openapi.updateSettings.impl.UpdateChecker;
 import com.intellij.openapi.updateSettings.impl.UpdateSettings;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.util.text.StringUtilRt;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.LicensingFacade;
 import com.intellij.ui.RelativeFont;
@@ -58,7 +58,6 @@ import org.jetbrains.annotations.*;
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
-import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.*;
@@ -92,8 +91,6 @@ public final class PluginManagerConfigurable
   public static final int ITEMS_PER_GROUP = 9;
 
   public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
-  private static final DecimalFormat K_FORMAT = new DecimalFormat("###.#K");
-  private static final DecimalFormat M_FORMAT = new DecimalFormat("###.#M");
 
   private TabbedPaneHeaderComponent myTabHeaderComponent;
   private MultiPanel myCardPanel;
@@ -200,6 +197,8 @@ public final class PluginManagerConfigurable
       myTabHeaderComponent.update();
     });
     myPluginModel.setPluginUpdatesService(myPluginUpdatesService);
+
+    UpdateChecker.updateDescriptorsForInstalledPlugins(InstalledPluginsState.getInstance());
 
     createMarketplaceTab();
     createInstalledTab();
@@ -342,9 +341,12 @@ public final class PluginManagerConfigurable
       @Override
       protected JComponent createPluginsPanel(@NotNull Consumer<? super PluginsGroupComponent> selectionListener) {
         MultiSelectionEventHandler eventHandler = new MultiSelectionEventHandler();
-        myMarketplacePanel =
-          new PluginsGroupComponentWithProgress(new PluginListLayout(), eventHandler,
-                                                d -> new ListPluginComponent(myPluginModel, d, mySearchListener, true));
+        myMarketplacePanel = new PluginsGroupComponentWithProgress(eventHandler) {
+          @Override
+          protected @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor descriptor) {
+            return new ListPluginComponent(myPluginModel, descriptor, mySearchListener, true);
+          }
+        };
 
         myMarketplacePanel.setSelectionListener(selectionListener);
         registerCopyProvider(myMarketplacePanel);
@@ -626,9 +628,12 @@ public final class PluginManagerConfigurable
         MultiSelectionEventHandler eventHandler = new MultiSelectionEventHandler();
         marketplaceController.setSearchResultEventHandler(eventHandler);
 
-        PluginsGroupComponentWithProgress panel =
-          new PluginsGroupComponentWithProgress(new PluginListLayout(), eventHandler,
-                                                descriptor -> new ListPluginComponent(myPluginModel, descriptor, mySearchListener, true));
+        PluginsGroupComponentWithProgress panel = new PluginsGroupComponentWithProgress(eventHandler) {
+          @Override
+          protected @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor descriptor) {
+            return new ListPluginComponent(myPluginModel, descriptor, mySearchListener, true);
+          }
+        };
 
         panel.setSelectionListener(selectionListener);
         registerCopyProvider(panel);
@@ -749,9 +754,12 @@ public final class PluginManagerConfigurable
       @Override
       protected JComponent createPluginsPanel(@NotNull Consumer<? super PluginsGroupComponent> selectionListener) {
         MultiSelectionEventHandler eventHandler = new MultiSelectionEventHandler();
-        myInstalledPanel =
-          new PluginsGroupComponent(new PluginListLayout(), eventHandler,
-                                    descriptor -> new ListPluginComponent(myPluginModel, descriptor, mySearchListener, false));
+        myInstalledPanel = new PluginsGroupComponent(eventHandler) {
+          @Override
+          protected @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor descriptor) {
+            return new ListPluginComponent(myPluginModel, descriptor, mySearchListener, false);
+          }
+        };
 
         myInstalledPanel.setSelectionListener(selectionListener);
         registerCopyProvider(myInstalledPanel);
@@ -917,16 +925,13 @@ public final class PluginManagerConfigurable
               );
           }
 
-          @Nullable
           @Override
-          protected List<String> getValues(@NotNull String attribute) {
-            if (SearchWords.ORGANIZATION.getValue().equals(attribute)) {
-              return myPluginModel.getVendors();
-            }
-            if (SearchWords.TAG.getValue().equals(attribute)) {
-              return myPluginModel.getTags();
-            }
-            return null;
+          protected @Nullable SortedSet<String> getValues(@NotNull String attribute) {
+            return SearchWords.ORGANIZATION.getValue().equals(attribute) ?
+                   myPluginModel.getVendors() :
+                   SearchWords.TAG.getValue().equals(attribute) ?
+                   myPluginModel.getTags() :
+                   null;
           }
 
           @Override
@@ -938,9 +943,12 @@ public final class PluginManagerConfigurable
         MultiSelectionEventHandler eventHandler = new MultiSelectionEventHandler();
         installedController.setSearchResultEventHandler(eventHandler);
 
-        PluginsGroupComponent panel =
-          new PluginsGroupComponent(new PluginListLayout(), eventHandler,
-                                    descriptor -> new ListPluginComponent(myPluginModel, descriptor, mySearchListener, false));
+        PluginsGroupComponent panel = new PluginsGroupComponent(eventHandler) {
+          @Override
+          protected @NotNull ListPluginComponent createListComponent(@NotNull IdeaPluginDescriptor descriptor) {
+            return new ListPluginComponent(myPluginModel, descriptor, mySearchListener, false);
+          }
+        };
 
         panel.setSelectionListener(selectionListener);
         registerCopyProvider(panel);
@@ -1169,12 +1177,12 @@ public final class PluginManagerConfigurable
     CopyProvider copyProvider = new CopyProvider() {
       @Override
       public void performCopy(@NotNull DataContext dataContext) {
-        StringBuilder result = new StringBuilder();
-        for (ListPluginComponent pluginComponent : component.getSelection()) {
-          IdeaPluginDescriptor descriptor = pluginComponent.getPluginDescriptor();
-          result.append(descriptor.getName()).append(" (").append(descriptor.getVersion()).append(")\n");
-        }
-        CopyPasteManager.getInstance().setContents(new TextTransferable(result.substring(0, result.length() - 1)));
+        String text = StringUtil.join(component.getSelection(),
+                                      pluginComponent -> {
+                                        IdeaPluginDescriptor descriptor = pluginComponent.getPluginDescriptor();
+                                        return String.format("%s (%s)", descriptor.getName(), descriptor.getVersion());
+                                      }, "\n");
+        CopyPasteManager.getInstance().setContents(new TextTransferable(text));
       }
 
       @Override
@@ -1191,8 +1199,7 @@ public final class PluginManagerConfigurable
     DataManager.registerDataProvider(component, dataId -> PlatformDataKeys.COPY_PROVIDER.is(dataId) ? copyProvider : null);
   }
 
-  @NotNull
-  public static List<String> getTags(@NotNull IdeaPluginDescriptor plugin) {
+  public static @NotNull List<String> getTags(@NotNull IdeaPluginDescriptor plugin) {
     List<String> tags = null;
     String productCode = plugin.getProductCode();
 
@@ -1207,7 +1214,7 @@ public final class PluginManagerConfigurable
           }
         }
         else if (tags == null) {
-          return Collections.singletonList(Tags.Paid.name());
+          return List.of(Tags.Paid.name());
         }
         else if (!tags.contains(Tags.Paid.name())) {
           tags = new ArrayList<>(tags);
@@ -1220,13 +1227,13 @@ public final class PluginManagerConfigurable
       if (instance != null) {
         String stamp = instance.getConfirmationStamp(productCode);
         if (stamp != null) {
-          return Collections.singletonList(stamp.startsWith("eval:") ? Tags.Trial.name() : Tags.Purchased.name());
+          return List.of(stamp.startsWith("eval:") ? Tags.Trial.name() : Tags.Purchased.name());
         }
       }
-      return Collections.singletonList(Tags.Paid.name());
+      return List.of(Tags.Paid.name());
     }
     if (ContainerUtil.isEmpty(tags)) {
-      return Collections.emptyList();
+      return List.of();
     }
 
     if (tags.size() > 1) {
@@ -1242,89 +1249,12 @@ public final class PluginManagerConfigurable
     return tags;
   }
 
-  @NotNull
-  public static <T extends Component> T setTinyFont(@NotNull T component) {
+  public static <T extends Component> @NotNull T setTinyFont(@NotNull T component) {
     return SystemInfo.isMac ? RelativeFont.TINY.install(component) : component;
   }
 
   public static int offset5() {
     return JBUIScale.scale(5);
-  }
-
-  @Nullable
-  public static synchronized @NlsSafe String getDownloads(@NotNull IdeaPluginDescriptor plugin) {
-    String downloads = null;
-    if (plugin instanceof PluginNode) {
-      downloads = ((PluginNode)plugin).getDownloads();
-    }
-    return getFormatLength(downloads);
-  }
-
-  @Nullable
-  static synchronized String getFormatLength(@Nullable String len) {
-    if (!StringUtil.isEmptyOrSpaces(len)) {
-      try {
-        long value = Long.parseLong(len);
-        if (value > 1000) {
-          return value < 1000000 ? K_FORMAT.format(value / 1000D) : M_FORMAT.format(value / 1000000D);
-        }
-        return Long.toString(value);
-      }
-      catch (NumberFormatException ignore) {
-      }
-    }
-
-    return null;
-  }
-
-  @Nullable
-  public static synchronized @NlsSafe String getLastUpdatedDate(@NotNull IdeaPluginDescriptor plugin) {
-    long date = 0;
-    if (plugin instanceof PluginNode) {
-      date = ((PluginNode)plugin).getDate();
-    }
-    return date > 0 && date != Long.MAX_VALUE ? DATE_FORMAT.format(new Date(date)) : null;
-  }
-
-  @Nullable
-  public static @NlsSafe String getRating(@NotNull IdeaPluginDescriptor plugin) {
-    String rating = null;
-    if (plugin instanceof PluginNode) {
-      rating = ((PluginNode)plugin).getRating();
-    }
-    if (rating != null) {
-      try {
-        if (Double.valueOf(rating) > 0) {
-          return StringUtil.trimEnd(rating, ".0");
-        }
-      }
-      catch (NumberFormatException ignore) {
-      }
-    }
-    return null;
-  }
-
-  @Nullable
-  public static synchronized @NlsSafe String getSize(@NotNull IdeaPluginDescriptor plugin) {
-    String size = null;
-    if (plugin instanceof PluginNode) {
-      size = ((PluginNode)plugin).getSize();
-    }
-    if (!StringUtil.isEmptyOrSpaces(size)) {
-      try {
-        return StringUtilRt.formatFileSize(Long.parseLong(size)).toUpperCase(Locale.ENGLISH);
-      }
-      catch (NumberFormatException ignore) {
-      }
-    }
-    return null;
-  }
-
-  public static @NlsSafe @NotNull String getVersion(@NotNull IdeaPluginDescriptor oldPlugin, @NotNull IdeaPluginDescriptor newPlugin) {
-    String[] strings = {StringUtil.defaultIfEmpty(oldPlugin.getVersion(), "unknown"),
-      UIUtil.rightArrow(),
-      StringUtil.defaultIfEmpty(newPlugin.getVersion(), "unknown")};
-    return StringUtil.join(strings, " ");
   }
 
   @Messages.YesNoResult
@@ -1651,9 +1581,9 @@ public final class PluginManagerConfigurable
 
   @Override
   public void disposeUIResources() {
+    InstalledPluginsState pluginsState = InstalledPluginsState.getInstance();
     if (myPluginModel.toBackground()) {
-      InstallPluginInfo.showRestart();
-      InstalledPluginsState.getInstance().clearShutdownCallback();
+      pluginsState.clearShutdownCallback();
     }
 
     myMarketplaceTab.dispose();
@@ -1669,9 +1599,8 @@ public final class PluginManagerConfigurable
     myPluginUpdatesService.dispose();
     PluginPriceService.cancel();
 
-    InstalledPluginsState.getInstance().runShutdownCallback();
-
-    InstalledPluginsState.getInstance().resetChangesAppliedWithoutRestart();
+    pluginsState.runShutdownCallback();
+    pluginsState.resetChangesAppliedWithoutRestart();
   }
 
   @Override

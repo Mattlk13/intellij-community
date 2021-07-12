@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.formatter;
 
@@ -101,6 +98,16 @@ public abstract class TypingIndentationTestBaseGenerated extends AbstractTypingI
         @TestMetadata("ConsecutiveCallsInSafeCallsEnd.after.kt")
         public void testConsecutiveCallsInSafeCallsEnd() throws Exception {
             runTest("testData/indentationOnNewline/ConsecutiveCallsInSafeCallsEnd.after.kt");
+        }
+
+        @TestMetadata("EOFCommentAfterFor.after.kt")
+        public void testEOFCommentAfterFor() throws Exception {
+            runTest("testData/indentationOnNewline/EOFCommentAfterFor.after.kt");
+        }
+
+        @TestMetadata("EOFCommentAfterIf.after.kt")
+        public void testEOFCommentAfterIf() throws Exception {
+            runTest("testData/indentationOnNewline/EOFCommentAfterIf.after.kt");
         }
 
         @TestMetadata("FunctionBlock.after.kt")
@@ -324,6 +331,11 @@ public abstract class TypingIndentationTestBaseGenerated extends AbstractTypingI
         public static class ControlFlowConstructions extends AbstractTypingIndentationTestBase {
             private void runTest(String testDataFilePath) throws Exception {
                 KotlinTestUtils.runTest(this::doNewlineTest, this, testDataFilePath);
+            }
+
+            @TestMetadata("BetweenOpenBraceAndParenthesis.after.kt")
+            public void testBetweenOpenBraceAndParenthesis() throws Exception {
+                runTest("testData/indentationOnNewline/controlFlowConstructions/BetweenOpenBraceAndParenthesis.after.kt");
             }
 
             @TestMetadata("Catch.after.kt")

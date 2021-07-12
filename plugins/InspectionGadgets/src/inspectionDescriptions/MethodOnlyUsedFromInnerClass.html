@@ -1,8 +1,8 @@
 <html>
 <body>
-Reports <code>private</code> methods, which
+Reports <code>private</code> methods which
 are only called from an inner class of the class containing the method. Such
-methods could be safely moved into that inner class.
+methods can be safely moved into that inner class.
 <p>Example:</p>
 <pre>
 public class Outer {
@@ -28,10 +28,7 @@ public class Outer {
 <!-- tooltip end -->
 <p>
 Use the first checkbox below to ignore <code>private</code>
-methods which are called from an anonymous class.
-<p>
-Use the second checkbox to ignore <code>private static</code>
-methods which are accessed from a non-static inner class.
+methods which are called from an anonymous or local class.
 <p>
 Use the third checkbox to only report <code>static</code> methods.
 <p>

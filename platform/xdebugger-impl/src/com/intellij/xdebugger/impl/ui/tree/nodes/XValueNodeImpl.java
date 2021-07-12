@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.xdebugger.impl.ui.tree.nodes;
 
 import com.intellij.openapi.application.ApplicationManager;
@@ -14,6 +14,7 @@ import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.util.ThreeState;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerBundle;
+import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.*;
 import com.intellij.xdebugger.frame.presentation.XValuePresentation;
@@ -31,6 +32,7 @@ import com.intellij.xdebugger.settings.XDebuggerSettingsManager;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.concurrency.Promise;
 
 import javax.swing.*;
 import java.awt.event.MouseEvent;
@@ -150,7 +152,8 @@ public class XValueNodeImpl extends XValueContainerNode<XValue> implements XValu
 
   private boolean showAsInlay(XDebugSession session, XSourcePosition position, Document document) {
     if (Registry.is("debugger.show.values.use.inlays")) {
-      if (position.getLine() >= 0 && XDebuggerInlayUtil.createLineEndInlay(this, session, position.getFile(), position, document)) {
+      if (position.getLine() >= 0 &&
+          XDebuggerInlayUtil.getInstance(session.getProject()).createLineEndInlay(this, session, position, document)) {
         return true;
       }
     }
@@ -217,6 +220,14 @@ public class XValueNodeImpl extends XValueContainerNode<XValue> implements XValu
       updateText();
       fireNodeChanged();
     }
+  }
+
+  /** always compute evaluate expression from the base value container to avoid recalculation for watches
+   * @see com.intellij.xdebugger.impl.ui.tree.nodes.WatchNodeImpl#getValueContainer()
+   */
+  @NotNull
+  public final Promise<XExpression> calculateEvaluationExpression() {
+    return myValueContainer.calculateEvaluationExpression();
   }
 
   @Nullable

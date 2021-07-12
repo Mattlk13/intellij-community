@@ -70,7 +70,7 @@ public class InspectionTree extends Tree {
     setModel(new AsyncTreeModel(myModel, false, view));
 
     setCellRenderer(new InspectionTreeCellRenderer(view));
-    setRootVisible(false);
+    setRootVisible(true);
     if (!ApplicationManager.getApplication().isUnitTestMode()) {
       getSelectionModel().addTreeSelectionListener(e -> {
         if (isUnderQueueUpdate()) return;
@@ -85,7 +85,7 @@ public class InspectionTree extends Tree {
       EditSourceOnDoubleClickHandler.install(this);
       EditSourceOnEnterKeyHandler.install(this);
       TreeUtil.installActions(this);
-      PopupHandler.installPopupHandler(this, IdeActions.INSPECTION_TOOL_WINDOW_TREE_POPUP, ActionPlaces.CODE_INSPECTION);
+      PopupHandler.installPopupMenu(this, IdeActions.INSPECTION_TOOL_WINDOW_TREE_POPUP, ActionPlaces.CODE_INSPECTION);
       new TreeSpeedSearch(this, o -> InspectionsConfigTreeComparator.getDisplayTextToSort(o.getLastPathComponent().toString()));
     }
 

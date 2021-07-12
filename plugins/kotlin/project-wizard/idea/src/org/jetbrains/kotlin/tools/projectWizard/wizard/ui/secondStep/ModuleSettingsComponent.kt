@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.wizard.ui.secondStep
 
 import com.intellij.util.ui.JBUI
@@ -169,7 +170,7 @@ private class ModuleTemplateComponent(
 private object NoneTemplate : Template() {
     override val title = KotlinNewProjectWizardUIBundle.message("module.settings.template.none")
     override val description: String = ""
-    override fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean = true
+    override fun isApplicableTo(module: Module, projectKind: ProjectKind): Boolean = true
 
     override val id: String = "none"
 }

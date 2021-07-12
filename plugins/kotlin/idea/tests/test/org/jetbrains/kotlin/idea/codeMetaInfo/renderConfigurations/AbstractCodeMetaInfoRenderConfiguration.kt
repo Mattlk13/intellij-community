@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeMetaInfo.renderConfigurations
 
@@ -18,8 +15,8 @@ import org.jetbrains.kotlin.idea.codeMetaInfo.models.LineMarkerCodeMetaInfo
 
 
 abstract class AbstractCodeMetaInfoRenderConfiguration(var renderParams: Boolean = true) {
-    private val clickOrPressRegex = "(Click or press|Press).*(to navigate)".toRegex() //We have different hotkeys on different platforms
-    open fun asString(codeMetaInfo: CodeMetaInfo) = codeMetaInfo.getTag() + getPlatformsString(codeMetaInfo)
+    private val clickOrPressRegex = "(Click or press|Press).*(to navigate)".toRegex() // We have different hotkeys on different platforms
+    open fun asString(codeMetaInfo: CodeMetaInfo) = codeMetaInfo.tag + getPlatformsString(codeMetaInfo)
 
     open fun getAdditionalParams(codeMetaInfo: CodeMetaInfo) = ""
 
@@ -41,8 +38,8 @@ abstract class AbstractCodeMetaInfoRenderConfiguration(var renderParams: Boolean
     }
 
     protected fun getPlatformsString(codeMetaInfo: CodeMetaInfo): String {
-        if (codeMetaInfo.platforms.isEmpty()) return ""
-        return "{${codeMetaInfo.platforms.joinToString(";")}}"
+        if (codeMetaInfo.attributes.isEmpty()) return ""
+        return "{${codeMetaInfo.attributes.joinToString(";")}}"
     }
 }
 
@@ -63,6 +60,8 @@ open class DiagnosticCodeMetaInfoConfiguration(
     private fun getParamsString(codeMetaInfo: DiagnosticCodeMetaInfo): String {
         if (!renderParams) return ""
         val params = mutableListOf<String>()
+
+        @Suppress("UNCHECKED_CAST")
         val renderer = when (codeMetaInfo.diagnostic.factory) {
             is DebugInfoDiagnosticFactory1 -> DiagnosticWithParameters1Renderer(
                 "{0}",
@@ -99,15 +98,10 @@ open class LineMarkerConfiguration(var renderDescription: Boolean = true) : Abst
         if (!renderParams) return ""
         val params = mutableListOf<String>()
 
-        try {
-            if (renderDescription)
-                lineMarkerCodeMetaInfo.lineMarker.lineMarkerTooltip?.apply {
-                    params.add("descr='${sanitizeLineMarkerTooltip(this)}'")
-                }
-        } catch (e: Exception) {
-            //Sometimes got exception caused by `ModuleDescriptor?.getPlatformName()` in HasActualMarker.kt
-            // when calling `single()` method, but platform collection has more than one element
-            // Going to fix it
+        if (renderDescription) {
+            lineMarkerCodeMetaInfo.lineMarker.lineMarkerTooltip?.apply {
+                params.add("descr='${sanitizeLineMarkerTooltip(this)}'")
+            }
         }
 
         params.add(getAdditionalParams(lineMarkerCodeMetaInfo))
@@ -144,7 +138,7 @@ open class HighlightingConfiguration(
             highlightingCodeMetaInfo.highlightingInfo.forcedTextAttributesKey?.apply {
                 params.add("textAttributesKey='${this}'")
             }
-        params.add(getAdditionalParams(highlightingCodeMetaInfo))
+            params.add(getAdditionalParams(highlightingCodeMetaInfo))
         val paramsString = params.filter { it.isNotEmpty() }.joinToString("; ")
 
         return if (paramsString.isEmpty()) "" else "(\"$paramsString\")"

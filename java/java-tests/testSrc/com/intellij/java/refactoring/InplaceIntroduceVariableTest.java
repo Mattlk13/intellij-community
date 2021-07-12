@@ -1,8 +1,9 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.java.refactoring;
 
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl;
 import com.intellij.codeInsight.template.impl.TemplateState;
+import com.intellij.java.JavaBundle;
 import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.openapi.actionSystem.IdeActions;
 import com.intellij.openapi.editor.Editor;
@@ -81,15 +82,27 @@ public class InplaceIntroduceVariableTest extends AbstractJavaInplaceIntroduceTe
   }
 
   public void testPlaceInsideLoopAndRename() {
-    doTest(introducer -> type("expr"));
+    doTestReplaceChoice("Runnable: () -> {...}", introducer -> type("expr"));
+  }
+  
+  public void testPlaceOutsideLoopAndRename() {
+    doTestReplaceChoice(JavaBundle.message("target.code.block.presentable.text"), introducer -> type("expr"));
+  }
+
+  public void testPlaceOutsideLambdaInIfWithoutBraces() {
+    doTestReplaceChoice(JavaBundle.message("target.code.block.presentable.text"), introducer -> type("expr"));
+  }
+
+  public void testPlaceOutsideLambdaInClass() {
+    doTestReplaceChoice(JavaBundle.message("target.code.block.presentable.text"), introducer -> type("expr"));
   }
 
   public void testPlaceInsideLambdaBody() {
-    doTest(introducer -> type("expr"));
+    doTestReplaceChoice("Runnable: () -> {...}", introducer -> type("expr"));
   }
 
   public void testPlaceInsideLambdaBodyMultipleOccurrences1() {
-    doTestReplaceChoice("Replace all 0 occurrences", introducer -> type("expr"));
+    doTestReplaceChoice("Replace all 0 occurrences", "Runnable: () -> {...}", introducer -> type("expr"), null);
   }
 
   public void testReplaceAllOnDummyCodeWithSameNameAsGenerated() {
@@ -205,12 +218,12 @@ public class InplaceIntroduceVariableTest extends AbstractJavaInplaceIntroduceTe
   }
 
   public void testAllLValues() {
-    doTestReplaceChoice("Replace all 2 occurrences (will change semantics!)", null,
+    doTestReplaceChoice("Replace all 2 occurrences (will change semantics!)", null, null,
                         List.of("Replace this occurrence only", "Replace all 2 occurrences (will change semantics!)"));
   }
 
   public void testSelectLValueThenFilterIt() {
-    doTestReplaceChoice("Replace read and write occurrences (will change semantics!)", null,
+    doTestReplaceChoice("Replace read and write occurrences (will change semantics!)", null, null,
                         List.of("Replace this occurrence only", "Replace read and write occurrences (will change semantics!)"));
   }
 
@@ -262,6 +275,11 @@ public class InplaceIntroduceVariableTest extends AbstractJavaInplaceIntroduceTe
     assertThrows(CommonRefactoringUtil.RefactoringErrorHintException.class,
                  "Selected block should represent an expression", () -> doTest(null));
   }
+
+  public void testHeavilyBrokenFile12() {
+    doTestReplaceChoice("Replace all 0 occurrences");
+  }
+
 
   public void testAnnotationArgument() {
     assertThrows(CommonRefactoringUtil.RefactoringErrorHintException.class,
@@ -336,10 +354,12 @@ public class InplaceIntroduceVariableTest extends AbstractJavaInplaceIntroduceTe
   }
 
   private void doTestReplaceChoice(String choiceText, Consumer<AbstractInplaceIntroducer<?, ?>> pass) {
-    doTestReplaceChoice(choiceText, pass, null);
+    doTestReplaceChoice(choiceText, null, pass, null);
   }
 
+  
   private void doTestReplaceChoice(String choiceText,
+                                   String secondChoiceText,
                                    Consumer<AbstractInplaceIntroducer<?, ?>> pass,
                                    @Nullable List<String> expectedOptions) {
     String name = getTestName(true);
@@ -351,6 +371,9 @@ public class InplaceIntroduceVariableTest extends AbstractJavaInplaceIntroduceTe
 
       MyIntroduceHandler handler = createIntroduceHandler();
       UiInterceptors.register(new ChooserInterceptor(expectedOptions, Pattern.quote(choiceText)));
+      if (secondChoiceText != null) {
+        UiInterceptors.register(new ChooserInterceptor(expectedOptions, Pattern.quote(secondChoiceText)));
+      }
       final AbstractInplaceIntroducer<?, ?> introducer = invokeRefactoring(handler);
       if (pass != null) {
         pass.accept(introducer);

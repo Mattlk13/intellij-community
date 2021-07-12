@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.util
 
@@ -23,12 +20,15 @@ import java.util.concurrent.TimeoutException
  * Copied from [com.intellij.openapi.progress.util.ProgressIndicatorUtils]
  */
 object ProgressIndicatorUtils {
+    @Suppress("ObjectLiteralToLambda") // Workaround for KT-43812.
     @JvmStatic
     fun <T> underModalProgress(
         project: Project,
         @Nls progressTitle: String,
         computable: () -> T
-    ): T = com.intellij.openapi.actionSystem.ex.ActionUtil.underModalProgress(project, progressTitle, computable)
+    ): T = com.intellij.openapi.actionSystem.ex.ActionUtil.underModalProgress(project, progressTitle, object : Computable<T> {
+        override fun compute(): T = computable()
+    })
 
     fun <T> runUnderDisposeAwareIndicator(
         parent: Disposable,

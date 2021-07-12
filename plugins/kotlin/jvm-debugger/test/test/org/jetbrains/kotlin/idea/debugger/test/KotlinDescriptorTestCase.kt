@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.test
 
@@ -18,7 +15,6 @@ import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder
-import com.intellij.execution.target.TargetEnvironmentConfiguration
 import com.intellij.execution.target.TargetEnvironmentRequest
 import com.intellij.execution.target.TargetedCommandLineBuilder
 import com.intellij.openapi.application.runWriteAction
@@ -38,6 +34,7 @@ import com.intellij.xdebugger.XDebugSession
 import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinDebuggerCaches
+import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.CodeFragmentCompiler
 import org.jetbrains.kotlin.idea.debugger.test.preference.*
 import org.jetbrains.kotlin.idea.debugger.test.util.BreakpointCreator
 import org.jetbrains.kotlin.idea.debugger.test.util.KotlinOutputChecker
@@ -50,6 +47,7 @@ import org.jetbrains.kotlin.test.Directives
 import org.jetbrains.kotlin.test.KotlinBaseTest.TestFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.KotlinTestUtils.*
+import org.jetbrains.kotlin.test.TargetBackend
 import org.junit.ComparisonFailure
 import java.io.File
 
@@ -116,6 +114,16 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
 
     open fun useIrBackend() = false
 
+    open fun fragmentCompilerBackend() = CodeFragmentCompiler.Companion.FragmentCompilerBackend.JVM
+
+    protected fun targetBackend(): TargetBackend =
+        when (fragmentCompilerBackend()) {
+            CodeFragmentCompiler.Companion.FragmentCompilerBackend.JVM ->
+                if (useIrBackend()) TargetBackend.JVM_IR_WITH_OLD_EVALUATOR else TargetBackend.JVM_WITH_OLD_EVALUATOR
+            CodeFragmentCompiler.Companion.FragmentCompilerBackend.JVM_IR ->
+                if (useIrBackend()) TargetBackend.JVM_IR_WITH_IR_EVALUATOR else TargetBackend.JVM_WITH_IR_EVALUATOR
+        }
+
     fun doTest(unused: String) {
         val wholeFile = testDataFile()
         val wholeFileContents = FileUtil.loadFile(wholeFile, true)
@@ -180,7 +188,16 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
             }
         }
 
-        val debugParameters = DebuggerManagerImpl.createDebugParameters(javaCommandLineState.javaParameters, debuggerRunnerSettings, true)
+        val debugParameters =
+            RemoteConnectionBuilder(
+                debuggerRunnerSettings.LOCAL,
+                debuggerRunnerSettings.getTransport(),
+                debuggerRunnerSettings.getDebugPort()
+            )
+                .checkValidity(true)
+                .asyncAgent(true)
+                .create(javaCommandLineState.javaParameters)
+
         lateinit var debuggerSession: DebuggerSession
 
         UIUtil.invokeAndWaitIfNeeded(Runnable {
@@ -195,8 +212,26 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
 
         val processHandler = debuggerSession.process.processHandler
         debuggerSession.process.addProcessListener(object : ProcessAdapter() {
+            private val errorOutput = StringBuilder()
+
             override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
-                print(event.text, outputType)
+                if (outputType == ProcessOutputTypes.STDERR) {
+                    errorOutput.append(event.text)
+                }
+            }
+
+            override fun startNotified(event: ProcessEvent) {
+                print("Run Java\n", ProcessOutputTypes.SYSTEM)
+                print("Connected to the target VM\n", ProcessOutputTypes.SYSTEM)
+            }
+
+            override fun processTerminated(event: ProcessEvent) {
+                print("Disconnected from the target VM\n\n", ProcessOutputTypes.SYSTEM)
+                print("Process finished with exit code ${event.exitCode}\n", ProcessOutputTypes.SYSTEM)
+
+                if (event.exitCode != 0) {
+                    print(errorOutput.toString(), ProcessOutputTypes.STDERR)
+                }
             }
         })
 
@@ -227,7 +262,13 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
     abstract fun doMultiFileTest(files: TestFiles, preferences: DebuggerPreferences)
 
     override fun initOutputChecker(): OutputChecker {
-        return KotlinOutputChecker(getTestDataPath(), testAppPath, appOutputPath, useIrBackend(), getExpectedOutputFile())
+        return KotlinOutputChecker(
+            getTestDataPath(),
+            testAppPath,
+            appOutputPath,
+            targetBackend(),
+            getExpectedOutputFile()
+        )
     }
 
     override fun setUpModule() {

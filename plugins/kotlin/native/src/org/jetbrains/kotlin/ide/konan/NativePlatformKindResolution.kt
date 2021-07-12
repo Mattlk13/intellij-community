@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.ide.konan
 
@@ -101,13 +98,14 @@ class NativePlatformKindResolution : IdePlatformKindResolution {
 
     override val kind get() = NativeIdePlatformKind
 
-    override fun getKeyForBuiltIns(moduleInfo: ModuleInfo, sdkInfo: SdkInfo?): BuiltInsCacheKey = NativeBuiltInsCacheKey
+    override fun getKeyForBuiltIns(moduleInfo: ModuleInfo, sdkInfo: SdkInfo?, stdlibInfo: LibraryInfo?): BuiltInsCacheKey = NativeBuiltInsCacheKey
 
     override fun createBuiltIns(
         moduleInfo: IdeaModuleInfo,
         projectContext: ProjectContext,
         resolverForProject: ResolverForProject<IdeaModuleInfo>,
-        sdkDependency: SdkInfo?
+        sdkDependency: SdkInfo?,
+        stdlibDependency: LibraryInfo?,
     ) = createKotlinNativeBuiltIns(moduleInfo, projectContext)
 
     private fun createKotlinNativeBuiltIns(moduleInfo: ModuleInfo, projectContext: ProjectContext): KotlinBuiltIns {
@@ -125,8 +123,7 @@ class NativePlatformKindResolution : IdePlatformKindResolution {
 
         val languageVersionSettings = IDELanguageSettingsProvider.getLanguageVersionSettings(
             stdlibInfo,
-            project,
-            isReleaseCoroutines = false
+            project
         )
 
         val stdlibPackageFragmentProvider = createKlibPackageFragmentProvider(

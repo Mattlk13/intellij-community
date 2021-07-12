@@ -4,7 +4,6 @@ package training.dsl
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.command.undo.BasicUndoableAction
 import com.intellij.openapi.command.undo.DocumentReferenceManager
@@ -26,12 +25,12 @@ import training.learn.ActionsRecorder
 import java.awt.Component
 
 @LearningDsl
-open class TaskRuntimeContext(private val lessonExecutor: LessonExecutor,
-                              internal val actionsRecorder: ActionsRecorder,
-                              val restorePreviousTaskCallback: () -> Unit,
-                              private val previousGetter: () -> PreviousTaskInfo
+open class TaskRuntimeContext internal constructor(private val lessonExecutor: LessonExecutor,
+                                                   internal val actionsRecorder: ActionsRecorder,
+                                                   val restorePreviousTaskCallback: () -> Unit,
+                                                   private val previousGetter: () -> PreviousTaskInfo
 ): LearningDslBase {
-  constructor(base: TaskRuntimeContext)
+  internal constructor(base: TaskRuntimeContext)
     : this(base.lessonExecutor, base.actionsRecorder, base.restorePreviousTaskCallback, base.previousGetter)
 
   val taskDisposable: Disposable = actionsRecorder
@@ -49,10 +48,18 @@ open class TaskRuntimeContext(private val lessonExecutor: LessonExecutor,
   val virtualFile: VirtualFile
     get() = FileDocumentManager.getInstance().getFile(editor.document) ?: error("No virtual file for ${editor.document}")
 
+  fun taskInvokeLater(modalityState: ModalityState? = null, runnable: () -> Unit) {
+    lessonExecutor.taskInvokeLater(modalityState, runnable)
+  }
+
+  fun invokeInBackground(runnable: () -> Unit) {
+    lessonExecutor.invokeInBackground(runnable)
+  }
+
   /// Utility methods ///
 
   fun setSample(sample: LessonSample) {
-    invokeLater(ModalityState.NON_MODAL) {
+    taskInvokeLater(ModalityState.NON_MODAL) {
       TemplateManagerImpl.getTemplateState(editor)?.gotoEnd()
       (editor as? EditorEx)?.isViewer = false
       editor.caretModel.removeSecondaryCarets()

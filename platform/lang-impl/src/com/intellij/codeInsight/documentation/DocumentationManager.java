@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.codeInsight.documentation;
 
 import com.intellij.codeInsight.CodeInsightBundle;
@@ -363,7 +363,7 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
     super(project);
     AnActionListener actionListener = new AnActionListener() {
       @Override
-      public void beforeActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
+      public void beforeActionPerformed(@NotNull AnAction action, @NotNull AnActionEvent event) {
         JBPopup hint = getDocInfoHint();
         if (hint != null &&
             LookupManager.getActiveLookup(myEditor) == null && // let the lookup manage all the actions
@@ -498,6 +498,15 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
     showJavaDocInfo(element, original, requestFocus, closeCallback, null, true);
   }
 
+  public void showJavaDocInfo(@NotNull Editor editor,
+                              @NotNull PsiElement element,
+                              PsiElement original,
+                              boolean requestFocus,
+                              @Nullable Runnable closeCallback) {
+    myEditor = editor;
+    showJavaDocInfo(element, original, requestFocus, closeCallback, null, true);
+  }
+
   public void showJavaDocInfo(@NotNull PsiElement element,
                               PsiElement original,
                               boolean requestFocus,
@@ -521,8 +530,9 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
     PopupUpdateProcessor updateProcessor = new PopupUpdateProcessor(element.getProject()) {
       @Override
       public void updatePopup(Object lookupItemObject) {
-        if (lookupItemObject instanceof PsiElement) {
-          doShowJavaDocInfo((PsiElement)lookupItemObject, requestFocus, this, original, null, null,
+        PsiElement psiElement = toPsi(lookupItemObject);
+        if (psiElement != null) {
+          doShowJavaDocInfo(psiElement, requestFocus, this, original, null, null,
                             useStoredPopupSize, onAutoUpdate);
         }
       }
@@ -565,15 +575,16 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
 
     PopupUpdateProcessor updateProcessor = new PopupUpdateProcessor(project) {
       @Override
-      public void updatePopup(Object lookupIteObject) {
-        if (lookupIteObject == null) {
+      public void updatePopup(Object lookupItemObject) {
+        if (lookupItemObject == null) {
           doShowJavaDocInfo(elementFuture, false, this, originalElement, closeCallback,
                             CodeInsightBundle.message("no.documentation.found"),
                             true, onAutoUpdate);
           return;
         }
-        if (lookupIteObject instanceof PsiElement) {
-          doShowJavaDocInfo((PsiElement)lookupIteObject, false, this, originalElement, closeCallback,
+        PsiElement psiElement = toPsi(lookupItemObject);
+        if (psiElement != null) {
+          doShowJavaDocInfo(psiElement, false, this, originalElement, closeCallback,
                             null, true, onAutoUpdate);
           return;
         }
@@ -582,7 +593,7 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
 
         PsiElement element = documentationProvider.getDocumentationElementForLookupItem(
           PsiManager.getInstance(myProject),
-          lookupIteObject,
+          lookupItemObject,
           originalElement
         );
 
@@ -1063,7 +1074,7 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
       PsiElement element = collector.getElement(true);
       if (element == null || !ReadAction.compute(() -> element.isValid())) {
         LOG.debug("Element for which documentation was requested is not available anymore");
-        GuiUtils.invokeLaterIfNeeded(() -> {
+        ModalityUiUtil.invokeLaterIfNeeded(() -> {
           component.setText(CodeInsightBundle.message("no.documentation.found"), null, collector.provider);
         }, ModalityState.any());
         callback.setDone();
@@ -1095,7 +1106,7 @@ public class DocumentationManager extends DockablePopupManager<DocumentationComp
 
       if (fail != null) {
         Throwable finalFail = fail;
-        GuiUtils.invokeLaterIfNeeded(() -> {
+        ModalityUiUtil.invokeLaterIfNeeded(() -> {
           String message = finalFail instanceof IndexNotReadyException
                            ? CodeInsightBundle.message("documentation.message.documentation.is.not.available")
                            : CodeInsightBundle.message("javadoc.external.fetch.error.message");

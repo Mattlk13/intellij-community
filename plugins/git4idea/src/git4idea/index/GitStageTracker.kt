@@ -210,6 +210,10 @@ class GitStageTracker(val project: Project) : Disposable {
       return statuses.values.any { line -> line.isTracked() }
     }
 
+    fun hasConflictedFiles(): Boolean {
+      return statuses.values.any { line -> line.isConflicted() }
+    }
+
     fun isEmpty(): Boolean {
       return statuses.isEmpty()
     }
@@ -225,6 +229,8 @@ class GitStageTracker(val project: Project) : Disposable {
   }
 
   data class State(val rootStates: Map<VirtualFile, RootState>) {
+    val allRoots: Set<VirtualFile>
+      get() = rootStates.keys
     val stagedRoots: Set<VirtualFile>
       get() = rootStates.filterValues(RootState::hasStagedFiles).keys
     val changedRoots: Set<VirtualFile>

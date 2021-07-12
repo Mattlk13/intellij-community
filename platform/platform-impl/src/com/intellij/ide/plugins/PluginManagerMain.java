@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.plugins;
 
 import com.intellij.ide.BrowserUtil;
@@ -11,6 +11,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ApplicationNamesInfo;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ex.ApplicationEx;
 import com.intellij.openapi.application.ex.ApplicationManagerEx;
 import com.intellij.openapi.extensions.PluginId;
@@ -22,15 +23,15 @@ import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.updateSettings.impl.UpdateChecker;
 import com.intellij.openapi.updateSettings.impl.UpdateSettings;
-import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.util.text.Strings;
 import com.intellij.openapi.wm.IdeFrame;
 import com.intellij.openapi.wm.ex.WindowManagerEx;
-import com.intellij.ui.scale.JBUIScale;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.xml.util.XmlStringUtil;
-import org.jetbrains.annotations.*;
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.NonNls;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
@@ -46,26 +47,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public final class PluginManagerMain {
-  private static final String TEXT_SUFFIX = "</body></html>";
-  private static final String HTML_PREFIX = "<a href=\"";
-  private static final String HTML_SUFFIX = "</a>";
 
   private PluginManagerMain() {
-  }
-
-  private static @NlsSafe String getTextPrefix() {
-    int fontSize = JBUIScale.scale(12);
-    int m1 = JBUIScale.scale(2);
-    int m2 = JBUIScale.scale(5);
-    return String.format(
-      "<html><head>" +
-      "    <style type=\"text/css\">" +
-      "        p {" +
-      "            font-family: Arial,serif; font-size: %dpt; margin: %dpx %dpx" +
-      "        }" +
-      "    </style>" +
-      "</head><body style=\"font-family: Arial,serif; font-size: %dpt; margin: %dpx %dpx;\">",
-      fontSize, m1, m1, fontSize, m2, m2);
   }
 
   /**
@@ -134,12 +117,12 @@ public final class PluginManagerMain {
                 if (onSuccess != null) {
                   onSuccess.run();
                 }
-              });
+              }, ModalityState.any());
             }
           }
           finally {
             if (function != null) {
-              ApplicationManager.getApplication().invokeLater(() -> function.accept(result[0]));
+              ApplicationManager.getApplication().invokeLater(() -> function.accept(result[0]), ModalityState.any());
             }
           }
         }
@@ -155,69 +138,6 @@ public final class PluginManagerMain {
         throw e;
       }
     }
-  }
-
-  public static @Nls String pluginInfoUpdate(@NotNull IdeaPluginDescriptor plugin) {
-    StringBuilder sb = new StringBuilder(getTextPrefix());
-    String description = plugin.getDescription();
-    if (!Strings.isEmptyOrSpaces(description)) {
-      sb.append(description);
-    }
-
-    String changeNotes = plugin.getChangeNotes();
-    if (!Strings.isEmptyOrSpaces(changeNotes)) {
-      sb.append("<h4>Change Notes</h4>");
-      sb.append(changeNotes);
-    }
-
-    if (!plugin.isBundled()) {
-      String vendor = plugin.getVendor();
-      String vendorEmail = plugin.getVendorEmail();
-      String vendorUrl = plugin.getVendorUrl();
-      if (!Strings.isEmptyOrSpaces(vendor) || !Strings.isEmptyOrSpaces(vendorEmail) || !Strings.isEmptyOrSpaces(vendorUrl)) {
-        sb.append("<h4>Vendor</h4>");
-
-        if (!Strings.isEmptyOrSpaces(vendor)) {
-          sb.append(vendor);
-        }
-        if (!Strings.isEmptyOrSpaces(vendorUrl)) {
-          sb.append("<br>").append(composeHref(vendorUrl));
-        }
-        if (!Strings.isEmptyOrSpaces(vendorEmail)) {
-          sb.append("<br>")
-            .append(HTML_PREFIX)
-            .append("mailto:").append(vendorEmail)
-            .append("\">").append(vendorEmail).append(HTML_SUFFIX);
-        }
-      }
-
-      String pluginDescriptorUrl = plugin.getUrl();
-      PluginInfoProvider provider = PluginInfoProvider.getInstance();
-      Set<PluginId> marketplacePlugins = provider.loadCachedPlugins();
-      if (marketplacePlugins == null ||
-          marketplacePlugins.contains(plugin.getPluginId())) {
-        if (!Strings.isEmptyOrSpaces(pluginDescriptorUrl)) {
-          sb.append("<h4>Plugin homepage</h4>").append(composeHref(pluginDescriptorUrl));
-        }
-
-        if (marketplacePlugins == null) {
-          // will get the marketplace plugins ids next time
-          provider.loadPlugins();
-        }
-      }
-
-      String size = plugin instanceof PluginNode ? ((PluginNode)plugin).getSize() : null;
-      if (!Strings.isEmptyOrSpaces(size)) {
-        sb.append("<h4>Size</h4>").append(PluginManagerColumnInfo.getFormattedSize(size));
-      }
-    }
-
-    @SuppressWarnings("HardCodedStringLiteral") String result = sb.append(TEXT_SUFFIX).toString();
-    return result.trim();
-  }
-
-  private static String composeHref(String vendorUrl) {
-    return HTML_PREFIX + vendorUrl + "\">" + vendorUrl + HTML_SUFFIX;
   }
 
   public static class MyHyperlinkListener implements HyperlinkListener {
@@ -254,10 +174,12 @@ public final class PluginManagerMain {
         }
 
         PluginId dependantId = dependency.getPluginId();
-        if (PluginManagerCore.isModuleDependency(dependantId)) {
-          // If there is no installed plugin implementing module then it can only be platform module which can not be disabled
-          if (PluginManagerCore.findPluginByModuleDependency(dependantId) == null) continue;
+        // If there is no installed plugin implementing module then it can only be platform module which can not be disabled
+        if (PluginManagerCore.isModuleDependency(dependantId) &&
+            PluginManagerCore.findPluginByModuleDependency(dependantId) == null) {
+          continue;
         }
+
         IdeaPluginDescriptor pluginDescriptor = PluginManagerCore.getPlugin(dependantId);
         if (pluginDescriptor != null && pluginEnabler.isDisabled(dependantId)) {
           disabledDependants.add(pluginDescriptor);
@@ -370,18 +292,19 @@ public final class PluginManagerMain {
     ApplicationEx app = ApplicationManagerEx.getApplicationEx();
     String title = IdeBundle.message("updates.notification.title", ApplicationNamesInfo.getInstance().getFullProductName());
     String action = IdeBundle.message("ide.restart.required.notification", app.isRestartCapable() ? 1 : 0);
-    Notification notification = UpdateChecker.getNotificationGroup()
-      .createNotification(title, "", NotificationType.INFORMATION, null, "plugins.updated.suggest.restart");
-    notification.addAction(new NotificationAction(action) {
-      @Override
-      public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
-        if (PluginManagerConfigurable.showRestartDialog() == Messages.YES) {
-          notification.expire();
-          ApplicationManagerEx.getApplicationEx().restart(true);
+    UpdateChecker.getNotificationGroup()
+      .createNotification(title, NotificationType.INFORMATION)
+      .setDisplayId("plugins.updated.suggest.restart")
+      .addAction(new NotificationAction(action) {
+        @Override
+        public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
+          if (PluginManagerConfigurable.showRestartDialog() == Messages.YES) {
+            notification.expire();
+            ApplicationManagerEx.getApplicationEx().restart(true);
+          }
         }
-      }
-    });
-    notification.notify(project);
+      })
+      .notify(project);
   }
 
   public static boolean checkThirdPartyPluginsAllowed(Iterable<? extends IdeaPluginDescriptor> descriptors) {
@@ -392,9 +315,8 @@ public final class PluginManagerMain {
       return true;
     }
 
-    PluginManager pluginManager = PluginManager.getInstance();
     for (IdeaPluginDescriptor descriptor : descriptors) {
-      if (!pluginManager.isDevelopedByJetBrains(descriptor)) {
+      if (!PluginManagerCore.isDevelopedByJetBrains(descriptor)) {
         String title = IdeBundle.message("third.party.plugins.privacy.note.title");
         String message = IdeBundle.message("third.party.plugins.privacy.note.message");
         String yesText = IdeBundle.message("third.party.plugins.privacy.note.yes");

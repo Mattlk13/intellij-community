@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 @file:JvmName("JvmIdePlatformUtil")
 @file:Suppress("DEPRECATION_ERROR", "DeprecatedCallableAddReplaceWith")
@@ -38,7 +35,7 @@ object JvmIdePlatformKind : IdePlatformKind<JvmIdePlatformKind>() {
         message = "IdePlatform is deprecated and will be removed soon, please, migrate to org.jetbrains.kotlin.platform.TargetPlatform",
         level = DeprecationLevel.ERROR
     )
-    override fun getDefaultPlatform(): Platform = Platform(JvmTarget.JVM_1_6)
+    override fun getDefaultPlatform(): Platform = Platform(JvmTarget.DEFAULT)
 
     override fun createArguments(): CommonCompilerArguments {
         return K2JVMCompilerArguments()

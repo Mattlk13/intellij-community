@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.structuralsearch.visitor
 
@@ -19,7 +16,6 @@ import com.intellij.structuralsearch.impl.matcher.compiler.WordOptimizer
 import com.intellij.structuralsearch.impl.matcher.handlers.MatchingHandler
 import com.intellij.structuralsearch.impl.matcher.handlers.SubstitutionHandler
 import com.intellij.structuralsearch.impl.matcher.handlers.TopLevelMatchingHandler
-import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.idea.structuralsearch.getCommentText
 import org.jetbrains.kotlin.idea.structuralsearch.handler.CommentedDeclarationHandler
 import org.jetbrains.kotlin.idea.structuralsearch.withinHierarchyTextFilterSet
@@ -68,13 +64,6 @@ class KotlinCompilingVisitor(private val myCompilingVisitor: GlobalCompilingVisi
         override fun visitProperty(property: KtProperty) {
             if (!handleWord(property.name, CODE, myCompilingVisitor.context)) return
             super.visitProperty(property)
-        }
-
-        override fun visitConstantExpression(expression: KtConstantExpression) {
-            val type = expression.elementType
-            if (type == KtNodeTypes.BOOLEAN_CONSTANT || type == KtNodeTypes.NULL)
-                if (!handleWord(expression.text, CODE, myCompilingVisitor.context)) return
-            super.visitConstantExpression(expression)
         }
 
         override fun visitReferenceExpression(expression: KtReferenceExpression) {
@@ -324,14 +313,14 @@ class KotlinCompilingVisitor(private val myCompilingVisitor: GlobalCompilingVisi
         constructor.setAbsenceOfMatchHandlerIfApplicable()
     }
 
-    override fun visitWhenEntry(jetWhenEntry: KtWhenEntry) {
-        super.visitWhenEntry(jetWhenEntry)
-        val condition = jetWhenEntry.firstChild.firstChild
+    override fun visitWhenEntry(ktWhenEntry: KtWhenEntry) {
+        super.visitWhenEntry(ktWhenEntry)
+        val condition = ktWhenEntry.firstChild.firstChild
         if (condition is KtNameReferenceExpression) {
             val handler = getHandler(condition)
             if (handler !is SubstitutionHandler) return
 
-            setHandler(jetWhenEntry, SubstitutionHandler(handler.name, false, handler.minOccurs, handler.maxOccurs, false))
+            setHandler(ktWhenEntry, SubstitutionHandler(handler.name, false, handler.minOccurs, handler.maxOccurs, false))
             condition.parent.resetCountFilter()
             condition.resetCountFilter()
             condition.firstChild.resetCountFilter()

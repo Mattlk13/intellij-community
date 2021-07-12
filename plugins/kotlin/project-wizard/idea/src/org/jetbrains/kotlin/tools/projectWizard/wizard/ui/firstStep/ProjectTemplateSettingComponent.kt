@@ -1,10 +1,10 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.wizard.ui.firstStep
 
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.ui.JBUI
 import org.jetbrains.kotlin.idea.KotlinIcons
-import org.jetbrains.kotlin.idea.projectWizard.WizardLoggingSession
 import org.jetbrains.kotlin.tools.projectWizard.core.Context
 import org.jetbrains.kotlin.tools.projectWizard.core.entity.settings.DropDownSettingType
 import org.jetbrains.kotlin.tools.projectWizard.core.entity.settings.SettingReference
@@ -93,9 +93,8 @@ class ProjectTemplateSettingComponent(
     }
 }
 
-private val ProjectTemplate.icon: Icon
+private val ProjectTemplate.icon: Icon?
     get() = when (this) {
-        BackendApplicationProjectTemplate -> KotlinIcons.Wizard.JVM
         MultiplatformApplicationProjectTemplate -> KotlinIcons.Wizard.MULTIPLATFORM
         ConsoleApplicationProjectTemplate -> KotlinIcons.Wizard.CONSOLE
         MultiplatformLibraryProjectTemplate -> KotlinIcons.Wizard.MULTIPLATFORM_LIBRARY
@@ -108,6 +107,7 @@ private val ProjectTemplate.icon: Icon
         NodeJsApplicationProjectTemplate -> KotlinIcons.Wizard.NODE_JS
         ComposeDesktopApplicationProjectTemplate -> KotlinIcons.Wizard.COMPOSE
         ComposeMultiplatformApplicationProjectTemplate -> KotlinIcons.Wizard.COMPOSE
+        else -> null
     }
 
 class TemplateDescriptionComponent : Component() {

@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.jetbrains.python.sdk;
 
 import com.google.common.collect.ImmutableList;
@@ -29,7 +29,6 @@ import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtilRt;
-import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.StandardFileSystems;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -56,9 +55,6 @@ import java.util.*;
 
 /**
  * Refreshes all project's Python SDKs.
- *
- * @author vlan
- * @author yole
  */
 public class PythonSdkUpdater implements StartupActivity.Background {
   private static final Logger LOG = Logger.getInstance(PythonSdkUpdater.class);
@@ -76,10 +72,6 @@ public class PythonSdkUpdater implements StartupActivity.Background {
    */
   @Override
   public void runActivity(@NotNull Project project) {
-    if (!Registry.is("python.use.new.sdk.updater")) {
-      PythonSdkUpdaterOld.updateProjectSdksOnStartup(project);
-      return;
-    }
     Application application = ApplicationManager.getApplication();
     if (application.isUnitTestMode()) return;
     if (project.isDisposed()) return;
@@ -181,7 +173,7 @@ public class PythonSdkUpdater implements StartupActivity.Background {
       }
       catch (UnsupportedPythonSdkTypeException e) {
         NOTIFICATION_GROUP
-          .createNotification(PyBundle.message("sdk.gen.failed.notification.title"), null,
+          .createNotification(PyBundle.message("sdk.gen.failed.notification.title"),
                               PyBundle.message("remote.interpreter.support.is.not.available", sdk.getName()),
                               NotificationType.WARNING)
           .notify(myProject);
@@ -231,9 +223,6 @@ public class PythonSdkUpdater implements StartupActivity.Background {
   @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
   @Deprecated
   public static boolean update(@NotNull Sdk sdk, @Nullable Project project, @Nullable Component ownerComponent) {
-    if (!Registry.is("python.use.new.sdk.updater")) {
-      return PythonSdkUpdaterOld.update(sdk, project, ownerComponent);
-    }
     return updateVersionAndPathsSynchronouslyAndScheduleRemaining(sdk, project);
   }
 
@@ -256,10 +245,6 @@ public class PythonSdkUpdater implements StartupActivity.Background {
    */
   @ApiStatus.Internal
   public static boolean updateVersionAndPathsSynchronouslyAndScheduleRemaining(@NotNull Sdk sdk, @Nullable Project project) {
-    if (!Registry.is("python.use.new.sdk.updater")) {
-      return PythonSdkUpdaterOld.update(sdk, project, null);
-    }
-
     Application application = ApplicationManager.getApplication();
     try {
       // This is not optimal but already happens in many contexts including possible external usages, e.g. during a new SDK generation.
@@ -306,12 +291,7 @@ public class PythonSdkUpdater implements StartupActivity.Background {
    *   <li>Multiple subsequent requests to update an SDK already being refreshed will be combined and result in a single update operation.</li>
    * </ul>
    */
-  @ApiStatus.Experimental
   public static void scheduleUpdate(@NotNull Sdk sdk, @NotNull Project project) {
-    if (!Registry.is("python.use.new.sdk.updater")) {
-      PythonSdkUpdaterOld.update(sdk, project, null);
-      return;
-    }
     scheduleUpdate(sdk, project, new PyUpdateSdkRequestData());
   }
 
@@ -348,10 +328,6 @@ public class PythonSdkUpdater implements StartupActivity.Background {
    */
   @ApiStatus.Internal
   public static void updateOrShowError(@NotNull Sdk sdk, @Nullable Project project, @Nullable Component ownerComponent) {
-    if (!Registry.is("python.use.new.sdk.updater")) {
-      PythonSdkUpdaterOld.updateOrShowError(sdk, project, ownerComponent);
-      return;
-    }
     boolean versionAndPathsUpdated = updateVersionAndPathsSynchronouslyAndScheduleRemaining(sdk, project);
     if (!versionAndPathsUpdated) {
       ApplicationManager.getApplication().invokeLater(

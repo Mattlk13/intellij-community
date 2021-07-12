@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -29,6 +26,7 @@ import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.varargParameterPosition
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 import org.jetbrains.kotlin.utils.keysToMap
 import kotlin.jvm.internal.FunctionBase
 
@@ -172,7 +170,7 @@ abstract class FileRankingCalculator(private val checkClassFqName: Boolean = tru
             return -MAJOR
 
         // boolean is
-        return if (methodName.drop(3) == propertyName.capitalize()) MAJOR else -NORMAL
+        return if (methodName.drop(3) == propertyName.capitalizeAsciiOnly()) MAJOR else -NORMAL
     }
 
     private fun rankingForVisibility(descriptor: DeclarationDescriptorWithVisibility, accessible: Accessible): Ranking {

@@ -114,6 +114,12 @@ class GradleRunAnythingProviderTest : GradleRunAnythingProviderTestCase() {
       assertCollection(it, "taskM", !":taskM", ":module:taskM")
       assertCollection(it, !"taskC", !":taskC", !":module:taskC")
       assertCollection(it, !"taskCM", !":taskCM", !":module:taskCM")
+
+      if (isGradleNewerOrSameAs("6.8")) {
+        assertCollection(it,
+                         getCommonTasks(":composite:") - ":composite:prepareKotlinBuildScriptModel",
+                         getCommonTasks(":composite:module:") - ":composite:module:prepareKotlinBuildScriptModel")
+      }
     }
     withVariantsFor("", "project") {
       assertCollection(it, getGradleOptions())
@@ -144,6 +150,10 @@ class GradleRunAnythingProviderTest : GradleRunAnythingProviderTestCase() {
       assertCollection(it, !"taskCM", !":taskCM", !":module:taskCM")
     }
     withVariantsFor("", "composite") {
+      if (isGradleNewerOrSameAs("6.8")) {
+        assertThat(it).containsExactlyInAnyOrderElementsOf(getGradleOptions())
+        return@withVariantsFor
+      }
       assertCollection(it, getGradleOptions())
       assertCollection(it, getRootProjectTasks(), getRootProjectTasks(":"), !getRootProjectTasks(":module:"))
       if (isGradleNewerOrSameAs("6.5.1")) {
@@ -157,6 +167,10 @@ class GradleRunAnythingProviderTest : GradleRunAnythingProviderTestCase() {
       assertCollection(it, "taskCM", !":taskCM", ":module:taskCM")
     }
     withVariantsFor("", "composite.module") {
+      if (isGradleNewerOrSameAs("6.8")) {
+        assertThat(it).containsExactlyInAnyOrderElementsOf(getGradleOptions())
+        return@withVariantsFor
+      }
       assertCollection(it, getGradleOptions())
       assertCollection(it, !getRootProjectTasks(), !getRootProjectTasks(":"), !getRootProjectTasks(":module:"))
       if (isGradleNewerOrSameAs("6.5.1")) {
@@ -201,13 +215,24 @@ class GradleRunAnythingProviderTest : GradleRunAnythingProviderTestCase() {
         "  Unknown command-line option '--unknown-option'"
       )
 
-    executeAndWait("taskWithArgs")
-      .assertExecutionTree(
-        "-\n" +
-        " -failed\n" +
-        "  :taskWithArgs\n" +
-        "  No value has been specified for property 'myArgs'"
-      )
+    if (isGradleNewerOrSameAs("7.0")) {
+      executeAndWait("taskWithArgs")
+        .assertExecutionTree(
+          "-\n" +
+          " -failed\n" +
+          "  :taskWithArgs\n" +
+          "  A problem was found with the configuration of task ':taskWithArgs' (type 'ArgsTask')."
+        )
+    }
+    else {
+      executeAndWait("taskWithArgs")
+        .assertExecutionTree(
+          "-\n" +
+          " -failed\n" +
+          "  :taskWithArgs\n" +
+          "  No value has been specified for property 'myArgs'"
+        )
+    }
 
     // test known build CLI option before tasks and with task quoted argument with apostrophe (')
     // (<build_option> <task> <arg>='<arg_value>')

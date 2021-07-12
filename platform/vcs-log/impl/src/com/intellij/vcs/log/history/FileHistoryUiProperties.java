@@ -7,10 +7,8 @@ import com.intellij.util.EventDispatcher;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.vcs.log.impl.VcsLogApplicationSettings;
 import com.intellij.vcs.log.impl.VcsLogUiProperties;
-import com.intellij.vcs.log.ui.table.VcsLogColumnDeprecated;
 import com.intellij.vcs.log.ui.table.column.Date;
 import com.intellij.vcs.log.ui.table.column.*;
-import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,6 +26,11 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
     ApplicationManager.getApplication().getService(VcsLogApplicationSettings.class);
   @NotNull private final PropertiesChangeListener myApplicationSettingsListener = this::onApplicationSettingChange;
 
+  @NotNull private final Set<VcsLogUiProperty<?>> myApplicationLevelProperties = Set.of(PREFER_COMMIT_DATE,
+                                                                                        COMPACT_REFERENCES_VIEW,
+                                                                                        SHOW_TAG_NAMES,
+                                                                                        LABELS_LEFT_ALIGNED);
+
   private State myState = new State();
 
   @SuppressWarnings("unchecked")
@@ -35,11 +38,6 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
   @Override
   public <T> T get(@NotNull VcsLogUiProperty<T> property) {
     if (property instanceof TableColumnWidthProperty) {
-      TableColumnWidthProperty tableColumnWidthProperty = (TableColumnWidthProperty)property;
-      if (!myState.COLUMN_WIDTH.isEmpty()) {
-        tableColumnWidthProperty.moveOldSettings(myState.COLUMN_WIDTH, myState.COLUMN_ID_WIDTH);
-        myState.COLUMN_WIDTH = new HashMap<>();
-      }
       Integer savedWidth = myState.COLUMN_ID_WIDTH.get(property.getName());
       if (savedWidth == null) {
         return (T)Integer.valueOf(-1);
@@ -64,23 +62,18 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
       }
       return (T)Boolean.FALSE;
     }
+    if (myApplicationLevelProperties.contains(property)) {
+      return myAppSettings.get(property);
+    }
     return property.match()
       .ifEq(SHOW_DETAILS).then(myState.SHOW_DETAILS)
       .ifEq(SHOW_ALL_BRANCHES).then(myState.SHOW_OTHER_BRANCHES)
       .ifEq(SHOW_DIFF_PREVIEW).then(myState.SHOW_DIFF_PREVIEW)
       .ifEq(SHOW_ROOT_NAMES).then(myState.SHOW_ROOT_NAMES)
-      .ifEq(PREFER_COMMIT_DATE).thenGet(() -> myAppSettings.get(PREFER_COMMIT_DATE))
       .ifEq(COLUMN_ID_ORDER).thenGet(() -> {
         List<String> order = myState.COLUMN_ID_ORDER;
         if (order != null && !order.isEmpty()) {
           return order;
-        }
-        List<Integer> oldOrder = myState.COLUMN_ORDER;
-        if (oldOrder != null && !oldOrder.isEmpty()) {
-          List<String> oldIdOrder = ContainerUtil.map(oldOrder, it -> VcsLogColumnDeprecated.getVcsLogColumnEx(it).getId());
-          myState.COLUMN_ID_ORDER = oldIdOrder;
-          myState.COLUMN_ORDER = new ArrayList<>();
-          return oldIdOrder;
         }
         return ContainerUtil.map(Arrays.asList(Root.INSTANCE, Author.INSTANCE, Date.INSTANCE, Commit.INSTANCE), VcsLogColumn::getId);
       })
@@ -88,7 +81,7 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
   }
 
   private <T> void onApplicationSettingChange(@NotNull VcsLogUiProperty<T> property) {
-    if (PREFER_COMMIT_DATE.equals(property)) {
+    if (myApplicationLevelProperties.contains(property)) {
       myEventDispatcher.getMulticaster().onPropertyChanged(property);
     }
   }
@@ -117,7 +110,7 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
     else if (SHOW_ROOT_NAMES.equals(property)) {
       myState.SHOW_ROOT_NAMES = (Boolean)value;
     }
-    else if (PREFER_COMMIT_DATE.equals(property)) {
+    else if (myApplicationLevelProperties.contains(property)) {
       myAppSettings.set(property, value);
       // listeners will be triggered via onApplicationSettingChange
       return;
@@ -135,7 +128,7 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
            COLUMN_ID_ORDER.equals(property) ||
            SHOW_DIFF_PREVIEW.equals(property) ||
            SHOW_ROOT_NAMES.equals(property) ||
-           PREFER_COMMIT_DATE.equals(property) ||
+           myApplicationLevelProperties.contains(property) ||
            property instanceof TableColumnWidthProperty ||
            property instanceof TableColumnVisibilityProperty;
   }
@@ -170,13 +163,7 @@ public final class FileHistoryUiProperties implements VcsLogUiProperties, Persis
   public static class State {
     public boolean SHOW_DETAILS = false;
     public boolean SHOW_OTHER_BRANCHES = false;
-    @Deprecated
-    @ApiStatus.ScheduledForRemoval(inVersion = "2021.3")
-    public Map<Integer, Integer> COLUMN_WIDTH = new HashMap<>();
     public Map<String, Integer> COLUMN_ID_WIDTH = new HashMap<>();
-    @Deprecated
-    @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-    public List<Integer> COLUMN_ORDER = new ArrayList<>();
     public List<String> COLUMN_ID_ORDER = new ArrayList<>();
     public Map<String, Boolean> COLUMN_ID_VISIBILITY = new HashMap<>();
     public boolean SHOW_DIFF_PREVIEW = true;

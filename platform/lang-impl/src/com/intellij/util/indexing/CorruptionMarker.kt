@@ -4,10 +4,13 @@ package com.intellij.util.indexing
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.psi.stubs.SerializationManagerEx
+import com.intellij.util.indexing.diagnostic.IndexDiagnosticDumper
 import com.intellij.util.indexing.impl.storage.FileBasedIndexLayoutSettings
+import com.intellij.util.io.directoryStreamIfExists
 import com.intellij.util.io.exists
 import com.intellij.util.io.readText
 import com.intellij.util.io.write
+import java.nio.file.Files
 import kotlin.io.path.deleteExisting
 
 internal object CorruptionMarker {
@@ -60,9 +63,29 @@ internal object CorruptionMarker {
 
   @JvmStatic
   fun dropIndexes() {
-    val indexRoot = PathManager.getIndexRoot().toFile()
-    FileUtil.deleteWithRenaming(indexRoot)
-    indexRoot.mkdirs()
+    val indexRoot = PathManager.getIndexRoot()
+
+    if (Files.exists(indexRoot)) {
+      val filesToBeIgnored = FileBasedIndexInfrastructureExtension.EP_NAME.extensions.mapNotNull { it.persistentStateRoot }.toSet()
+      indexRoot.directoryStreamIfExists { dirStream ->
+        dirStream.forEach {
+          if (!filesToBeIgnored.contains(it.fileName.toString())) {
+            FileUtil.deleteWithRenaming(it.toFile())
+          }
+        }
+      }
+    }
+    else {
+      Files.createDirectories(indexRoot)
+    }
+
+    val indexingDiagnosticDir = IndexDiagnosticDumper.indexingDiagnosticDir
+    if (indexingDiagnosticDir.exists()) {
+      indexingDiagnosticDir.directoryStreamIfExists { dirStream ->
+        dirStream.forEach { FileUtil.deleteWithRenaming(it) }
+      }
+    }
+
     // serialization manager is initialized before and use removed index root so we need to reinitialize it
     SerializationManagerEx.getInstanceEx().reinitializeNameStorage()
     ID.reinitializeDiskStorage()

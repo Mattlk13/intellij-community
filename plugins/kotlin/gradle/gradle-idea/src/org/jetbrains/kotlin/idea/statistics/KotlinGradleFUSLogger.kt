@@ -1,25 +1,32 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.statistics
 
+import com.intellij.ide.highlighter.ProjectFileType
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.internal.statistic.eventLog.EventLogConfiguration
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.util.io.FileUtil
+import com.intellij.util.PathUtilRt
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.util.text.trimMiddle
 import org.jetbrains.kotlin.statistics.BuildSessionLogger
-import java.io.File
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import org.jetbrains.kotlin.statistics.BuildSessionLogger.Companion.STATISTICS_FOLDER_NAME
 import org.jetbrains.kotlin.statistics.fileloggers.MetricsContainer
 import org.jetbrains.kotlin.statistics.metrics.BooleanMetrics
 import org.jetbrains.kotlin.statistics.metrics.NumericalMetrics
 import org.jetbrains.kotlin.statistics.metrics.StringMetrics
+import java.io.File
+import java.util.*
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
+import kotlin.io.path.Path
+import kotlin.io.path.exists
 
 class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
 
@@ -33,6 +40,27 @@ class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
     }
 
     companion object {
+
+        private val IDE_STRING_ANONYMIZERS = lazy {
+            mapOf(
+                StringMetrics.PROJECT_PATH to { path: String ->
+                    // This code duplicated logics of StatisticsUtil.getProjectId, which could not be directly reused:
+                    // 1. the path of gradle project may not have corresponding project
+                    // 2. the projectId should be stable and independent on IDE version
+                    val presentableUrl = FileUtil.toSystemIndependentName(path)
+                    val name =
+                        PathUtilRt.getFileName(presentableUrl).toLowerCase(Locale.US).removeSuffix(ProjectFileType.DOT_DEFAULT_EXTENSION)
+                    val locationHash = Integer.toHexString((presentableUrl).hashCode())
+                    val projectHash =
+                        "${name.trimMiddle(name.length.coerceAtMost(254 - locationHash.length), useEllipsisSymbol = false)}.$locationHash"
+                    EventLogConfiguration.getInstance().anonymize(projectHash)
+                })
+        }
+
+        private fun String.anonymizeIdeString(metric: StringMetrics) = if (metric.anonymization.anonymizeOnIdeSize())
+            IDE_STRING_ANONYMIZERS.value[metric]?.invoke(this)
+        else
+            this
 
         /**
          * Maximum amount of directories which were reported as gradle user dirs
@@ -63,7 +91,10 @@ class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
             for (metric in metrics) {
                 when (metric) {
                     is BooleanMetrics -> putIfNotNull(metric.name, this.getMetric(metric)?.toStringRepresentation())
-                    is StringMetrics -> putIfNotNull(metric.name, this.getMetric(metric)?.toStringRepresentation())
+                    is StringMetrics -> putIfNotNull(
+                        metric.name,
+                        this.getMetric(metric)?.toStringRepresentation()?.anonymizeIdeString(metric)
+                    )
                     is NumericalMetrics -> putIfNotNull(metric.name, this.getMetric(metric)?.toStringRepresentation())
                     is Pair<*, *> -> putIfNotNull(metric.first.toString(), metric.second?.toString())
                 }
@@ -80,7 +111,8 @@ class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
                 StringMetrics.GRADLE_VERSION,
                 NumericalMetrics.ARTIFACTS_DOWNLOAD_SPEED,
                 StringMetrics.IDES_INSTALLED,
-                BooleanMetrics.EXECUTED_FROM_IDEA
+                BooleanMetrics.EXECUTED_FROM_IDEA,
+                StringMetrics.PROJECT_PATH
             )
             container.log(
                 GradleStatisticsEvents.Kapt,
@@ -96,7 +128,8 @@ class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
                 BooleanMetrics.ENABLED_COMPILER_PLUGIN_JPA_SUPPORT,
                 BooleanMetrics.ENABLED_COMPILER_PLUGIN_SAM_WITH_RECEIVER,
                 BooleanMetrics.JVM_COMPILER_IR_MODE,
-                StringMetrics.JVM_DEFAULTS
+                StringMetrics.JVM_DEFAULTS,
+                StringMetrics.USE_OLD_BACKEND
             )
 
             container.log(
@@ -224,8 +257,7 @@ class KotlinGradleFUSLogger : StartupActivity, DumbAware, Runnable {
             result.add(path)
             result.addAll(currentState)
 
-            gradleUserDirs =
-                result.filter { filePath -> File(filePath).exists() }.take(MAXIMUM_USER_DIRS).toTypedArray()
+            gradleUserDirs = result.filter { filePath -> Path(filePath).exists() }.take(MAXIMUM_USER_DIRS).toTypedArray()
         }
     }
 }

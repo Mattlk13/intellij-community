@@ -17,7 +17,7 @@ import com.intellij.util.text.nullize
 import com.jetbrains.packagesearch.intellij.plugin.PACKAGE_SEARCH_NOTIFICATION_GROUP_ID
 import com.jetbrains.packagesearch.intellij.plugin.PackageSearchBundle
 import com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.PackageSearchToolWindowFactory
-import com.jetbrains.packagesearch.intellij.plugin.util.dataService
+import com.jetbrains.packagesearch.intellij.plugin.util.packageSearchDataService
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.HttpMethod
@@ -87,7 +87,7 @@ internal class PackageSearchRestService : RestService() {
             ProjectUtil.focusProjectWindow(project, true)
 
             PackageSearchToolWindowFactory.activateToolWindow(project) {
-                val rootModel = project.dataService()
+                val rootModel = project.packageSearchDataService
 //                rootModel.setSelectedPackage(pkg) // TODO preselect proper package
                 rootModel.setSearchQuery(query ?: pkg.replace(':', ' '))
 
@@ -123,10 +123,10 @@ internal class PackageSearchRestService : RestService() {
             .getNotificationGroup(PACKAGE_SEARCH_NOTIFICATION_GROUP_ID)
             .createNotification(
                 PackageSearchBundle.message("packagesearch.title"),
-                pkg,
                 PackageSearchBundle.message("packagesearch.restService.readyForInstallation"),
                 NotificationType.INFORMATION
             )
+            .setSubtitle(pkg)
             .notify(project)
 }
 

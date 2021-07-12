@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.kapt.idea
 
@@ -12,6 +9,7 @@ import org.jetbrains.kotlin.idea.configuration.GradleProjectImportHandler
 import org.jetbrains.kotlin.idea.facet.KotlinFacet
 import org.jetbrains.plugins.gradle.model.data.GradleSourceSetData
 import java.io.File
+import java.util.*
 
 class KaptGradleProjectImportHandler : GradleProjectImportHandler {
     override fun importBySourceSet(facet: KotlinFacet, sourceSetNode: DataNode<GradleSourceSetData>) {
@@ -42,7 +40,7 @@ class KaptGradleProjectImportHandler : GradleProjectImportHandler {
 
     private fun isKaptCompilerPluginPath(path: String): Boolean {
         val lastIndexOfFile = path.lastIndexOfAny(charArrayOf('/', File.separatorChar)).takeIf { it >= 0 } ?: return false
-        val fileName = path.drop(lastIndexOfFile + 1).toLowerCase()
+        val fileName = path.drop(lastIndexOfFile + 1).toLowerCase(Locale.US)
         return fileName.matches("kotlin\\-annotation\\-processing(\\-gradle)?\\-[0-9].*\\.jar".toRegex())
     }
 }

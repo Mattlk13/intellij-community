@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.hierarchy.calls
 
@@ -83,7 +80,8 @@ class KotlinCallerTreeStructure(
                 isReadAccess = element.isGetter
                 isWriteAccess = element.isSetter
             }
-            is KtClass -> KotlinClassFindUsagesOptions(myProject).apply {
+            is KtEnumEntry -> KotlinClassFindUsagesOptions(myProject)
+            is KtClass, is KtObjectDeclaration -> KotlinClassFindUsagesOptions(myProject).apply {
                 isUsages = false
             }
             else -> return emptyList()

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.project
 
@@ -15,6 +12,7 @@ import com.intellij.psi.util.CachedValuesManager
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.containers.SLRUCache
 import org.jetbrains.annotations.TestOnly
+import org.jetbrains.kotlin.analyzer.ModuleInfo
 import org.jetbrains.kotlin.cfg.ControlFlowInformationProvider
 import org.jetbrains.kotlin.container.get
 import org.jetbrains.kotlin.context.SimpleGlobalContext
@@ -24,12 +22,13 @@ import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.descriptors.annotations.Annotations
 import org.jetbrains.kotlin.frontend.di.createContainerForBodyResolve
 import org.jetbrains.kotlin.idea.DaemonCodeAnalyzerStatusService
+import org.jetbrains.kotlin.idea.caches.project.LibraryInfo
 import org.jetbrains.kotlin.idea.caches.resolve.CodeFragmentAnalyzer
 import org.jetbrains.kotlin.idea.caches.resolve.util.analyzeControlFlow
 import org.jetbrains.kotlin.idea.caches.trackers.KotlinCodeBlockModificationListener
 import org.jetbrains.kotlin.idea.caches.trackers.PureKotlinCodeBlockModificationListener
 import org.jetbrains.kotlin.idea.caches.trackers.inBlockModificationCount
-import org.jetbrains.kotlin.idea.compiler.IdeMainFunctionDetectorFactory
+import org.jetbrains.kotlin.idea.compiler.IdeSealedClassInheritorsProvider
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.platform.TargetPlatform
@@ -43,6 +42,7 @@ import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowInfo
 import org.jetbrains.kotlin.resolve.lazy.*
 import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyClassDescriptor
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope
+import org.jetbrains.kotlin.types.expressions.ExpressionTypingContext
 import java.util.*
 import java.util.concurrent.ConcurrentMap
 
@@ -52,6 +52,14 @@ class ResolveElementCache(
     private val targetPlatform: TargetPlatform,
     private val codeFragmentAnalyzer: CodeFragmentAnalyzer
 ) : BodyResolveCache {
+
+    private val cacheDependencies = listOfNotNull(
+        resolveSession.exceptionTracker,
+        ProjectRootModificationTracker.getInstance(project),
+        if (resolveSession.moduleDescriptor.getCapability(ModuleInfo.Capability) !is LibraryInfo) {
+            KotlinCodeBlockModificationListener.getInstance(project).kotlinOutOfCodeBlockTracker
+        } else null
+    ).toTypedArray()
 
     private val forcedFullResolveOnHighlighting = Registry.`is`("kotlin.resolve.force.full.resolve.on.highlighting", true)
 
@@ -80,9 +88,7 @@ class ResolveElementCache(
             CachedValueProvider {
                 CachedValueProvider.Result.create(
                     ContainerUtil.createConcurrentWeakKeySoftValueMap(),
-                    KotlinCodeBlockModificationListener.getInstance(project).kotlinOutOfCodeBlockTracker,
-                    resolveSession.exceptionTracker,
-                    rootsChangedTracker
+                    cacheDependencies
                 )
             },
             false
@@ -118,17 +124,10 @@ class ResolveElementCache(
                         }
                     }
 
-                CachedValueProvider.Result.create(
-                    slruCache,
-                    KotlinCodeBlockModificationListener.getInstance(project).kotlinOutOfCodeBlockTracker,
-                    resolveSession.exceptionTracker,
-                    rootsChangedTracker
-                )
+                CachedValueProvider.Result.create(slruCache, cacheDependencies)
             },
             false
         )
-
-    private val rootsChangedTracker = ProjectRootModificationTracker.getInstance(project)
 
     override fun resolveFunctionBody(function: KtNamedFunction) = getElementsAdditionalResolve(function, null, BodyResolveMode.FULL)
 
@@ -514,8 +513,8 @@ class ResolveElementCache(
         return trace
     }
 
-    private fun typeConstraintAdditionalResolve(analyzer: KotlinCodeAnalyzer, jetTypeConstraint: KtTypeConstraint): BindingTrace {
-        val declaration = jetTypeConstraint.getParentOfType<KtDeclaration>(true)!!
+    private fun typeConstraintAdditionalResolve(analyzer: KotlinCodeAnalyzer, typeConstraint: KtTypeConstraint): BindingTrace {
+        val declaration = typeConstraint.getParentOfType<KtDeclaration>(true)!!
         val descriptor = analyzer.resolveToDescriptor(declaration) as ClassifierDescriptorWithTypeParameters
 
         for (parameterDescriptor in descriptor.declaredTypeParameters) {
@@ -601,7 +600,8 @@ class ResolveElementCache(
             descriptor,
             descriptor.unsubstitutedPrimaryConstructor,
             descriptor.scopeForConstructorHeaderResolution,
-            descriptor.scopeForMemberDeclarationResolution
+            descriptor.scopeForMemberDeclarationResolution,
+            resolveSession.inferenceSession
         )
 
         return trace
@@ -677,7 +677,7 @@ class ResolveElementCache(
         ForceResolveUtil.forceResolveAllContents(functionDescriptor)
 
         val bodyResolver = createBodyResolver(resolveSession, trace, file, statementFilter)
-        bodyResolver.resolveFunctionBody(DataFlowInfo.EMPTY, trace, namedFunction, functionDescriptor, scope)
+        bodyResolver.resolveFunctionBody(DataFlowInfo.EMPTY, trace, namedFunction, functionDescriptor, scope, null)
 
         forceResolveAnnotationsInside(namedFunction)
 
@@ -696,7 +696,7 @@ class ResolveElementCache(
         ForceResolveUtil.forceResolveAllContents(constructorDescriptor)
 
         val bodyResolver = createBodyResolver(resolveSession, trace, file, statementFilter)
-        bodyResolver.resolveSecondaryConstructorBody(DataFlowInfo.EMPTY, trace, constructor, constructorDescriptor, scope)
+        bodyResolver.resolveSecondaryConstructorBody(DataFlowInfo.EMPTY, trace, constructor, constructorDescriptor, scope, null)
 
         forceResolveAnnotationsInside(constructor)
 
@@ -725,7 +725,8 @@ class ResolveElementCache(
                 trace,
                 primaryConstructor,
                 constructorDescriptor,
-                scope
+                scope,
+                resolveSession.inferenceSession
             )
 
             forceResolveAnnotationsInside(primaryConstructor)
@@ -755,7 +756,9 @@ class ResolveElementCache(
         val classOrObjectDescriptor = resolveSession.resolveToDescriptor(anonymousInitializer.containingDeclaration) as LazyClassDescriptor
 
         val bodyResolver = createBodyResolver(resolveSession, trace, file, statementFilter)
-        bodyResolver.resolveAnonymousInitializer(DataFlowInfo.EMPTY, anonymousInitializer, classOrObjectDescriptor)
+        bodyResolver.resolveAnonymousInitializer(
+            DataFlowInfo.EMPTY, anonymousInitializer, classOrObjectDescriptor, resolveSession.inferenceSession
+        )
 
         forceResolveAnnotationsInside(anonymousInitializer)
 
@@ -785,7 +788,8 @@ class ResolveElementCache(
             statementFilter,
             targetPlatform.findAnalyzerServices(file.project),
             file.languageVersionSettings,
-            IdeaModuleStructureOracle()
+            IdeaModuleStructureOracle(),
+            IdeSealedClassInheritorsProvider
         ).get()
     }
 
@@ -834,6 +838,8 @@ class ResolveElementCache(
         override fun getOuterDataFlowInfo(): DataFlowInfo = DataFlowInfo.EMPTY
 
         override fun getTopDownAnalysisMode() = topDownAnalysisMode
+
+        override fun getLocalContext(): ExpressionTypingContext? = null
     }
 
     companion object {

@@ -1,16 +1,18 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ui.win;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.io.NioFiles;
 import com.intellij.util.ConcurrencyUtil;
-import com.intellij.util.loader.NativeLibraryLoader;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -37,7 +39,7 @@ final class WinShellIntegration implements Disposable {
       parent.clearRecentTasksList();
     }
 
-    public void setRecentTasksList(@NotNull Task @NotNull [] recentTasks) {
+    public void setRecentTasksList(@NotNull JumpTask @NotNull [] recentTasks) {
       parent.setRecentTasksList(recentTasks);
     }
 
@@ -120,7 +122,7 @@ final class WinShellIntegration implements Disposable {
     bridge.clearRecentTasksListNative();
   }
 
-  private void setRecentTasksList(@NotNull Task @NotNull [] recentTasks) {
+  private void setRecentTasksList(@NotNull JumpTask @NotNull [] recentTasks) {
     bridge.ensureNativeIsInitialized();
     bridge.setRecentTasksListNative(recentTasks);
   }
@@ -144,10 +146,12 @@ final class WinShellIntegration implements Disposable {
 
     native private void initializeNative();
     native private void clearRecentTasksListNative();
-    native private void setRecentTasksListNative(@NotNull Task @NotNull [] recentTasks);
+    native private void setRecentTasksListNative(@NotNull JumpTask @NotNull [] recentTasks);
 
     static {
-      NativeLibraryLoader.loadPlatformLibrary("WinShellIntegrationBridge");
+      Path lib = PathManager.findBinFile("WinShellIntegrationBridge.dll");
+      assert lib != null : "Shell Integration lib missing; bin=" + NioFiles.list(Path.of(PathManager.getBinPath()));
+      System.load(lib.toString());
     }
   }
 

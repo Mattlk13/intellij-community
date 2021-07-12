@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators
 
@@ -20,12 +17,9 @@ import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.JSConfigurat
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.JsBrowserBasedConfigurator.Companion.browserSubTarget
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.JsBrowserBasedConfigurator.Companion.cssSupport
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.JsNodeBasedConfigurator.Companion.nodejsSubTarget
-import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.JsNodeTargetConfigurator.createTargetIrs
-import org.jetbrains.kotlin.tools.projectWizard.phases.GenerationPhase
 import org.jetbrains.kotlin.tools.projectWizard.plugins.buildSystem.buildSystemType
 import org.jetbrains.kotlin.tools.projectWizard.plugins.buildSystem.isGradle
 import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ModuleSubType
-import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ModulesToIrConversionData
 import org.jetbrains.kotlin.tools.projectWizard.settings.DisplayableSettingItem
 import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Module
 import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.ModuleKind
@@ -157,7 +151,7 @@ object JvmTargetConfigurator : JvmModuleConfigurator,
 
     override val text: String = KotlinNewProjectWizardBundle.message("module.configurator.jvm")
 
-    override fun defaultTestFramework(): KotlinTestFramework = KotlinTestFramework.JUNIT4
+    override fun defaultTestFramework(): KotlinTestFramework = KotlinTestFramework.JUNIT5
 
     override fun createInnerTargetIrs(
         reader: Reader,
@@ -173,7 +167,7 @@ object JvmTargetConfigurator : JvmModuleConfigurator,
                     }
 
                 }
-                if (Settings.javaSupport.reference.settingValue) {
+                if (!module.hasAndroidSibling()) {
                     "withJava"()
                 }
             }
@@ -188,17 +182,7 @@ object JvmTargetConfigurator : JvmModuleConfigurator,
         }
     }
 
-    override fun getConfiguratorSettings(): List<ModuleConfiguratorSetting<*, *>> =
-        super.getConfiguratorSettings() +
-                Settings.javaSupport
-
-    object Settings : ModuleConfiguratorSettings() {
-        val javaSupport by booleanSetting(
-            KotlinNewProjectWizardBundle.message("module.configurator.jvm.setting.java.support"),
-            GenerationPhase.PROJECT_GENERATION
-        ) {
-            description = KotlinNewProjectWizardBundle.message("module.configurator.jvm.setting.java.support.description")
-            defaultValue = value(false)
-        }
-    }
+    private fun Module.hasAndroidSibling(): Boolean =
+        configurator is TargetConfigurator
+                && parent?.subModules?.any { it.configurator is AndroidModuleConfigurator } ?: false
 }

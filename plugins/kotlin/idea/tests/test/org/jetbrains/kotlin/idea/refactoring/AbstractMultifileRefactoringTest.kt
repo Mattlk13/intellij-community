@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring
 
@@ -24,11 +21,9 @@ import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.UsefulTestCase
 import org.jetbrains.kotlin.idea.jsonUtils.getNullableString
 import org.jetbrains.kotlin.idea.refactoring.rename.loadTestConfiguration
-import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
-import org.jetbrains.kotlin.idea.test.KotlinLightProjectDescriptor
-import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
-import org.jetbrains.kotlin.idea.test.extractMultipleMarkerOffsets
+import org.jetbrains.kotlin.idea.test.*
 import org.jetbrains.kotlin.test.KotlinTestUtils
+import org.jetbrains.kotlin.util.prefixIfNot
 import java.io.File
 
 abstract class AbstractMultifileRefactoringTest : KotlinLightCodeInsightFixtureTestCase() {
@@ -53,7 +48,10 @@ abstract class AbstractMultifileRefactoringTest : KotlinLightCodeInsightFixtureT
         val config = JsonParser.parseString(FileUtil.loadFile(testFile, true)) as JsonObject
 
         doTestCommittingDocuments(testFile) { rootDir ->
-            runRefactoring(testFile.path, config, rootDir, project)
+            val opts = config.getNullableString("customCompilerOpts")?.prefixIfNot("// ") ?: ""
+            withCustomCompilerOptions(opts, project, module) {
+                runRefactoring(testFile.path, config, rootDir, project)
+            }
         }
     }
 
@@ -89,10 +87,9 @@ fun runRefactoringTest(
     project: Project,
     action: AbstractMultifileRefactoringTest.RefactoringAction
 ) {
-    val testDir = path.substring(0, path.lastIndexOf("/"))
     val mainFilePath = config.getNullableString("mainFile") ?: config.getAsJsonArray("filesToMove").first().asString
 
-    val conflictFile = File("$testDir/conflicts.txt")
+    val conflictFile = File(File(path).parentFile, "conflicts.txt")
 
     val mainFile = rootDir.findFileByRelativePath(mainFilePath)!!
     val mainPsiFile = PsiManager.getInstance(project).findFile(mainFile)!!

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.breakpoints
 
@@ -141,9 +138,9 @@ class LineBreakpointExpressionVisitor private constructor(
         return ApplicabilityResult.UNKNOWN
     }
 
-    override fun visitWhenEntry(jetWhenEntry: KtWhenEntry, data: Unit?): ApplicabilityResult {
-        jetWhenEntry.expression?.accept(this, data)?.handle()?.let { return it }
-        return ApplicabilityResult.maybe(jetWhenEntry.conditions.isNotEmpty() || jetWhenEntry.isElse)
+    override fun visitWhenEntry(ktWhenEntry: KtWhenEntry, data: Unit?): ApplicabilityResult {
+        ktWhenEntry.expression?.accept(this, data)?.handle()?.let { return it }
+        return ApplicabilityResult.maybe(ktWhenEntry.conditions.isNotEmpty() || ktWhenEntry.isElse)
     }
 
     override fun visitDestructuringDeclaration(multiDeclaration: KtDestructuringDeclaration, data: Unit?): ApplicabilityResult {

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.move;
 
@@ -779,6 +776,11 @@ public class MoveTestGenerated extends AbstractMoveTest {
     @TestMetadata("kotlin/moveTopLevelDeclarations/moveSealedClassWithImplsToAnotherPackage/moveSealedClassWithImplsToAnotherPackage.test")
     public void testKotlin_moveTopLevelDeclarations_moveSealedClassWithImplsToAnotherPackage_MoveSealedClassWithImplsToAnotherPackage() throws Exception {
         runTest("testData/refactoring/move/kotlin/moveTopLevelDeclarations/moveSealedClassWithImplsToAnotherPackage/moveSealedClassWithImplsToAnotherPackage.test");
+    }
+
+    @TestMetadata("kotlin/moveTopLevelDeclarations/moveSealedClassWithImplsToAnotherPackage/moveSealedClassWithNestedImplsToAnotherPackage.test")
+    public void testKotlin_moveTopLevelDeclarations_moveSealedClassWithImplsToAnotherPackage_MoveSealedClassWithNestedImplsToAnotherPackage() throws Exception {
+        runTest("testData/refactoring/move/kotlin/moveTopLevelDeclarations/moveSealedClassWithImplsToAnotherPackage/moveSealedClassWithNestedImplsToAnotherPackage.test");
     }
 
     @TestMetadata("kotlin/moveTopLevelDeclarations/moveSealedClassWithNestedImplsToAnotherPackage/moveSealedClassWithNestedImplsToAnotherPackage.test")

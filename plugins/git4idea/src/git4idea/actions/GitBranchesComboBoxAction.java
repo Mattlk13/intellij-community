@@ -5,6 +5,7 @@ import com.intellij.dvcs.branch.DvcsBranchUtil;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.ComboBoxAction;
+import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupListener;
 import com.intellij.openapi.ui.popup.LightweightWindowEvent;
@@ -19,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.util.Objects;
 
-public class GitBranchesComboBoxAction extends ComboBoxAction {
+public class GitBranchesComboBoxAction extends ComboBoxAction implements DumbAware {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
@@ -55,7 +56,7 @@ public class GitBranchesComboBoxAction extends ComboBoxAction {
     Project project = Objects.requireNonNull(context.getData(CommonDataKeys.PROJECT));
     GitRepository repo = Objects.requireNonNull(GitBranchUtil.getCurrentRepository(project));
 
-    ListPopup popup = GitBranchPopup.getInstance(project, repo).asListPopup();
+    ListPopup popup = GitBranchPopup.getInstance(project, repo, context).asListPopup();
     popup.addListener(new JBPopupListener() {
       @Override
       public void onClosed(@NotNull LightweightWindowEvent event) {

@@ -1,33 +1,36 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.updateSettings.impl.pluginsAdvertisement
 
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.ide.plugins.PluginManagerCore
-import com.intellij.ide.plugins.advertiser.KnownExtensionsService
 import com.intellij.ide.plugins.advertiser.PluginData
+import com.intellij.ide.plugins.advertiser.PluginFeatureCacheService
 import com.intellij.ide.plugins.marketplace.MarketplaceRequests
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.fileTypes.FileNameMatcher
+import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeFactory
 import com.intellij.openapi.fileTypes.PlainTextLikeFileType
 import com.intellij.openapi.fileTypes.ex.DetectedByContentFileType
 import com.intellij.openapi.fileTypes.ex.FakeFileType
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.util.io.FileUtilRt
+import com.intellij.openapi.util.text.Strings
+import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
+import com.intellij.util.concurrency.annotations.RequiresNoReadLock
 import com.intellij.util.containers.mapSmartSet
-import com.intellij.util.containers.orNull
 import com.intellij.util.xmlb.annotations.Tag
 import com.intellij.util.xmlb.annotations.XMap
+import org.jetbrains.annotations.VisibleForTesting
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-internal data class PluginAdvertiserExtensionsData(
+data class PluginAdvertiserExtensionsData(
   // Either extension or file name. Depends on which of the two properties has more priority for advertising plugins for this specific file.
   val extensionOrFileName: String,
   val plugins: Set<PluginData>,
@@ -38,7 +41,7 @@ internal data class PluginAdvertiserExtensionsData(
   storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)]
 )
 @Service(Service.Level.APP)
-internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateComponent<PluginAdvertiserExtensionsStateService.State>(
+class PluginAdvertiserExtensionsStateService : SimplePersistentStateComponent<PluginAdvertiserExtensionsStateService.State>(
   State()
 ) {
 
@@ -72,8 +75,11 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
       get() = service<PluginAdvertiserExtensionsStateService>()
 
     @JvmStatic
-    fun getFullExtension(file: VirtualFile): String? = file.extension?.let { "*.$it" }
+    fun getFullExtension(fileName: String): String? = Strings.toLowerCase(
+      FileUtilRt.getExtension(fileName)).takeIf { it.isNotEmpty() }?.let { "*.$it" }
 
+    @RequiresBackgroundThread
+    @RequiresNoReadLock
     private fun requestCompatiblePlugins(
       extensionOrFileName: String,
       dataSet: Set<PluginData>,
@@ -83,7 +89,7 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
         return emptySet()
       }
 
-      val pluginIdsFromMarketplace = MarketplaceRequests.Instance
+      val pluginIdsFromMarketplace = MarketplaceRequests
         .getLastCompatiblePluginUpdate(dataSet.mapSmartSet { it.pluginId })
         .map { it.pluginId }
         .toSet()
@@ -127,7 +133,7 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
   private val cache = Caffeine
     .newBuilder()
     .expireAfterWrite(1, TimeUnit.HOURS)
-    .build<String, Optional<PluginAdvertiserExtensionsData>>()
+    .build<String, PluginAdvertiserExtensionsData>()
 
   fun createExtensionDataProvider(project: Project) = ExtensionDataProvider(project)
 
@@ -135,15 +141,14 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
     state[matcher.presentableString] = descriptor
   }
 
+  @RequiresBackgroundThread
+  @RequiresNoReadLock
   fun updateCache(extensionOrFileName: String): Boolean {
-    LOG.assertTrue(!ApplicationManager.getApplication().isReadAccessAllowed)
-    LOG.assertTrue(!ApplicationManager.getApplication().isDispatchThread)
-
     if (cache.getIfPresent(extensionOrFileName) != null) {
       return false
     }
 
-    val knownExtensions = KnownExtensionsService.instance.extensions
+    val knownExtensions = PluginFeatureCacheService.instance.extensions
     if (knownExtensions == null) {
       LOG.debug("No known extensions loaded")
       return false
@@ -151,16 +156,16 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
 
     val compatiblePlugins = requestCompatiblePlugins(
       extensionOrFileName,
-      knownExtensions[extensionOrFileName],
+      knownExtensions[extensionOrFileName]
     )
 
-    val optionalData = if (compatiblePlugins.isEmpty())
-      Optional.empty()
-    else
-      Optional.of(PluginAdvertiserExtensionsData(extensionOrFileName, compatiblePlugins))
-
-    cache.put(extensionOrFileName, optionalData)
+    updateCache(extensionOrFileName, compatiblePlugins)
     return true
+  }
+
+  @VisibleForTesting
+  fun updateCache(extensionOrFileName: String, compatiblePlugins: Set<PluginData>) {
+    cache.put(extensionOrFileName, PluginAdvertiserExtensionsData(extensionOrFileName, compatiblePlugins))
   }
 
   inner class ExtensionDataProvider(private val project: Project) {
@@ -178,53 +183,58 @@ internal class PluginAdvertiserExtensionsStateService : SimplePersistentStateCom
       cache.invalidate(extensionOrFileName)
     }
 
-    fun requestExtensionData(file: VirtualFile): PluginAdvertiserExtensionsData? {
-      val fullExtension = getFullExtension(file)
+    fun requestExtensionData(fileName: String, fileType: FileType): PluginAdvertiserExtensionsData? {
+      val fullExtension = getFullExtension(fileName)
       if (fullExtension != null && isIgnored(fullExtension)) {
         LOG.debug("Extension '$fullExtension' is ignored in project '${project.name}'")
         return null
       }
-      val fileName = file.name
       if (isIgnored(fileName)) {
         LOG.debug("File '$fileName' is ignored in project '${project.name}'")
         return null
       }
 
-      val fileType = file.fileType
       if (fullExtension == null && fileType is FakeFileType) {
         return null
       }
 
+      // Check if there's a plugin matching the exact file name
+
       state[fileName]?.let {
         return it
       }
-      fullExtension?.let { state[it] }?.let {
-        return it
-      }
 
-      val knownExtensions = KnownExtensionsService.instance.extensions
+      val knownExtensions = PluginFeatureCacheService.instance.extensions
       if (knownExtensions == null) {
         LOG.debug("No known extensions loaded")
         return null
       }
 
-      val optionalData = if (fileType is PlainTextLikeFileType
-                             || fileType is DetectedByContentFileType) {
-        fullExtension?.let { cache.getIfPresent(it) }
-        ?: cache.getIfPresent(fileName)
-      }
-      else {
-        val plugin = findEnabledPlugin(knownExtensions[fileName].map { it.pluginIdString }.toSet())
-        LOG.debug {
-          val suffix = plugin?.let { "by fileName via '${it.name}'(id: '${it.pluginId}') plugin" }
-                       ?: "therefore looking only for plugins exactly matching fileName"
-          "File '$fileName' (type: '$fileType') is already supported $suffix"
-        }
-
-        if (plugin != null) null else cache.getIfPresent(fileName)
+      val plugin = findEnabledPlugin(knownExtensions[fileName].map { it.pluginIdString }.toSet())
+      if (plugin != null) {
+        // Plugin supporting the exact file name is installed and enabled, no advertiser is needed
+        return null
       }
 
-      return optionalData?.orNull()
+      val pluginsForExactFileName = cache.getIfPresent(fileName)
+      if (pluginsForExactFileName != null && pluginsForExactFileName.plugins.isNotEmpty()) {
+        return pluginsForExactFileName
+      }
+      if (knownExtensions[fileName].isNotEmpty()) {
+        // there is a plugin that can support the exact file name but we don't know a compatible version, return null to force request to update cache
+        return null
+      }
+
+      // Check if there's a plugin matching the extension
+
+      fullExtension?.let { state[it] }?.let {
+        return it
+      }
+
+      if (fileType is PlainTextLikeFileType || fileType is DetectedByContentFileType) {
+        return fullExtension?.let { cache.getIfPresent(it) } ?: PluginAdvertiserExtensionsData(fileName, emptySet())
+      }
+      return null
     }
 
     private fun isIgnored(extensionOrFileName: String): Boolean {

@@ -1,12 +1,10 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.templates
 
 import org.jetbrains.kotlin.tools.projectWizard.Identificator
 import org.jetbrains.kotlin.tools.projectWizard.SettingsOwner
 import org.jetbrains.kotlin.tools.projectWizard.WizardRunConfiguration
-
-
 import org.jetbrains.kotlin.tools.projectWizard.core.*
-
 import org.jetbrains.kotlin.tools.projectWizard.core.entity.settings.*
 import org.jetbrains.kotlin.tools.projectWizard.enumSettingImpl
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.*
@@ -14,8 +12,6 @@ import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.multiplatf
 import org.jetbrains.kotlin.tools.projectWizard.phases.GenerationPhase
 import org.jetbrains.kotlin.tools.projectWizard.plugins.RunConfigurationsPlugin
 import org.jetbrains.kotlin.tools.projectWizard.plugins.StructurePlugin
-import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ModuleType
-import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ModulesToIrConversionData
 import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ProjectKind
 import org.jetbrains.kotlin.tools.projectWizard.settings.DisplayableSettingItem
 import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Module
@@ -23,6 +19,7 @@ import org.jetbrains.kotlin.tools.projectWizard.settings.version.Version
 import org.jetbrains.kotlin.tools.projectWizard.transformers.interceptors.InterceptionPoint
 import org.jetbrains.kotlin.tools.projectWizard.transformers.interceptors.TemplateInterceptor
 import java.nio.file.Path
+import java.util.*
 import kotlin.properties.ReadOnlyProperty
 
 interface TemplateEnvironment {
@@ -73,7 +70,16 @@ abstract class Template : SettingsOwner, EntitiesOwnerDescriptor, DisplayableSet
     abstract val title: String
     abstract val description: String
 
-    abstract fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean
+    fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean {
+         return isPermittedForModule(module) && isApplicableTo(module, projectKind)
+    }
+
+    private fun isPermittedForModule(module: Module): Boolean {
+        return module.permittedTemplateIds?.contains(id) ?: true // not specified? - no restrictions, let template decide
+    }
+
+    abstract fun isApplicableTo(module: Module, projectKind: ProjectKind): Boolean
+
 
     override val text: String get() = title
 
@@ -112,7 +118,7 @@ abstract class Template : SettingsOwner, EntitiesOwnerDescriptor, DisplayableSet
     open fun Reader.getFileTemplates(module: ModuleIR): List<FileTemplateDescriptorWithPath> = emptyList()
     open fun Reader.getAdditionalSettings(module: Module): Map<String, Any> = emptyMap()
 
-    open fun createInterceptors(module: ModuleIR): List<TemplateInterceptor> = emptyList()
+    open fun Reader.createInterceptors(module: ModuleIR): List<TemplateInterceptor> = emptyList()
 
     open fun Reader.createRunConfigurations(module: ModuleIR): List<WizardRunConfiguration> = emptyList()
 
@@ -163,7 +169,7 @@ abstract class Template : SettingsOwner, EntitiesOwnerDescriptor, DisplayableSet
 
 
     private fun Reader.createDefaultSettings() = mapOf(
-        "projectName" to StructurePlugin.name.settingValue.capitalize()
+        "projectName" to StructurePlugin.name.settingValue.capitalize(Locale.US)
     )
 
     override fun equals(other: Any?): Boolean =

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
@@ -262,45 +259,6 @@ open class MultiModuleHighlightingTest : AbstractMultiModuleHighlightingTest() {
         val usageModule = module("usage")
         usageModule.makeJsModule()
         usageModule.addLibrary(lib, kind = JSLibraryKind)
-
-        checkHighlightingInProject()
-    }
-
-    fun testCoroutineMixedReleaseStatus() {
-        KotlinCommonCompilerArgumentsHolder.getInstance(project).update { skipMetadataVersionCheck = true }
-        KotlinCompilerSettings.getInstance(project).update { additionalArguments = "-Xskip-metadata-version-check" }
-
-        val libOld = KotlinCompilerStandalone(
-            listOf(File(testDataPath, getTestName(true) + "/libOld")),
-            options = listOf("-language-version", "1.2", "-api-version", "1.2")
-        ).compile()
-
-        val libNew = KotlinCompilerStandalone(
-            listOf(File(testDataPath, getTestName(true) + "/libNew")),
-            options = listOf("-language-version", "1.3", "-api-version", "1.3")
-        ).compile()
-
-        val moduleNew = module("moduleNew").setupKotlinFacet {
-            settings.coroutineSupport = LanguageFeature.State.ENABLED
-            settings.languageLevel = LanguageVersion.KOTLIN_1_3
-            settings.apiLevel = LanguageVersion.KOTLIN_1_3
-        }
-
-        val moduleOld = module("moduleOld").setupKotlinFacet {
-            settings.coroutineSupport = LanguageFeature.State.ENABLED
-            settings.languageLevel = LanguageVersion.KOTLIN_1_2
-            settings.apiLevel = LanguageVersion.KOTLIN_1_2
-        }
-
-        moduleNew.addLibrary(libOld)
-        moduleNew.addLibrary(libNew)
-        moduleNew.addLibrary(KotlinArtifacts.instance.kotlinStdlib)
-
-        moduleOld.addLibrary(libNew)
-        moduleOld.addLibrary(libOld)
-        moduleOld.addLibrary(KotlinArtifacts.instance.kotlinStdlib)
-
-        moduleNew.addDependency(moduleOld)
 
         checkHighlightingInProject()
     }

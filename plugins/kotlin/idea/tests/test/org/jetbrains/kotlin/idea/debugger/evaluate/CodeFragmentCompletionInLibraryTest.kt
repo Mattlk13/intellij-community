@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.evaluate
 
@@ -20,10 +17,8 @@ import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtFunction
 import org.jetbrains.kotlin.psi.KtPsiFactory
-import org.jetbrains.kotlin.test.KotlinRoot
 import org.junit.internal.runners.JUnit38ClassRunner
 import org.junit.runner.RunWith
-import java.io.File
 
 
 @RunWith(JUnit38ClassRunner::class)
@@ -68,8 +63,8 @@ class CodeFragmentCompletionInLibraryTest : AbstractJvmBasicCompletionTest() {
 
     private fun setupFixtureByCodeFragment(fragmentText: String) {
         val sourceFile = findLibrarySourceDir().findChild("customLibrary.kt")!!
-        val jetFile = PsiManager.getInstance(project).findFile(sourceFile) as KtFile
-        val fooFunctionFromLibrary = jetFile.declarations.first() as KtFunction
+        val ktFile = PsiManager.getInstance(project).findFile(sourceFile) as KtFile
+        val fooFunctionFromLibrary = ktFile.declarations.first() as KtFunction
         val codeFragment = KtPsiFactory(fooFunctionFromLibrary).createExpressionCodeFragment(
             fragmentText,
             getContextElement(fooFunctionFromLibrary.bodyExpression)

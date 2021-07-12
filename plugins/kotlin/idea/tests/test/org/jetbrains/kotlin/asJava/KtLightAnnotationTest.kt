@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.asJava
 
@@ -18,8 +15,8 @@ import junit.framework.TestCase
 import org.jetbrains.kotlin.asJava.elements.KtLightAnnotationForSourceEntry
 import org.jetbrains.kotlin.asJava.elements.KtLightPsiArrayInitializerMemberValue
 import org.jetbrains.kotlin.config.LanguageFeature
-
 import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.codegen.forTestCompile.ForTestCompileRuntime
 import org.jetbrains.kotlin.idea.completion.test.assertInstanceOf
 import org.jetbrains.kotlin.idea.facet.configureFacet
 import org.jetbrains.kotlin.idea.facet.getOrCreateFacet
@@ -927,7 +924,7 @@ class KtLightAnnotationTest : KotlinLightCodeInsightFixtureTestCase() {
         WriteAction.run<Throwable> {
             val modelsProvider = IdeModifiableModelsProviderImpl(project)
             val facet = module.getOrCreateFacet(modelsProvider, useProjectSettings = false)
-            facet.configureFacet(version, LanguageFeature.State.DISABLED, null, modelsProvider)
+            facet.configureFacet(version, null, modelsProvider)
             modelsProvider.commit()
         }
     }

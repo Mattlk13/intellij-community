@@ -1,14 +1,14 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.util.lang;
 
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.util.io.Murmur3_32Hash;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -22,18 +22,23 @@ import java.util.jar.Manifest;
 
 @SuppressWarnings("SuspiciousPackagePrivateAccess")
 public final class ZipResourceFile implements ResourceFile {
-  private static final int MANIFEST_HASH_CODE = Murmur3_32Hash.MURMUR3_32.hashString(JarFile.MANIFEST_NAME, 0, JarFile.MANIFEST_NAME.length());
+  private static final int MANIFEST_HASH_CODE = 0x4099_fd89;  // = Murmur3_32Hash.MURMUR3_32.hashString(JarFile.MANIFEST_NAME)
 
   private final ImmutableZipFile zipFile;
 
-  public ZipResourceFile(@NotNull Path file) throws IOException {
+  public ZipResourceFile(@NotNull Path file) {
     ZipFilePool pool = ZipFilePool.POOL;
-    if (pool == null) {
-      zipFile = ImmutableZipFile.load(file);
+    try {
+      if (pool == null) {
+        zipFile = ImmutableZipFile.load(file);
+      }
+      else {
+        Object zipFile = pool.loadZipFile(file);
+        this.zipFile = (ImmutableZipFile)zipFile;
+      }
     }
-    else {
-      Object zipFile = pool.loadZipFile(file);
-      this.zipFile = (ImmutableZipFile)zipFile;
+    catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
   }
 
@@ -55,10 +60,7 @@ public final class ZipResourceFile implements ResourceFile {
   @Override
   public @Nullable Attributes loadManifestAttributes() throws IOException {
     ImmutableZipEntry entry = zipFile.getEntry(JarFile.MANIFEST_NAME, MANIFEST_HASH_CODE);
-    if (entry != null) {
-      return new Manifest(new ByteArrayInputStream(entry.getData(zipFile))).getMainAttributes();
-    }
-    return null;
+    return entry != null ? new Manifest(new ByteArrayInputStream(entry.getData(zipFile))).getMainAttributes() : null;
   }
 
   @Override
@@ -283,6 +285,7 @@ public final class ZipResourceFile implements ResourceFile {
 
     @Override
     public JarFile getJarFile() throws IOException {
+      //noinspection LoggerInitializedWithForeignClass
       Logger.getInstance(ZipResourceFile.class).warn("Do not use URL connection as JarURLConnection");
       return new JarFile(path.toFile());
     }

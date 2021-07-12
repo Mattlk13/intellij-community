@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight
 
@@ -38,10 +35,6 @@ abstract class AbstractOutOfBlockModificationTest : KotlinLightCodeInsightFixtur
         val isSkipCheckDefined = InTextDirectivesUtils.isDirectiveDefined(
             ktFile.text,
             SKIP_ANALYZE_CHECK_DIRECTIVE
-        )
-        assertTrue(
-            "It's allowed to skip check with analyze only for tests where out-of-block is expected",
-            !isSkipCheckDefined || expectedOutOfBlock
         )
         val tracker =
             PsiManager.getInstance(myFixture.project).modificationTracker as PsiModificationTrackerImpl

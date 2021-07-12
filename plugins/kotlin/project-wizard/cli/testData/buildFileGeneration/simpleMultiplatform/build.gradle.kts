@@ -14,6 +14,7 @@ kotlin {
         compilations.all {
             kotlinOptions.jvmTarget = "9"
         }
+        withJava()
         testRuns["test"].executionTask.configure {
             useJUnit()
         }
@@ -30,13 +31,13 @@ kotlin {
         val jvmMain by getting
         val jvmTest by getting {
             dependencies {
-                implementation(kotlin("test-junit"))
+                implementation(kotlin("test"))
             }
         }
         val aMain by getting
         val aTest by getting {
             dependencies {
-                implementation(kotlin("test-js"))
+                implementation(kotlin("test"))
             }
         }
     }

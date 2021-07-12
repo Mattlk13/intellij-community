@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
@@ -23,12 +20,14 @@ import org.jetbrains.kotlin.context.withModule
 import org.jetbrains.kotlin.context.withProject
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.diagnostics.Diagnostic
+import org.jetbrains.kotlin.diagnostics.DiagnosticSink
 import org.jetbrains.kotlin.diagnostics.DiagnosticUtils
 import org.jetbrains.kotlin.frontend.di.createContainerForLazyBodyResolve
 import org.jetbrains.kotlin.idea.caches.project.getModuleInfo
 import org.jetbrains.kotlin.idea.caches.trackers.clearInBlockModifications
 import org.jetbrains.kotlin.idea.caches.trackers.inBlockModifications
 import org.jetbrains.kotlin.idea.compiler.IdeMainFunctionDetectorFactory
+import org.jetbrains.kotlin.idea.compiler.IdeSealedClassInheritorsProvider
 import org.jetbrains.kotlin.idea.project.IdeaModuleStructureOracle
 import org.jetbrains.kotlin.idea.project.findAnalyzerServices
 import org.jetbrains.kotlin.idea.project.languageVersionSettings
@@ -91,32 +90,50 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
         return null
     }
 
-    internal fun getAnalysisResults(element: KtElement): AnalysisResult {
+    internal fun getAnalysisResults(element: KtElement, callback: DiagnosticSink.DiagnosticsCallback? = null): AnalysisResult {
         check(element)
 
         val analyzableParent = KotlinResolveDataProvider.findAnalyzableParent(element) ?: return AnalysisResult.EMPTY
 
+        fun handleResult(result: AnalysisResult, callback: DiagnosticSink.DiagnosticsCallback?): AnalysisResult {
+            callback?.let { result.bindingContext.diagnostics.forEach(it::callback) }
+            return result
+        }
+
         return guardLock.guarded {
             // step 1: perform incremental analysis IF it is applicable
-            getIncrementalAnalysisResult()?.let { return@guarded it }
+            getIncrementalAnalysisResult(callback)?.let {
+                return@guarded handleResult(it, callback)
+            }
 
             // cache does not contain AnalysisResult per each kt/psi element
             // instead it looks up analysis for its parents - see lookUp(analyzableElement)
 
             // step 2: return result if it is cached
             lookUp(analyzableParent)?.let {
-                return@guarded it
+                return@guarded handleResult(it, callback)
             }
 
+            val localDiagnostics = mutableSetOf<Diagnostic>()
+            val localCallback = if (callback != null) { d: Diagnostic ->
+                localDiagnostics.add(d)
+                callback.callback(d)
+            } else null
+
             // step 3: perform analyze of analyzableParent as nothing has been cached yet
-            val result = analyze(analyzableParent)
+            val result = analyze(analyzableParent, null, localCallback)
+
+            // some of diagnostics could be not handled with a callback - send out the rest
+            callback?.let { c ->
+                result.bindingContext.diagnostics.filterNot { it in localDiagnostics }.forEach(c::callback)
+            }
             cache[analyzableParent] = result
 
             return@guarded result
         }
     }
 
-    private fun getIncrementalAnalysisResult(): AnalysisResult? {
+    private fun getIncrementalAnalysisResult(callback: DiagnosticSink.DiagnosticsCallback?): AnalysisResult? {
         updateFileResultFromCache()
 
         val inBlockModifications = file.inBlockModifications
@@ -153,7 +170,9 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
                                 )
                             }
 
-                        val newResult = analyze(inBlockModification, trace)
+                        callback?.let { trace.parentDiagnosticsApartElement.forEach(it::callback) }
+
+                        val newResult = analyze(inBlockModification, trace, callback)
                         analysisResult = wrapResult(result, newResult, trace)
                     }
                     file.clearInBlockModifications()
@@ -226,7 +245,11 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
         }
     }
 
-    private fun analyze(analyzableElement: KtElement, bindingTrace: BindingTrace? = null): AnalysisResult {
+    private fun analyze(
+        analyzableElement: KtElement,
+        bindingTrace: BindingTrace?,
+        callback: DiagnosticSink.DiagnosticsCallback?
+    ): AnalysisResult {
         ProgressIndicatorProvider.checkCanceled()
 
         val project = analyzableElement.project
@@ -244,7 +267,8 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
                 codeFragmentAnalyzer,
                 bodyResolveCache,
                 analyzableElement,
-                bindingTrace
+                bindingTrace,
+                callback
             )
         } catch (e: ProcessCanceledException) {
             throw e
@@ -414,12 +438,14 @@ private object KotlinResolveDataProvider {
         codeFragmentAnalyzer: CodeFragmentAnalyzer,
         bodyResolveCache: BodyResolveCache,
         analyzableElement: KtElement,
-        bindingTrace: BindingTrace?
+        bindingTrace: BindingTrace?,
+        callback: DiagnosticSink.DiagnosticsCallback?
     ): AnalysisResult {
         try {
             if (analyzableElement is KtCodeFragment) {
                 val bodyResolveMode = BodyResolveMode.PARTIAL_FOR_COMPLETION
-                val bindingContext = codeFragmentAnalyzer.analyzeCodeFragment(analyzableElement, bodyResolveMode).bindingContext
+                val trace: BindingTrace = codeFragmentAnalyzer.analyzeCodeFragment(analyzableElement, bodyResolveMode)
+                val bindingContext = trace.bindingContext
                 return AnalysisResult.success(bindingContext, moduleDescriptor)
             }
 
@@ -429,34 +455,41 @@ private object KotlinResolveDataProvider {
                 allowSliceRewrite = true
             )
 
-            val moduleInfo = analyzableElement.containingFile.getModuleInfo()
+            val moduleInfo = analyzableElement.containingKtFile.getModuleInfo()
 
             val targetPlatform = moduleInfo.platform
 
-            /*
-            Note that currently we *have* to re-create LazyTopDownAnalyzer with custom trace in order to disallow resolution of
-            bodies in top-level trace (trace from DI-container).
-            Resolving bodies in top-level trace may lead to memory leaks and incorrect resolution, because top-level
-            trace isn't invalidated on in-block modifications (while body resolution surely does)
+            callback?.let { trace.setCallback(it) }
 
-            Also note that for function bodies, we'll create DelegatingBindingTrace in ResolveElementCache anyways
-            (see 'functionAdditionalResolve'). However, this trace is still needed, because we have other
-            codepaths for other KtDeclarationWithBodies (like property accessors/secondary constructors/class initializers)
-             */
-            val lazyTopDownAnalyzer = createContainerForLazyBodyResolve(
-                //TODO: should get ModuleContext
-                globalContext.withProject(project).withModule(moduleDescriptor),
-                resolveSession,
-                trace,
-                targetPlatform,
-                bodyResolveCache,
-                targetPlatform.findAnalyzerServices(project),
-                analyzableElement.languageVersionSettings,
-                IdeaModuleStructureOracle(),
-                IdeMainFunctionDetectorFactory()
+            try {
+                /*
+                Note that currently we *have* to re-create LazyTopDownAnalyzer with custom trace in order to disallow resolution of
+                bodies in top-level trace (trace from DI-container).
+                Resolving bodies in top-level trace may lead to memory leaks and incorrect resolution, because top-level
+                trace isn't invalidated on in-block modifications (while body resolution surely does)
+
+                Also note that for function bodies, we'll create DelegatingBindingTrace in ResolveElementCache anyways
+                (see 'functionAdditionalResolve'). However, this trace is still needed, because we have other
+                codepaths for other KtDeclarationWithBodies (like property accessors/secondary constructors/class initializers)
+                 */
+                val lazyTopDownAnalyzer = createContainerForLazyBodyResolve(
+                    //TODO: should get ModuleContext
+                    globalContext.withProject(project).withModule(moduleDescriptor),
+                    resolveSession,
+                    trace,
+                    targetPlatform,
+                    bodyResolveCache,
+                    targetPlatform.findAnalyzerServices(project),
+                    analyzableElement.languageVersionSettings,
+                    IdeaModuleStructureOracle(),
+                    IdeMainFunctionDetectorFactory(),
+                    IdeSealedClassInheritorsProvider
             ).get<LazyTopDownAnalyzer>()
 
-            lazyTopDownAnalyzer.analyzeDeclarations(TopDownAnalysisMode.TopLevelDeclarations, listOf(analyzableElement))
+                lazyTopDownAnalyzer.analyzeDeclarations(TopDownAnalysisMode.TopLevelDeclarations, listOf(analyzableElement))
+            } finally {
+                trace.resetCallback()
+            }
 
             return AnalysisResult.success(trace.bindingContext, moduleDescriptor)
         } catch (e: ProcessCanceledException) {

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script
 
@@ -17,6 +14,7 @@ import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.extensions.Extensions
 import com.intellij.openapi.extensions.ProjectExtensionPointName
 import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.progress.util.BackgroundTaskUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ex.PathUtilEx
@@ -30,9 +28,10 @@ import org.jetbrains.kotlin.idea.KotlinFileType
 import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.caches.project.SdkInfo
 import org.jetbrains.kotlin.idea.caches.project.getScriptRelatedModuleInfo
+import org.jetbrains.kotlin.idea.core.KotlinPluginDisposable
 import org.jetbrains.kotlin.idea.core.script.configuration.CompositeScriptConfigurationManager
 import org.jetbrains.kotlin.idea.core.script.settings.KotlinScriptingSettings
-import org.jetbrains.kotlin.idea.core.util.withCheckCanceledLock
+import org.jetbrains.kotlin.idea.core.util.CheckCanceledLock
 import org.jetbrains.kotlin.idea.core.util.writeWithCheckCanceled
 import org.jetbrains.kotlin.idea.util.application.getServiceSafe
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
@@ -44,7 +43,9 @@ import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstanceOrNull
 import org.jetbrains.kotlin.utils.addToStdlib.flattenTo
 import java.io.File
 import java.net.URLClassLoader
+import java.nio.file.Path
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.script.dependencies.Environment
 import kotlin.script.dependencies.ScriptContents
 import kotlin.script.experimental.api.SourceCode
@@ -60,16 +61,14 @@ import kotlin.script.experimental.jvm.util.ClasspathExtractionException
 import kotlin.script.experimental.jvm.util.scriptCompilationClasspathFromContextOrStdlib
 import kotlin.script.templates.standard.ScriptTemplateWithArgs
 
-class LoadScriptDefinitionsStartupActivity : StartupActivity {
+class LoadScriptDefinitionsStartupActivity : StartupActivity.Background {
     override fun runActivity(project: Project) {
         if (isUnitTestMode()) {
             // In tests definitions are loaded synchronously because they are needed to analyze script
             // In IDE script won't be highlighted before all definitions are loaded, then the highlighting will be restarted
             ScriptDefinitionsManager.getInstance(project).reloadScriptDefinitionsIfNeeded()
         } else {
-            ApplicationManager.getApplication().executeOnPooledThread {
-                if (project.isDefault || project.isDisposed) return@executeOnPooledThread
-
+            BackgroundTaskUtil.runUnderDisposeAwareIndicator(KotlinPluginDisposable.getInstance(project)) {
                 ScriptDefinitionsManager.getInstance(project).reloadScriptDefinitionsIfNeeded()
                 ScriptConfigurationManager.getInstance(project).loadPlugins()
             }
@@ -78,6 +77,7 @@ class LoadScriptDefinitionsStartupActivity : StartupActivity {
 }
 
 class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinitionProvider(), Disposable {
+    private val definitionsLock = ReentrantReadWriteLock()
     private val definitionsBySource = mutableMapOf<ScriptDefinitionsSource, List<ScriptDefinition>>()
 
     @Volatile
@@ -86,13 +86,14 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
     private val failedContributorsHashes = HashSet<Int>()
 
-    private val scriptDefinitionsCacheLock = ReentrantLock()
+    private val scriptDefinitionsCacheLock = CheckCanceledLock()
     private val scriptDefinitionsCache = SLRUMap<String, ScriptDefinition>(10, 10)
 
     // cache service as it's getter is on the hot path
     // it is safe, since both services are in same plugin
     @Volatile
-    private var configurations: CompositeScriptConfigurationManager? = ScriptConfigurationManager.getInstance(project) as CompositeScriptConfigurationManager
+    private var configurations: CompositeScriptConfigurationManager? =
+        ScriptConfigurationManager.compositeScriptConfigurationManager(project)
 
     override fun findDefinition(script: SourceCode): ScriptDefinition? {
         val locationId = script.locationId ?: return null
@@ -102,7 +103,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
         if (!isReady()) return null
 
-        scriptDefinitionsCacheLock.withCheckCanceledLock { scriptDefinitionsCache.get(locationId) }?.let { cached -> return cached }
+        scriptDefinitionsCacheLock.withLock { scriptDefinitionsCache.get(locationId) }?.let { cached -> return cached }
 
         val definition =
             if (isScratchFile(script)) {
@@ -112,7 +113,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
                 super.findDefinition(script) ?: return null
             }
 
-        scriptDefinitionsCacheLock.withCheckCanceledLock {
+        scriptDefinitionsCacheLock.withLock {
             scriptDefinitionsCache.put(locationId, definition)
         }
 
@@ -126,10 +127,11 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
         return virtualFile != null && ScratchFileService.getInstance().getRootType(virtualFile) is ScratchRootType
     }
 
-    override fun findScriptDefinition(fileName: String): KotlinScriptDefinition? = findDefinition(File(fileName).toScriptSource())?.legacyDefinition
+    override fun findScriptDefinition(fileName: String): KotlinScriptDefinition? =
+        findDefinition(File(fileName).toScriptSource())?.legacyDefinition
 
     fun reloadDefinitionsBy(source: ScriptDefinitionsSource) {
-        lock.writeWithCheckCanceled {
+        definitionsLock.writeWithCheckCanceled {
             if (definitions == null) {
                 sourcesToReload.add(source)
                 return // not loaded yet
@@ -138,7 +140,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
         }
 
         val safeGetDefinitions = source.safeGetDefinitions()
-        val updateDefinitionsResult = lock.writeWithCheckCanceled {
+        val updateDefinitionsResult = definitionsLock.writeWithCheckCanceled {
             definitionsBySource[source] = safeGetDefinitions
 
             definitions = definitionsBySource.values.flattenTo(mutableListOf())
@@ -148,7 +150,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
         updateDefinitionsResult?.apply()
     }
 
-    override val currentDefinitions:Sequence<ScriptDefinition>
+    override val currentDefinitions: Sequence<ScriptDefinition>
         get() {
             val scriptingSettings = kotlinScriptingSettingsSafe() ?: return emptySequence()
             return (definitions ?: run {
@@ -177,7 +179,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
         val newDefinitionsBySource = getSources().associateWith { it.safeGetDefinitions() }
 
-        val updateDefinitionsResult = lock.writeWithCheckCanceled {
+        val updateDefinitionsResult = definitionsLock.writeWithCheckCanceled {
             definitionsBySource.putAll(newDefinitionsBySource)
             definitions = definitionsBySource.values.flattenTo(mutableListOf())
 
@@ -185,7 +187,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
         }
         updateDefinitionsResult?.apply()
 
-        lock.writeWithCheckCanceled {
+        definitionsLock.writeWithCheckCanceled {
             sourcesToReload.takeIf { it.isNotEmpty() }?.let {
                 val copy = ArrayList<ScriptDefinitionsSource>(it)
                 it.clear()
@@ -196,7 +198,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
     fun reorderScriptDefinitions() {
         val scriptingSettings = kotlinScriptingSettingsSafe() ?: return
-        val updateDefinitionsResult = lock.writeWithCheckCanceled {
+        val updateDefinitionsResult = definitionsLock.writeWithCheckCanceled {
             definitions?.let { list ->
                 list.forEach {
                     it.order = scriptingSettings.getScriptDefinitionOrder(it)
@@ -220,7 +222,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
     fun isReady(): Boolean {
         if (definitions == null) return false
-        val keys = lock.writeWithCheckCanceled { definitionsBySource.keys }
+        val keys = definitionsLock.writeWithCheckCanceled { definitionsBySource.keys }
         return keys.all { source ->
             // TODO: implement another API for readiness checking
             (source as? ScriptDefinitionContributor)?.isReady() != false
@@ -229,22 +231,27 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
 
     override fun getDefaultDefinition(): ScriptDefinition {
         val standardScriptDefinitionContributor = ScriptDefinitionContributor.find<StandardScriptDefinitionContributor>(project)
-            ?: error("StandardScriptDefinitionContributor should be registered is plugin.xml")
+            ?: error("StandardScriptDefinitionContributor should be registered in plugin.xml")
         return ScriptDefinition.FromLegacy(getScriptingHostConfiguration(), standardScriptDefinitionContributor.getDefinitions().last())
     }
 
     private fun updateDefinitions(): UpdateDefinitionsResult? {
-        assert(lock.isWriteLocked) { "updateDefinitions should only be called under the write lock" }
+        assert(definitionsLock.isWriteLocked) { "updateDefinitions should only be called under the write lock" }
         if (project.isDisposed) return null
 
         val fileTypeManager = FileTypeManager.getInstance()
 
-        val newExtensions = getKnownFilenameExtensions().filter {
-            fileTypeManager.getFileTypeByExtension(it) != KotlinFileType.INSTANCE
+        val newExtensions = getKnownFilenameExtensions().toSet().filter {
+            val fileTypeByExtension = fileTypeManager.getFileTypeByFileName("xxx.$it")
+            val notKnown = fileTypeByExtension != KotlinFileType.INSTANCE
+            if (notKnown) {
+                scriptingWarnLog("extension $it file type [${fileTypeByExtension.name}] is not registered as ${KotlinFileType.INSTANCE.name}")
+            }
+            notKnown
         }.toSet()
 
         clearCache()
-        scriptDefinitionsCacheLock.withCheckCanceledLock { scriptDefinitionsCache.clear() }
+        scriptDefinitionsCacheLock.withLock { scriptDefinitionsCache.clear() }
 
         return UpdateDefinitionsResult(project, newExtensions)
     }
@@ -252,6 +259,7 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
     private data class UpdateDefinitionsResult(val project: Project, val newExtensions: Set<String>) {
         fun apply() {
             if (newExtensions.isNotEmpty()) {
+                scriptingWarnLog("extensions ${newExtensions} is about to be registered as ${KotlinFileType.INSTANCE.name}")
                 // Register new file extensions
                 ApplicationManager.getApplication().invokeLater {
                     val fileTypeManager = FileTypeManager.getInstance()
@@ -287,6 +295,8 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
     }
 
     override fun dispose() {
+        super.dispose()
+
         clearCache()
 
         definitionsBySource.clear()
@@ -302,7 +312,6 @@ class ScriptDefinitionsManager(private val project: Project) : LazyScriptDefinit
     }
 }
 
-// TODO: consider rewriting to return sequence
 fun loadDefinitionsFromTemplates(
     templateClassNames: List<String>,
     templateClasspath: List<File>,
@@ -315,27 +324,55 @@ fun loadDefinitionsFromTemplates(
      */
     additionalResolverClasspath: List<File> = emptyList(),
     defaultCompilerOptions: Iterable<String> = emptyList()
+): List<ScriptDefinition> = loadDefinitionsFromTemplatesByPaths(
+    templateClassNames,
+    templateClasspath.map(File::toPath),
+    baseHostConfiguration,
+    additionalResolverClasspath.map(File::toPath),
+    defaultCompilerOptions
+)
+
+// TODO: consider rewriting to return sequence
+fun loadDefinitionsFromTemplatesByPaths(
+    templateClassNames: List<String>,
+    templateClasspath: List<Path>,
+    baseHostConfiguration: ScriptingHostConfiguration,
+    // TODO: need to provide a way to specify this in compiler/repl .. etc
+    /*
+     * Allows to specify additional jars needed for DependenciesResolver (and not script template).
+     * Script template dependencies naturally become (part of) dependencies of the script which is not always desired for resolver dependencies.
+     * i.e. gradle resolver may depend on some jars that 'built.gradle.kts' files should not depend on.
+     */
+    additionalResolverClasspath: List<Path> = emptyList(),
+    defaultCompilerOptions: Iterable<String> = emptyList()
 ): List<ScriptDefinition> {
     val classpath = templateClasspath + additionalResolverClasspath
     scriptingInfoLog("Loading script definitions $templateClassNames using classpath: ${classpath.joinToString(File.pathSeparator)}")
     val baseLoader = ScriptDefinitionContributor::class.java.classLoader
-    val loader = if (classpath.isEmpty()) baseLoader else URLClassLoader(classpath.map { it.toURI().toURL() }.toTypedArray(), baseLoader)
+    val loader = if (classpath.isEmpty())
+        baseLoader
+    else
+        URLClassLoader(classpath.map { it.toUri().toURL() }.toTypedArray(), baseLoader)
 
     return templateClassNames.mapNotNull { templateClassName ->
         try {
             // TODO: drop class loading here - it should be handled downstream
             // as a compatibility measure, the asm based reading of annotations should be implemented to filter classes before classloading
             val template = loader.loadClass(templateClassName).kotlin
+            val templateClasspathAsFiles = templateClasspath.map(Path::toFile)
             val hostConfiguration = ScriptingHostConfiguration(baseHostConfiguration) {
-                configurationDependencies(JvmDependency(templateClasspath))
+                configurationDependencies(JvmDependency(templateClasspathAsFiles))
             }
+
             when {
                 template.annotations.firstIsInstanceOrNull<kotlin.script.templates.ScriptTemplateDefinition>() != null -> {
-                    ScriptDefinition.FromLegacyTemplate(hostConfiguration, template, templateClasspath, defaultCompilerOptions)
+                    ScriptDefinition.FromLegacyTemplate(hostConfiguration, template, templateClasspathAsFiles, defaultCompilerOptions)
                 }
+
                 template.annotations.firstIsInstanceOrNull<kotlin.script.experimental.annotations.KotlinScript>() != null -> {
                     ScriptDefinition.FromTemplate(hostConfiguration, template, ScriptDefinition::class, defaultCompilerOptions)
                 }
+
                 else -> {
                     scriptingWarnLog("Cannot find a valid script definition annotation on the class $template")
                     null
@@ -350,12 +387,9 @@ fun loadDefinitionsFromTemplates(
             if (e is ControlFlowException) throw e
 
             val message = "Cannot load script definition class $templateClassName"
-            val thirdPartyPlugin = PluginManagerCore.getPluginByClassName(templateClassName)
-            if (thirdPartyPlugin != null) {
-                scriptingErrorLog(message, PluginException(message, e, thirdPartyPlugin))
-            } else {
-                scriptingErrorLog(message, e)
-            }
+            PluginManagerCore.getPluginByClassName(templateClassName)?.let {
+                scriptingErrorLog(message, PluginException(message, e, it))
+            } ?: scriptingErrorLog(message, e)
             null
         }
     }

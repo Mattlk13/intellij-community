@@ -30,5 +30,10 @@ data class JsonDateTime(val instant: ZonedDateTime = ZonedDateTime.ofInstant(Ins
       JsonDateTime(ZonedDateTime.parse(p.valueAsString, DateTimeFormatter.ISO_ZONED_DATE_TIME))
   }
 
-  fun presentableDateTime(): String = instant.format(DateTimeFormatter.RFC_1123_DATE_TIME)
+  fun presentableLocalDateTime(): String =
+    instant.withZoneSameInstant(ZoneOffset.systemDefault()).format(LOCAL_DATE_TIME_SHORT_FORMAT)
+
+  companion object {
+    val LOCAL_DATE_TIME_SHORT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss dd MMM");
+  }
 }

@@ -1,8 +1,8 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package training.ui.views
 
 import com.intellij.openapi.project.DumbService
-import com.intellij.openapi.project.guessCurrentProject
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.impl.welcomeScreen.learnIde.HeightLimitedPane
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
@@ -11,8 +11,8 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import icons.FeaturesTrainerIcons
 import org.jetbrains.annotations.NotNull
+import training.FeaturesTrainerIcons
 import training.learn.CourseManager
 import training.learn.LearnBundle
 import training.learn.course.IftModule
@@ -31,8 +31,8 @@ import javax.swing.border.EmptyBorder
 
 private val HOVER_COLOR: Color get() = JBColor.namedColor("Plugins.hoverBackground", JBColor(0xEDF6FE, 0x464A4D))
 
-class LearningItems : JPanel() {
-  var modules: List<IftModule> = emptyList()
+class LearningItems(private val project: Project) : JPanel() {
+  var modules: Collection<IftModule> = emptyList()
   private val expanded: MutableSet<IftModule> = mutableSetOf()
 
   init {
@@ -73,7 +73,6 @@ class LearningItems : JPanel() {
     val name = LinkLabel<Any>(lesson.name, null)
     name.setListener(
       { _, _ ->
-        val project = guessCurrentProject(this)
         val cantBeOpenedInDumb = DumbService.getInstance(project).isDumb && !lesson.properties.canStartInDumbMode
         if (cantBeOpenedInDumb && !LessonManager.instance.lessonShouldBeOpenedCompleted(lesson)) {
           val balloon = createBalloon(LearnBundle.message("indexing.message"))
@@ -158,7 +157,7 @@ class LearningItems : JPanel() {
     modulePanel.add(scaledRigid(0, UISettings.instance.progressModuleGap))
 
     if (expanded.contains(module)) {
-      modulePanel.add(HeightLimitedPane(module.description ?: "", -1, UIUtil.getLabelForeground() as JBColor).also {
+      modulePanel.add(HeightLimitedPane(module.description, -1, UIUtil.getLabelForeground() as JBColor).also {
         it.addMouseListener(mouseAdapter)
       })
     }

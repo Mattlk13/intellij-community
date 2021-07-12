@@ -143,9 +143,7 @@ public final class PathManager {
     if (rootPath == null) return null;
 
     Path root = Paths.get(rootPath).toAbsolutePath();
-    do {
-      root = root.getParent();
-    } while (root != null && !isIdeaHome(root));
+    do root = root.getParent(); while (root != null && !isIdeaHome(root));
     return root != null ? root.toString() : null;
   }
 
@@ -161,11 +159,11 @@ public final class PathManager {
   private static List<Path> getBinDirectories(Path root) {
     List<Path> binDirs = new ArrayList<>();
 
-    String[] subDirs = {BIN_DIRECTORY, "community/bin", "ultimate/community/bin"};
+    Path[] candidates = {root.resolve(BIN_DIRECTORY), Paths.get(getCommunityHomePath(root.toString()), "bin")};
     String osSuffix = SystemInfoRt.isWindows ? "win" : SystemInfoRt.isMac ? "mac" : "linux";
 
-    for (String subDir : subDirs) {
-      Path dir = root.resolve(subDir);
+    for (Path dir : candidates) {
+      if (binDirs.contains(dir)) continue;
       if (Files.isDirectory(dir)) {
         binDirs.add(dir);
         dir = dir.resolve(osSuffix);
@@ -377,13 +375,17 @@ public final class PathManager {
       ourLogPath = explicit;
     }
     else if (PATHS_SELECTOR != null && System.getProperty(PROPERTY_SYSTEM_PATH) == null) {
-      ourLogPath = platformPath(PATHS_SELECTOR, "Logs", "", "LOCALAPPDATA", LOG_DIRECTORY, "XDG_CACHE_HOME", ".cache", LOG_DIRECTORY);
+      ourLogPath = getDefaultLogPathFor(PATHS_SELECTOR);
     }
     else {
       ourLogPath = getSystemPath() + '/' + LOG_DIRECTORY;
     }
 
     return ourLogPath;
+  }
+
+  public static @NotNull String getDefaultLogPathFor(@NotNull String selector) {
+    return platformPath(selector, "Logs", "", "LOCALAPPDATA", LOG_DIRECTORY, "XDG_CACHE_HOME", ".cache", LOG_DIRECTORY);
   }
 
   public static @NotNull String getPluginTempPath() {
@@ -609,14 +611,23 @@ public final class PathManager {
    * @return path to 'community' project home irrespective of current project
    */
   public static @NotNull String getCommunityHomePath() {
-    String path = getHomePath();
-    if (Files.isDirectory(Paths.get(path, "community/.idea"))) {
-      return path + "/community";
+    return getCommunityHomePath(getHomePath());
+  }
+
+  private static @NotNull String getCommunityHomePath(@NotNull String homePath) {
+    boolean isRunningFromSources = Files.isDirectory(Paths.get(homePath, ".idea"));
+    if (!isRunningFromSources) return homePath;
+
+    if (Files.isDirectory(Paths.get(homePath, "community/.idea"))) {
+      return homePath + "/community";
     }
-    if (Files.isDirectory(Paths.get(path, "ultimate/community/.idea"))) {
-      return path + "/ultimate/community";
+    if (Files.isDirectory(Paths.get(homePath, "ultimate/community/.idea"))) {
+      return homePath + "/ultimate/community";
     }
-    return path;
+    if (Files.isRegularFile(Paths.get(homePath, "../../Product.Root"))) { // .NET products directory
+      return homePath + "/../ultimate/community";
+    }
+    return homePath;
   }
 
   public static @Nullable String getJarPathForClass(@NotNull Class<?> aClass) {
@@ -727,11 +738,7 @@ public final class PathManager {
     throw new UnsupportedOperationException("Unsupported OS: " + SystemInfoRt.OS_NAME);
   }
 
-  @NotNull
-  private static String getUnixPlatformPath(String userHome, String selector,
-                                            String xdgVar,
-                                            String xdgDfl,
-                                            String xdgSub) {
+  private static String getUnixPlatformPath(String userHome, String selector, @Nullable String xdgVar, String xdgDfl, String xdgSub) {
     String dir = xdgVar != null ? System.getenv(xdgVar) : null;
     if (dir == null || dir.isEmpty()) dir = userHome + '/' + xdgDfl;
     dir = dir + '/' + vendorName();

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.nj2k;
 
@@ -728,6 +725,24 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
         @TestMetadata("sout.java")
         public void testSout() throws Exception {
             runTest("testData/newJ2k/callChainExpression/sout.java");
+        }
+    }
+
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("testData/newJ2k/caseConversion")
+    public static class CaseConversion extends AbstractNewJavaToKotlinConverterSingleFileTest {
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("charCaseConversion.java")
+        public void testCharCaseConversion() throws Exception {
+            runTest("testData/newJ2k/caseConversion/charCaseConversion.java");
+        }
+
+        @TestMetadata("stringCaseConversion.java")
+        public void testStringCaseConversion() throws Exception {
+            runTest("testData/newJ2k/caseConversion/stringCaseConversion.java");
         }
     }
 
@@ -3446,6 +3461,11 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
             runTest("testData/newJ2k/methodCallExpression/callWithKeywords.java");
         }
 
+        @TestMetadata("characterDigit.java")
+        public void testCharacterDigit() throws Exception {
+            runTest("testData/newJ2k/methodCallExpression/characterDigit.java");
+        }
+
         @TestMetadata("collectionsMethods.java")
         public void testCollectionsMethods() throws Exception {
             runTest("testData/newJ2k/methodCallExpression/collectionsMethods.java");
@@ -4799,6 +4819,11 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
         @TestMetadata("castNullable.java")
         public void testCastNullable() throws Exception {
             runTest("testData/newJ2k/typeCastExpression/castNullable.java");
+        }
+
+        @TestMetadata("charCasts.java")
+        public void testCharCasts() throws Exception {
+            runTest("testData/newJ2k/typeCastExpression/charCasts.java");
         }
 
         @TestMetadata("extendsWildcardCast.java")

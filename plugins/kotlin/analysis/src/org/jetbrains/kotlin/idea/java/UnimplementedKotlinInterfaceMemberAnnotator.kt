@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.java
 
@@ -19,7 +16,10 @@ import com.intellij.psi.*
 import org.jetbrains.kotlin.asJava.KtLightClassMarker
 import org.jetbrains.kotlin.asJava.classes.KtLightClassForSourceDeclaration
 import org.jetbrains.kotlin.asJava.elements.KtLightMethod
+import org.jetbrains.kotlin.config.JvmAnalysisFlags
+import org.jetbrains.kotlin.config.JvmDefaultMode
 import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.project.languageVersionSettings
 import org.jetbrains.kotlin.load.java.structure.LightClassOriginKind
 import org.jetbrains.kotlin.resolve.annotations.JVM_STATIC_ANNOTATION_FQ_NAME
 import org.jetbrains.kotlin.resolve.jvm.annotations.JVM_DEFAULT_FQ_NAME
@@ -31,17 +31,24 @@ class UnimplementedKotlinInterfaceMemberAnnotator : Annotator {
 
         if (element.isInterface || element.hasModifierProperty(PsiModifier.ABSTRACT)) return
 
+        val jvmDefaultMode = element.languageVersionSettings.getFlag(JvmAnalysisFlags.jvmDefaultMode)
+        if (jvmDefaultMode == JvmDefaultMode.ALL_COMPATIBILITY || jvmDefaultMode == JvmDefaultMode.ALL_INCOMPATIBLE) {
+            return
+        }
+
         if (getAnyMethodToImplement(element) != null) return // reported by java default annotator
 
         findUnimplementedMethod(element)?.let {
             report(it, holder, element)
         }
-
     }
 
     private fun findUnimplementedMethod(psiClass: PsiClass): KtLightMethod? {
         val signaturesFromKotlinInterfaces = psiClass.visibleSignatures.filter { signature ->
-            signature.method.let { it is KtLightMethod && it.hasModifierProperty(PsiModifier.DEFAULT) }
+            val method = signature.method
+            method is KtLightMethod &&
+                    method.hasModifierProperty(PsiModifier.DEFAULT) &&
+                    !method.hasModifierProperty(PsiModifier.STATIC)
         }.ifEmpty { return null }
 
         val kotlinSuperClass = generateSequence(psiClass) { it.superClass }.firstOrNull { it is KtLightClassForSourceDeclaration }

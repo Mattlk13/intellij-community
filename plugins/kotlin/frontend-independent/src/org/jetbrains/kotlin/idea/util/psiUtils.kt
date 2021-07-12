@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.util
 
@@ -12,9 +9,12 @@ import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.util.parentOfType
 import com.intellij.psi.util.parentsOfType
 import org.jetbrains.kotlin.cfg.pseudocode.containingDeclarationForPseudocode
+import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
+import org.jetbrains.kotlin.fileClasses.JvmFileClassUtil
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.resolve.jvm.JvmClassName
 
 fun KtElement.getElementTextInContext(): String {
     val context = parentOfType<KtImportDirective>()
@@ -46,6 +46,27 @@ fun KtClassOrObject.classIdIfNonLocal(): ClassId? {
     return ClassId(packageName, FqName(classesNames.joinToString(separator = ".")), /*local=*/false)
 }
 
+val KtClassOrObject.jvmFqName: String?
+    get() = classIdIfNonLocal()?.let { JvmClassName.byClassId(it) }?.fqNameForTopLevelClassMaybeWithDollars?.asString()
+
 fun PsiElement.reformatted(canChangeWhiteSpacesOnly: Boolean = false): PsiElement = let {
     CodeStyleManager.getInstance(it.project).reformat(it, canChangeWhiteSpacesOnly)
 }
+
+fun KtAnnotated.findAnnotation(
+    shortName: String,
+    useSiteTarget: AnnotationUseSiteTarget? = null,
+): KtAnnotationEntry? = annotationEntries.firstOrNull {
+    it.useSiteTarget?.getAnnotationUseSiteTarget() == useSiteTarget && it.shortName?.asString() == shortName
+}
+
+private fun KtAnnotated.findJvmName(useSiteTarget: AnnotationUseSiteTarget? = null): String? =
+    findAnnotation(JvmFileClassUtil.JVM_NAME_SHORT, useSiteTarget)?.let(JvmFileClassUtil::getLiteralStringFromAnnotation)
+
+val KtNamedFunction.jvmName: String? get() = findJvmName()
+val KtPropertyAccessor.jvmName: String? get() = findJvmName()
+val KtProperty.jvmSetterName: String? get() = setter?.jvmName ?: findJvmName(AnnotationUseSiteTarget.PROPERTY_SETTER)
+val KtProperty.jvmGetterName: String? get() = getter?.jvmName ?: findJvmName(AnnotationUseSiteTarget.PROPERTY_GETTER)
+
+fun KtCallableDeclaration.numberOfArguments(countReceiver: Boolean = false): Int =
+    valueParameters.size + (1.takeIf { countReceiver && receiverTypeReference != null } ?: 0)

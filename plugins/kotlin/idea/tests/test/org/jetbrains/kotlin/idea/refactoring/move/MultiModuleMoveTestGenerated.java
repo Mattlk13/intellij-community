@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.move;
 
@@ -84,6 +81,61 @@ public class MultiModuleMoveTestGenerated extends AbstractMultiModuleMoveTest {
     @TestMetadata("moveRefToLibTypeAliasImplementingLibExpectClass/moveRefToLibTypeAliasImplementingLibExpectClass.test")
     public void testMoveRefToLibTypeAliasImplementingLibExpectClass_MoveRefToLibTypeAliasImplementingLibExpectClass() throws Exception {
         runTest("testData/refactoring/moveMultiModule/moveRefToLibTypeAliasImplementingLibExpectClass/moveRefToLibTypeAliasImplementingLibExpectClass.test");
+    }
+
+    @TestMetadata("moveSealedCheckEntireHierarchy/moveSealedCheckEntireHierarchy.test")
+    public void testMoveSealedCheckEntireHierarchy_MoveSealedCheckEntireHierarchy() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckEntireHierarchy/moveSealedCheckEntireHierarchy.test");
+    }
+
+    @TestMetadata("moveSealedCheckNotMember/moveSealedCheckNotMember.test")
+    public void testMoveSealedCheckNotMember_MoveSealedCheckNotMember() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckNotMember/moveSealedCheckNotMember.test");
+    }
+
+    @TestMetadata("moveSealedCheckOriginalPackageHasMemberCrossModule/moveSealedCheckOriginalPackageHasMemberCrossModule.test")
+    public void testMoveSealedCheckOriginalPackageHasMemberCrossModule_MoveSealedCheckOriginalPackageHasMemberCrossModule() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckOriginalPackageHasMemberCrossModule/moveSealedCheckOriginalPackageHasMemberCrossModule.test");
+    }
+
+    @TestMetadata("moveSealedCheckOriginalPackageHasMember/moveSealedCheckOriginalPackageHasMember.test")
+    public void testMoveSealedCheckOriginalPackageHasMember_MoveSealedCheckOriginalPackageHasMember() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckOriginalPackageHasMember/moveSealedCheckOriginalPackageHasMember.test");
+    }
+
+    @TestMetadata("moveSealedCheckSingleSealed/moveSealedCheckSingleSealed.test")
+    public void testMoveSealedCheckSingleSealed_MoveSealedCheckSingleSealed() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckSingleSealed/moveSealedCheckSingleSealed.test");
+    }
+
+    @TestMetadata("moveSealedCheckTargetPackageHasMemberCrossModule/moveSealedCheckTargetPackageHasMemberCrossModule.test")
+    public void testMoveSealedCheckTargetPackageHasMemberCrossModule_MoveSealedCheckTargetPackageHasMemberCrossModule() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckTargetPackageHasMemberCrossModule/moveSealedCheckTargetPackageHasMemberCrossModule.test");
+    }
+
+    @TestMetadata("moveSealedCheckTargetPackageHasMember/moveSealedCheckTargetPackageHasMember.test")
+    public void testMoveSealedCheckTargetPackageHasMember_MoveSealedCheckTargetPackageHasMember() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckTargetPackageHasMember/moveSealedCheckTargetPackageHasMember.test");
+    }
+
+    @TestMetadata("moveSealedCheckTargetPackageHasNoMembersCrossModuleBig/moveSealedCheckTargetPackageHasNoMembersCrossModuleBig.test")
+    public void testMoveSealedCheckTargetPackageHasNoMembersCrossModuleBig_MoveSealedCheckTargetPackageHasNoMembersCrossModuleBig() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckTargetPackageHasNoMembersCrossModuleBig/moveSealedCheckTargetPackageHasNoMembersCrossModuleBig.test");
+    }
+
+    @TestMetadata("moveSealedCheckTargetPackageHasNoMembersCrossModule/moveSealedCheckTargetPackageHasNoMembersCrossModule.test")
+    public void testMoveSealedCheckTargetPackageHasNoMembersCrossModule_MoveSealedCheckTargetPackageHasNoMembersCrossModule() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckTargetPackageHasNoMembersCrossModule/moveSealedCheckTargetPackageHasNoMembersCrossModule.test");
+    }
+
+    @TestMetadata("moveSealedCheckTargetPackageHasNoMembers/moveSealedCheckTargetPackageHasNoMembers.test")
+    public void testMoveSealedCheckTargetPackageHasNoMembers_MoveSealedCheckTargetPackageHasNoMembers() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckTargetPackageHasNoMembers/moveSealedCheckTargetPackageHasNoMembers.test");
+    }
+
+    @TestMetadata("moveSealedCheckWithinPackage/moveSealedCheckWithinPackage.test")
+    public void testMoveSealedCheckWithinPackage_MoveSealedCheckWithinPackage() throws Exception {
+        runTest("testData/refactoring/moveMultiModule/moveSealedCheckWithinPackage/moveSealedCheckWithinPackage.test");
     }
 
     @TestMetadata("moveToModuleWithoutLibConflict/moveToModuleWithoutLibConflict.test")

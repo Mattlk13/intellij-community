@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.EditorKind;
 import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
@@ -65,6 +66,7 @@ public class ExecutionPointHighlighter {
 
         clearDescriptor();
         myOpenFileDescriptor = XSourcePositionImpl.createOpenFileDescriptor(myProject, position);
+        myOpenFileDescriptor.setUsePreviewTab(true);
         if (!XDebuggerSettingManagerImpl.getInstanceImpl().getGeneralSettings().isScrollToCenter()) {
           myOpenFileDescriptor.setScrollType(notTopFrame ? ScrollType.CENTER : ScrollType.MAKE_VISIBLE);
         }
@@ -133,21 +135,16 @@ public class ExecutionPointHighlighter {
 
     removeHighlighter();
 
-
-    OpenFileDescriptor fileDescriptor = myOpenFileDescriptor;
-    if (!navigate && myOpenFileDescriptor != null) {
-      fileDescriptor = new OpenFileDescriptor(myProject, myOpenFileDescriptor.getFile());
-    }
     myEditor = null;
-    if (fileDescriptor != null) {
+    if (myOpenFileDescriptor != null) {
       if (!navigate) {
-        FileEditor editor = FileEditorManager.getInstance(fileDescriptor.getProject()).getSelectedEditor(fileDescriptor.getFile());
+        FileEditor editor = FileEditorManager.getInstance(myProject).getSelectedEditor(myOpenFileDescriptor.getFile());
         if (editor instanceof TextEditor) {
           myEditor = ((TextEditor)editor).getEditor();
         }
       }
       if (myEditor == null) {
-        myEditor = XDebuggerUtilImpl.createEditor(fileDescriptor);
+        myEditor = XDebuggerUtilImpl.createEditor(myOpenFileDescriptor);
       }
     }
     if (myEditor != null) {
@@ -200,7 +197,7 @@ public class ExecutionPointHighlighter {
       myRangeHighlighter = markupModel.addLineHighlighter(attributesKey, line, DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER);
     }
     myRangeHighlighter.putUserData(EXECUTION_POINT_HIGHLIGHTER_TOP_FRAME_KEY, !myNotTopFrame);
-    myRangeHighlighter.setEditorFilter(MarkupEditorFilterFactory.createIsNotDiffFilter());
+    myRangeHighlighter.setEditorFilter(editor -> editor.getEditorKind() == EditorKind.MAIN_EDITOR);
     myRangeHighlighter.setGutterIconRenderer(myGutterIconRenderer);
   }
 

@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.model.psi.impl
 
 import com.intellij.codeInsight.TargetElementUtil
+import com.intellij.diagnostic.PluginException
 import com.intellij.model.Symbol
 import com.intellij.model.psi.PsiSymbolDeclaration
 import com.intellij.model.psi.PsiSymbolReference
@@ -42,9 +43,16 @@ internal fun declaredReferencedData(file: PsiFile, offset: Int): DeclaredReferen
     return null
   }
 
-  val withMinimalRanges: Collection<DeclarationOrReference> = chooseByRange(
-    allDeclarationsOrReferences, offset, DeclarationOrReference::rangeWithOffset
-  )
+  val withMinimalRanges: Collection<DeclarationOrReference> = try {
+    chooseByRange(allDeclarationsOrReferences, offset, DeclarationOrReference::rangeWithOffset)
+  }
+  catch (e: RangeOverlapException) {
+    val details = allDeclarationsOrReferences.joinToString(separator = "") { item ->
+      "\n${item.rangeWithOffset} : $item"
+    }
+    LOG.error("Range overlap", PluginException.createByClass(e, file.javaClass), details)
+    return null
+  }
 
   var declaration: PsiSymbolDeclaration? = null
   val references: MutableList<PsiSymbolReference> = ArrayList()
@@ -82,15 +90,21 @@ private sealed class DeclarationOrReference {
   abstract val rangeWithOffset: TextRange
 
   class Declaration(val declaration: PsiSymbolDeclaration) : DeclarationOrReference() {
+
     override val rangeWithOffset: TextRange get() = declaration.absoluteRange
+
+    override fun toString(): String = declaration.toString()
   }
 
   class Reference(val reference: PsiSymbolReference, private val offset: Int) : DeclarationOrReference() {
+
     override val rangeWithOffset: TextRange by lazy(LazyThreadSafetyMode.NONE) {
       referenceRanges(reference).find {
         it.containsOffset(offset)
       } ?: error("One of the ranges must contain offset at this point")
     }
+
+    override fun toString(): String = reference.toString()
   }
 }
 

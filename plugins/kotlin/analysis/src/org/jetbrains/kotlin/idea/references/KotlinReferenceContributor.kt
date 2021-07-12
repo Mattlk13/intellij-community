@@ -1,17 +1,14 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.references
 
-import com.intellij.openapi.paths.GlobalPathReferenceProvider
-import com.intellij.openapi.paths.WebReference
-import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiReference
 import org.jetbrains.kotlin.idea.kdoc.KDocReferenceDescriptorsImpl
 import org.jetbrains.kotlin.lexer.KtTokens
-import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.KtImportDirective
+import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtPackageDirective
+import org.jetbrains.kotlin.psi.KtUserType
 import org.jetbrains.kotlin.psi.psiUtil.parents
 
 class KotlinReferenceContributor : KotlinReferenceProviderContributor {
@@ -20,9 +17,11 @@ class KotlinReferenceContributor : KotlinReferenceProviderContributor {
             registerProvider(factory = ::KtSimpleNameReferenceDescriptorsImpl)
 
             registerMultiProvider<KtNameReferenceExpression> { nameReferenceExpression ->
-                if (nameReferenceExpression.getReferencedNameElementType() != KtTokens.IDENTIFIER) return@registerMultiProvider emptyArray()
+                if (nameReferenceExpression.getReferencedNameElementType() != KtTokens.IDENTIFIER) {
+                    return@registerMultiProvider PsiReference.EMPTY_ARRAY
+                }
                 if (nameReferenceExpression.parents.any { it is KtImportDirective || it is KtPackageDirective || it is KtUserType }) {
-                    return@registerMultiProvider emptyArray()
+                    return@registerMultiProvider PsiReference.EMPTY_ARRAY
                 }
 
                 when (nameReferenceExpression.readWriteAccess(useResolveForReadWrite = false)) {
@@ -55,19 +54,6 @@ class KotlinReferenceContributor : KotlinReferenceProviderContributor {
             registerProvider(factory = ::KDocReferenceDescriptorsImpl)
 
             registerProvider(KotlinDefaultAnnotationMethodImplicitReferenceProvider)
-
-            registerMultiProvider<KtStringTemplateEntry> { stringTemplateEntry ->
-                val texts = stringTemplateEntry.text.split(Regex("\\s"))
-                val results = mutableListOf<PsiReference>()
-                var startIndex = 0
-                texts.forEach { text ->
-                    if (GlobalPathReferenceProvider.isWebReferenceUrl(text)) {
-                        results.add(WebReference(stringTemplateEntry, TextRange(startIndex, startIndex + text.length), text))
-                    }
-                    startIndex += text.length + 1
-                }
-                results.toTypedArray()
-            }
         }
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.codeInspection;
 
 import com.google.common.base.Predicates;
@@ -33,6 +33,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.project.ProjectManagerListener;
 import com.intellij.openapi.project.ex.ProjectManagerEx;
+import com.intellij.openapi.roots.AdditionalLibraryRootsListener;
 import com.intellij.openapi.roots.ModuleRootEvent;
 import com.intellij.openapi.roots.ModuleRootListener;
 import com.intellij.openapi.util.Comparing;
@@ -60,6 +61,7 @@ import com.intellij.util.containers.MultiMap;
 import com.intellij.util.messages.MessageBusConnection;
 import one.util.streamex.StreamEx;
 import org.jdom.JDOMException;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.AsyncPromise;
@@ -80,10 +82,10 @@ import java.util.function.Predicate;
 public class InspectionApplicationBase implements CommandLineInspectionProgressReporter {
   static final Logger LOG = Logger.getInstance(InspectionApplicationBase.class);
 
-  InspectionToolCmdlineOptionHelpProvider myHelpProvider;
+  public InspectionToolCmdlineOptionHelpProvider myHelpProvider;
   public String myProjectPath;
   public String myOutPath;
-  String mySourceDirectory;
+  public String mySourceDirectory;
   public String myStubProfile;
   public String myProfileName;
   public String myProfilePath;
@@ -340,11 +342,25 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     connection.subscribe(ProjectTopics.PROJECT_ROOTS, new ModuleRootListener() {
       @Override
       public void rootsChanged(@NotNull ModuleRootEvent event) {
-        int i = counter.incrementAndGet();
-        reportConverter.projectData(project, rootLogDir.resolve("state" + i));
-        LOG.info("Project structure update written. Change number " + i);
+        updateProjectStructure(counter, reportConverter, project, rootLogDir);
       }
     });
+    connection.subscribe(AdditionalLibraryRootsListener.TOPIC,
+                         new AdditionalLibraryRootsListener() {
+                           @Override
+                           public void libraryRootsChanged(@Nullable @Nls String presentableLibraryName,
+                                                           @NotNull Collection<? extends VirtualFile> oldRoots,
+                                                           @NotNull Collection<? extends VirtualFile> newRoots,
+                                                           @NotNull String libraryNameForDebug) {
+                             updateProjectStructure(counter, reportConverter, project, rootLogDir);
+                           }
+                         });
+  }
+
+  private static void updateProjectStructure(AtomicInteger counter, InspectionsReportConverter reportConverter, Project project, Path rootLogDir) {
+    int i = counter.incrementAndGet();
+    reportConverter.projectData(project, rootLogDir.resolve("state" + i));
+    LOG.info("Project structure update written. Change number " + i);
   }
 
   private List<VirtualFile> getChangedFiles(@NotNull Project project) throws ExecutionException, InterruptedException {

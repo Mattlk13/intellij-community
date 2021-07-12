@@ -97,10 +97,11 @@ public class VcsLogFullDetailsIndex<T, D> implements Disposable {
   @NotNull
   public IntSet getCommitsWithAllKeys(@NotNull Collection<Integer> keys) throws StorageException {
     checkDisposed();
-    return InvertedIndexUtil.collectInputIdsContainingAllKeys(myMapReduceIndex, keys, (k) -> {
-      ProgressManager.checkCanceled();
-      return true;
-    }, null, null);
+    return InvertedIndexUtil.collectInputIdsContainingAllKeys(myMapReduceIndex,
+                                                              keys,
+                                                              null,
+                                                              null,
+                                                              null);
   }
 
   private void iterateCommitIds(int key, @NotNull IntConsumer consumer) throws StorageException {
@@ -182,11 +183,6 @@ public class VcsLogFullDetailsIndex<T, D> implements Disposable {
         return false;
       });
       return isEmpty.get();
-    }
-
-    @Override
-    protected void checkCanceled() {
-      ProgressManager.checkCanceled();
     }
 
     @Override

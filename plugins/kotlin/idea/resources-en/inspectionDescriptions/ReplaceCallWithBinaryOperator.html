@@ -1,6 +1,15 @@
 <html>
 <body>
-This inspection reports function calls that can be replaced with binary operators, especially comparison-related.
-Example: <b>2.compareTo(1) > 0</b> can be replaced by <b>2 > 1</b>.
+Reports function calls that can be replaced with binary operators, in particular comparison-related ones.
+<p><b>Example:</b></p>
+<pre><code>  fun test(): Boolean {
+      return 2.compareTo(1) > 0 // replaceable 'compareTo()'
+  }
+</code></pre>
+<p>After the quick-fix is applied:</p>
+<pre><code>  fun test(): Boolean {
+      return 2 > 1
+  }
+</code></pre>
 </body>
 </html>

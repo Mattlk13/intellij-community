@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.configuration
 
@@ -105,7 +102,8 @@ open class KotlinMPPGradleProjectResolver : AbstractProjectResolverExtension() {
                 nativeDebugAdvertised = true
                 suggestNativeDebug(resolverCtx.projectPath)
             }
-            if (!resolverCtx.isResolveModulePerSourceSet && !PlatformVersion.isAndroidStudio() && !PlatformUtils.isMobileIde()) {
+            if (!resolverCtx.isResolveModulePerSourceSet && !PlatformVersion.isAndroidStudio() && !PlatformUtils.isMobileIde() &&
+                !PlatformUtils.isAppCode()) {
                 notifyLegacyIsResolveModulePerSourceSetSettingIfNeeded(resolverCtx.projectPath)
                 resolverCtx.report(MessageEvent.Kind.WARNING, ResolveModulesPerSourceSetInMppBuildIssue())
             }
@@ -410,7 +408,8 @@ open class KotlinMPPGradleProjectResolver : AbstractProjectResolverExtension() {
             val ignoreCommonSourceSets by lazy { externalProject.notImportedCommonSourceSets() }
             for (sourceSet in mppModel.sourceSetsByName.values) {
                 if (shouldDelegateToOtherPlugin(sourceSet)) continue
-                if (sourceSet.actualPlatforms.platforms.singleOrNull() == KotlinPlatform.COMMON && ignoreCommonSourceSets) continue
+                val platform = sourceSet.actualPlatforms.platforms.singleOrNull()
+                if (platform == KotlinPlatform.COMMON && ignoreCommonSourceSets) continue
                 val moduleId = getKotlinModuleId(gradleModule, sourceSet, resolverCtx)
                 val existingSourceSetDataNode = sourceSetMap[moduleId]?.first
                 if (existingSourceSetDataNode?.kotlinSourceSet != null) continue
@@ -435,6 +434,13 @@ open class KotlinMPPGradleProjectResolver : AbstractProjectResolverExtension() {
                             @OptIn(UnsafeTestSourceSetHeuristicApi::class)
                             predictedProductionSourceSetName(sourceSet.name)
                         )
+                    } else {
+                        if (platform == KotlinPlatform.COMMON) {
+                            val artifacts = externalProject.artifactsByConfiguration["metadataApiElements"]?.toMutableList()
+                            if (artifacts != null) {
+                                it.artifacts = artifacts
+                            }
+                        }
                     }
 
                     it.ideModuleGroup = moduleGroup
@@ -583,7 +589,7 @@ open class KotlinMPPGradleProjectResolver : AbstractProjectResolverExtension() {
                 get() = compilation.nativeExtensions?.konanTarget
 
             val dependencyNames: Map<String, ExternalDependency> by lazy {
-                substitutedDependencies.associateBy { it.name.removeSuffixIfPresent(" [$konanTarget]") }
+                substitutedDependencies.associateBy { it.name.removeSuffixIfPresent(" | $konanTarget") }
             }
         }
 

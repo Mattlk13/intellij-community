@@ -1,4 +1,4 @@
-// Copyright 2000-2017 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.jetbrains.python;
 
 import com.intellij.codeInsight.completion.impl.CamelHumpMatcher;
@@ -20,9 +20,7 @@ import org.junit.Ignore;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * @author yole
- */
+
 @TestDataPath("$CONTENT_ROOT/../testData/completion")
 public class Py3CompletionTest extends PyTestCase {
 
@@ -476,6 +474,11 @@ public class Py3CompletionTest extends PyTestCase {
     assertContainsElements(myFixture.getLookupElementStrings(), "city");
   }
 
+  // PY-48665
+  public void testFStringLikeCompletionNotAvailableInLiteralPatterns() {
+    doNegativeTest();
+  }
+
   // PY-46056
   public void testImportCompletionHintForSameDirectoryModuleInOrdinaryPackage() {
     doTestVariantTailText("ordinaryPackage/sample.py", "logging", null);
@@ -512,6 +515,15 @@ public class Py3CompletionTest extends PyTestCase {
     myFixture.configureByFile("foo_bar/sample.py");
     myFixture.completeBasic();
     myFixture.checkResultByFile(getTestName(true) + "/foo_bar/sample.after.py");
+  }
+
+  // PY-49156
+  public void testHaveCompletionVariantsForOsPath() {
+    myFixture.configureByFile(getTestName(true) + ".py");
+    LookupElement[] variants = myFixture.completeBasic();
+    assertNotNull(variants);
+    assertTrue(variants.length > 0);
+    assertTrue(ContainerUtil.exists(variants, v -> v.getLookupString().equals("join")));
   }
 
   @Override

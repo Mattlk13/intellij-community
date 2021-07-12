@@ -1,6 +1,7 @@
 // Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.bookmarks;
 
+import com.intellij.ide.bookmark.BookmarkType;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.ui.UISettingsListener;
 import com.intellij.openapi.application.ApplicationManager;
@@ -86,6 +87,10 @@ public final class BookmarkManager implements PersistentStateComponent<Element> 
   static final class MyStartupActivity implements StartupActivity.DumbAware {
     @Override
     public void runActivity(@NotNull Project project) {
+      if (ApplicationManager.getApplication().isHeadlessEnvironment()) {
+        return;
+      }
+
       project.getMessageBus().connect().subscribe(PsiDocumentListener.TOPIC, MyStartupActivity::documentCreated);
 
       BookmarkManager bookmarkManager = getInstance(project);

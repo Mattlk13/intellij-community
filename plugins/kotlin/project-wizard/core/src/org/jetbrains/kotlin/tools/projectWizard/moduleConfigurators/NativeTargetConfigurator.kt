@@ -1,11 +1,10 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators
 
 import kotlinx.collections.immutable.toPersistentList
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.tools.projectWizard.KotlinNewProjectWizardBundle
 import org.jetbrains.kotlin.tools.projectWizard.core.Reader
-
-import org.jetbrains.kotlin.tools.projectWizard.core.buildList
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.BuildSystemIR
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.*
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.multiplatform.NonDefaultTargetConfigurationIR
@@ -13,6 +12,7 @@ import org.jetbrains.kotlin.tools.projectWizard.plugins.buildSystem.BuildSystemT
 import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.*
 import org.jetbrains.kotlin.tools.projectWizard.plugins.printer.GradlePrinter
 import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Module
+import java.util.*
 
 interface NativeTargetConfigurator : TargetConfigurator {
     val isDesktopTarget: Boolean
@@ -22,7 +22,7 @@ interface NativeTargetConfigurator : TargetConfigurator {
 class RealNativeTargetConfigurator private constructor(
     override val moduleSubType: ModuleSubType
 ) : NativeTargetConfigurator, SimpleTargetConfigurator {
-    override val text: String = moduleSubType.name.capitalize()
+    override val text: String = moduleSubType.name.capitalize(Locale.US)
     override val isDesktopTarget: Boolean
         get() = moduleSubType.isNativeDesktop
 
@@ -84,7 +84,7 @@ object NativeForCurrentSystemTarget : NativeTargetConfigurator, SingleCoexistenc
                         }
                     }
                     GradlePrinter.GradleDsl.GROOVY -> {
-                        +"""KotlinNativeTargetWithTests $variableName"""; nlIndented()
+                        +"""def $variableName"""; nlIndented()
                         +"""if (hostOs == "Mac OS X") $variableName = macosX64('$moduleName')"""; nlIndented()
                         +"""else if (hostOs == "Linux") $variableName = linuxX64("$moduleName")"""; nlIndented()
                         +"""else if (isMingwX64) $variableName = mingwX64("$moduleName")"""; nlIndented()
@@ -99,16 +99,6 @@ object NativeForCurrentSystemTarget : NativeTargetConfigurator, SingleCoexistenc
                 targetName = moduleName,
                 irs = createInnerTargetIrs(this@createTargetIrs, module).toPersistentList()
             )
-        }
-    }
-
-    override fun createBuildFileIRs(
-        reader: Reader,
-        configurationData: ModulesToIrConversionData,
-        module: Module
-    ): List<BuildSystemIR> = irsList {
-        if (configurationData.buildSystemType == BuildSystemType.GradleGroovyDsl) {
-            import("org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithTests")
         }
     }
 }

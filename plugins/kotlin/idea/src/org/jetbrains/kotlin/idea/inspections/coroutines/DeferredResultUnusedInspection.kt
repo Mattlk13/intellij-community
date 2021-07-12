@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections.coroutines
 
@@ -23,10 +20,15 @@ class DeferredResultUnusedInspection(@JvmField var standardOnly: Boolean = false
                 (!inspection.standardOnly || expression.calleeExpression?.text in shortNames),
     callChecker = fun(resolvedCall, inspection): Boolean {
         if (inspection !is DeferredResultUnusedInspection) return false
+
+        val resultingDescriptor = resolvedCall.resultingDescriptor
+        val fqName = resultingDescriptor.fqNameOrNull()
+        if (fqName in fqNamesThatShouldNotBeReported) return false
+
         return if (inspection.standardOnly) {
-            resolvedCall.resultingDescriptor.fqNameOrNull() in fqNamesAll
+            fqName in fqNamesAll
         } else {
-            val returnTypeClassifier = resolvedCall.resultingDescriptor.returnType?.constructor?.declarationDescriptor
+            val returnTypeClassifier = resultingDescriptor.returnType?.constructor?.declarationDescriptor
             val importableFqName = returnTypeClassifier?.importableFqName
             importableFqName == deferred || importableFqName == deferredExperimental
         }
@@ -56,5 +58,8 @@ class DeferredResultUnusedInspection(@JvmField var standardOnly: Boolean = false
         private val deferred = FqName("$COROUTINE_PACKAGE.Deferred")
 
         private val deferredExperimental = FqName("$COROUTINE_EXPERIMENTAL_PACKAGE.Deferred")
+
+        private val fqNamesThatShouldNotBeReported =
+            listOf("kotlin.test.assertNotNull", "kotlin.requireNotNull", "kotlin.checkNotNull").map { FqName(it) }
     }
 }

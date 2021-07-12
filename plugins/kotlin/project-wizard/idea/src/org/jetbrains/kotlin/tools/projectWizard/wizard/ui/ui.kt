@@ -1,8 +1,7 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.wizard.ui
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.ThrowableComputable
@@ -94,11 +93,11 @@ val ModuleSubType.icon: Icon
 val ModuleKind.icon: Icon
     get() = when (this) {
         ModuleKind.multiplatform -> KotlinIcons.MPP
-        ModuleKind.singleplatformJsBrowser -> KotlinIcons.Wizard.JS
-        ModuleKind.singleplatformJsNode -> KotlinIcons.Wizard.NODE_JS
-        ModuleKind.singleplatformJvm -> KotlinIcons.Wizard.JVM
+        ModuleKind.singlePlatformJsBrowser -> KotlinIcons.Wizard.JS
+        ModuleKind.singlePlatformJsNode -> KotlinIcons.Wizard.NODE_JS
+        ModuleKind.singlePlatformJvm -> KotlinIcons.Wizard.JVM
         ModuleKind.target -> AllIcons.Nodes.Module
-        ModuleKind.singleplatformAndroid -> KotlinIcons.Wizard.ANDROID
+        ModuleKind.singlePlatformAndroid -> KotlinIcons.Wizard.ANDROID
     }
 
 val ModuleConfigurator.icon: Icon
@@ -116,11 +115,10 @@ fun ToolbarDecorator.createPanelWithPopupHandler(popupTarget: JComponent) = crea
         ToolbarDecorator.findAddButton(this@toolbarApply)?.let(this::add)
         ToolbarDecorator.findRemoveButton(this@toolbarApply)?.let(this::add)
     }
-    PopupHandler.installPopupHandler(
+    PopupHandler.installPopupMenu(
         popupTarget,
         actionGroup,
-        ActionPlaces.UNKNOWN,
-        ActionManager.getInstance()
+        "ToolbarDecoratorPopup"
     )
 }
 

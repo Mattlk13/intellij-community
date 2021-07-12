@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.asJava.classes;
 
@@ -24,6 +21,11 @@ import org.junit.runner.RunWith;
 public class UltraLightClassLoadingTestGenerated extends AbstractUltraLightClassLoadingTest {
     private void runTest(String testDataFilePath) throws Exception {
         KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+    }
+
+    @TestMetadata("annotationTargets_1_6.kt")
+    public void testAnnotationTargets_1_6() throws Exception {
+        runTest("testData/compiler/asJava/ultraLightClasses/annotationTargets_1_6.kt");
     }
 
     @TestMetadata("annotationWithSetParamPropertyModifier.kt")
@@ -54,6 +56,16 @@ public class UltraLightClassLoadingTestGenerated extends AbstractUltraLightClass
     @TestMetadata("dataClasses.kt")
     public void testDataClasses() throws Exception {
         runTest("testData/compiler/asJava/ultraLightClasses/dataClasses.kt");
+    }
+
+    @TestMetadata("defaultMethodInKotlinWithSettingAll.kt")
+    public void testDefaultMethodInKotlinWithSettingAll() throws Exception {
+        runTest("testData/compiler/asJava/ultraLightClasses/defaultMethodInKotlinWithSettingAll.kt");
+    }
+
+    @TestMetadata("defaultMethodInKotlinWithSettingAllCompatibility.kt")
+    public void testDefaultMethodInKotlinWithSettingAllCompatibility() throws Exception {
+        runTest("testData/compiler/asJava/ultraLightClasses/defaultMethodInKotlinWithSettingAllCompatibility.kt");
     }
 
     @TestMetadata("delegatesWithAnnotations.kt")

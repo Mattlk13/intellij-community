@@ -53,6 +53,7 @@ import com.intellij.model.psi.PsiSymbolReference;
 import com.intellij.model.psi.impl.ReferencesKt;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -93,6 +94,7 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.readOnlyHandler.ReadonlyStatusHandlerImpl;
 import com.intellij.openapi.vfs.*;
+import com.intellij.openapi.roots.impl.libraries.LibraryTableTracker;
 import com.intellij.openapi.vfs.impl.VirtualFilePointerTracker;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.PsiManagerEx;
@@ -180,6 +182,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
   private boolean myCaresAboutInjection = true;
   private boolean myReadEditorMarkupModel;
   private VirtualFilePointerTracker myVirtualFilePointerTracker;
+  private LibraryTableTracker  myLibraryTableTracker;
   private ResourceBundle[] myMessageBundles = new ResourceBundle[0];
 
   public CodeInsightTestFixtureImpl(@NotNull IdeaProjectTestFixture projectFixture, @NotNull TempDirTestFixture tempDirTestFixture) {
@@ -187,7 +190,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
     myTempDirFixture = tempDirTestFixture;
   }
 
-  private void setFileAndEditor(VirtualFile file, Editor editor) {
+  private void setFileAndEditor(@NotNull VirtualFile file, @NotNull Editor editor) {
     myFile = file;
     myEditor = editor;
     myEditorTestFixture = new EditorTestFixture(getProject(), editor, file);
@@ -425,7 +428,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
       }
     }
     catch (IOException e) {
-      throw new UncheckedIOException(e);
+      throw new UncheckedIOException("sourceFile="+sourceFile, e);
     }
   }
 
@@ -880,9 +883,8 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
   @Override
   public Presentation testAction(@NotNull AnAction action) {
     TestActionEvent e = new TestActionEvent(action);
-    action.beforeActionPerformedUpdate(e);
-    if (e.getPresentation().isEnabled() && e.getPresentation().isVisible()) {
-      action.actionPerformed(e);
+    if (ActionUtil.lastUpdateAndCheckDumb(action, e, true)) {
+      ActionUtil.performActionDumbAwareWithCallbacks(action, e);
     }
     return e.getPresentation();
   }
@@ -1260,6 +1262,8 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
       if (policy != null) {
         policy.setUp(getProject(), getTestRootDisposable(), getTestDataPath());
       }
+      ActionUtil.performActionDumbAwareWithCallbacks(
+        new EmptyAction(true), AnActionEvent.createFromDataContext("", null, DataContext.EMPTY_CONTEXT));
     });
 
     for (Module module : ModuleManager.getInstance(getProject()).getModules()) {
@@ -1268,6 +1272,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
     if (shouldTrackVirtualFilePointers()) {
       myVirtualFilePointerTracker = new VirtualFilePointerTracker();
     }
+    myLibraryTableTracker = new LibraryTableTracker();
   }
 
   protected boolean shouldTrackVirtualFilePointers() {
@@ -1326,6 +1331,11 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
       () -> {
         if (myVirtualFilePointerTracker != null) {
           myVirtualFilePointerTracker.assertPointersAreDisposed();
+        }
+      },
+      () -> {
+        if (myLibraryTableTracker != null) {
+          myLibraryTableTracker.assertDisposed();
         }
       }
     );
@@ -1520,7 +1530,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
     return copy;
   }
 
-  @Nullable
+  @NotNull
   protected Editor createEditor(@NotNull VirtualFile file) {
     final Project project = getProject();
     final FileEditorManager instance = FileEditorManager.getInstance(project);
@@ -1528,9 +1538,7 @@ public class CodeInsightTestFixtureImpl extends BaseFixture implements CodeInsig
 
     Editor editor = instance.openTextEditor(new OpenFileDescriptor(project, file), false);
     EditorTestUtil.waitForLoading(editor);
-    if (editor != null) {
-      DaemonCodeAnalyzer.getInstance(getProject()).restart();
-    }
+    DaemonCodeAnalyzer.getInstance(getProject()).restart();
     return editor;
   }
 

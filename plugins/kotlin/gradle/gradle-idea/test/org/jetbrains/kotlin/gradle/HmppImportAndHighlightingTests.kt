@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.gradle
 
 import com.intellij.execution.executors.DefaultRunExecutor
@@ -7,16 +8,19 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.roots.DependencyScope
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.testFramework.runInEdtAndWait
+import org.jetbrains.kotlin.codeMetaInfo.clearTextFromDiagnosticMarkup
 import org.jetbrains.kotlin.idea.codeInsight.gradle.MultiplePluginVersionGradleImportingTestCase
-import org.jetbrains.kotlin.idea.codeMetaInfo.clearTextFromDiagnosticMarkup
 import org.jetbrains.kotlin.konan.target.HostManager
 import org.jetbrains.kotlin.konan.target.KonanTarget
 import org.jetbrains.kotlin.platform.js.JsPlatforms
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.jetbrains.kotlin.platform.konan.NativePlatforms
+import org.jetbrains.kotlin.util.parseKotlinVersion
 import org.jetbrains.plugins.gradle.tooling.annotation.PluginTargetVersions
 import org.jetbrains.plugins.gradle.util.GradleConstants
+import org.junit.Assume.assumeTrue
 import org.junit.Test
+import java.io.PrintStream
 
 class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestCase() {
 
@@ -453,8 +457,12 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
     @Test
     @PluginTargetVersions(pluginVersion = "1.4.30+")
     fun testHmppLibAndConsumer() {
+        assumeTrue(
+            "Test ignored, because of regression in 1.5.0 https://youtrack.jetbrains.com/issue/KT-46417",
+            kotlinPluginVersion != parseKotlinVersion("1.5.0")
+        )
+
         configureByFiles()
-        importProject()
         linkProject("$projectPath/lib-and-app")
         linkProject("$projectPath/published-lib-consumer")
 
@@ -487,18 +495,21 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
             allModules {
                 assertNoDependencyInBuildClasses()
             }
-            module("project")
+
             module("lib-and-app")
+
             module("lib-and-app.app")
+
             module("lib-and-app.app.commonMain") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.app.commonTest") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
             }
-            module("lib-and-app.app.iosArm64Main")
-            {
+
+            module("lib-and-app.app.iosArm64Main") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.app.iosMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
@@ -506,8 +517,8 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 if (HostManager.hostIsMac)
                     moduleDependency("lib-and-app.lib.iosArm64Main", DependencyScope.COMPILE)
             }
-            module("lib-and-app.app.iosArm64Test")
-            {
+
+            module("lib-and-app.app.iosArm64Test") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.iosArm64Main", DependencyScope.TEST)
@@ -515,25 +526,23 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.app.iosTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
-                if (HostManager.hostIsMac)
-                    moduleDependency("lib-and-app.lib.iosArm64Main", DependencyScope.COMPILE)
             }
-            module("lib-and-app.app.iosMain")
-            {
+
+            module("lib-and-app.app.iosMain") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.COMPILE)
             }
-            module("lib-and-app.app.iosTest")
-            {
+
+            module("lib-and-app.app.iosTest") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.iosMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
             }
-            module("lib-and-app.app.iosX64Main")
-            {
+
+            module("lib-and-app.app.iosX64Main") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.app.iosMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
@@ -541,8 +550,17 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 if (HostManager.hostIsMac)
                     moduleDependency("lib-and-app.lib.iosX64Main", DependencyScope.COMPILE)
             }
-            module("lib-and-app.app.iosX64Test")
-            {
+
+            module("lib-and-app.app.iosSimulatorArm64Main", isOptional = true) {
+                moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.app.iosMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.lib.iosMain", DependencyScope.COMPILE)
+                if (HostManager.hostIsMac)
+                    moduleDependency("lib-and-app.lib.iosSimulatorArm64Main", DependencyScope.COMPILE)
+            }
+
+            module("lib-and-app.app.iosX64Test") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.iosX64Main", DependencyScope.TEST)
@@ -552,57 +570,77 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
                 if (HostManager.hostIsMac)
                     moduleDependency("lib-and-app.lib.iosX64Main", DependencyScope.TEST)
-
             }
+
+            module("lib-and-app.app.iosSimulatorArm64Test", isOptional = true) {
+                moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.iosSimulatorArm64Main", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.iosMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.iosTest", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
+                if (HostManager.hostIsMac)
+                    moduleDependency("lib-and-app.lib.iosSimulatorArm64Main", DependencyScope.TEST)
+            }
+
             module("lib-and-app.app.jsMain") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
-                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.COMPILE, allowMultiple = true)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE, allowMultiple = true)
                 moduleDependency("lib-and-app.lib.jsMain", DependencyScope.COMPILE)
-                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE, allowMultiple = true)
             }
+
             module("lib-and-app.app.jsTest") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.jsMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.jsMain", DependencyScope.RUNTIME, isOptional = true)
-                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.TEST, allowMultiple = true)
                 moduleDependency("lib-and-app.lib.jsMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST, allowMultiple = true)
-                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST, allowMultiple = true)
             }
+
             module("lib-and-app.app.jvmAndJsMain") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.app.jvmMain") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.COMPILE)
-                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.COMPILE, allowMultiple = true)
                 moduleDependency("lib-and-app.lib.jvmMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE, allowMultiple = true)
-                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE, allowMultiple = true)
             }
+
             module("lib-and-app.app.jvmTest") {
                 moduleDependency("lib-and-app.app.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.commonTest", DependencyScope.TEST)
-                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.app.jvmAndJsMain", DependencyScope.TEST, allowMultiple = true)
                 moduleDependency("lib-and-app.app.jvmMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.app.jvmMain", DependencyScope.RUNTIME, isOptional = true)
                 moduleDependency("lib-and-app.lib.jvmMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST, allowMultiple = true)
-                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST, allowMultiple = true)
             }
 
             module("lib-and-app.lib")
+
             module("lib-and-app.lib.commonMain")
+
             module("lib-and-app.lib.commonTest") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
             }
+
             module("lib-and-app.lib.iosArm64Main") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.lib.iosArm64Test") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
@@ -610,18 +648,27 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.iosTest", DependencyScope.TEST)
             }
+
             module("lib-and-app.lib.iosMain") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.lib.iosTest") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
             }
+
             module("lib-and-app.lib.iosX64Main") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.COMPILE)
             }
+
+            module("lib-and-app.lib.iosSimulatorArm64Main", isOptional = true) {
+                moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
+                moduleDependency("lib-and-app.lib.iosMain", DependencyScope.COMPILE)
+            }
+
             module("lib-and-app.lib.iosX64Test") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
@@ -629,10 +676,20 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.iosTest", DependencyScope.TEST)
             }
+
+            module("lib-and-app.lib.iosSimulatorArm64Test", isOptional = true) {
+                moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.iosSimulatorArm64Main", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.iosMain", DependencyScope.TEST)
+                moduleDependency("lib-and-app.lib.iosTest", DependencyScope.TEST)
+            }
+
             module("lib-and-app.lib.jsMain") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.lib.jsTest") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
@@ -641,18 +698,22 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.jvmAndJsTest", DependencyScope.TEST)
             }
+
             module("lib-and-app.lib.jvmAndJsMain") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.lib.jvmAndJsTest") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST)
             }
+
             module("lib-and-app.lib.jvmMain") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.COMPILE)
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.COMPILE)
             }
+
             module("lib-and-app.lib.jvmTest") {
                 moduleDependency("lib-and-app.lib.commonMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.commonTest", DependencyScope.TEST)
@@ -661,82 +722,117 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
                 moduleDependency("lib-and-app.lib.jvmAndJsMain", DependencyScope.TEST)
                 moduleDependency("lib-and-app.lib.jvmAndJsTest", DependencyScope.TEST)
             }
+
             module("published-lib-consumer")
+
             module("published-lib-consumer.commonMain") {
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:commonMain:1.0", DependencyScope.COMPILE)
             }
+
             module("published-lib-consumer.commonTest") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:commonMain:1.0", DependencyScope.TEST)
             }
+
             module("published-lib-consumer.iosArm64Main") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 moduleDependency("published-lib-consumer.iosMain", DependencyScope.COMPILE)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-iosarm64:1.0", DependencyScope.COMPILE)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iosarm64:(klib:)?1.0"), DependencyScope.COMPILE)
             }
+
             module("published-lib-consumer.iosArm64Test") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosArm64Main", DependencyScope.TEST)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-iosarm64:1.0", DependencyScope.TEST)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iosarm64:(klib:)?1.0"), DependencyScope.TEST)
             }
+
             module("published-lib-consumer.iosMain") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:commonMain:1.0", DependencyScope.COMPILE)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:iosMain:1.0", DependencyScope.COMPILE)
+                libraryDependency(
+                    "Gradle: com.h0tk3y.mpp.demo:lib:iosMain:1.0", DependencyScope.COMPILE,
+                    isOptional = !HostManager.hostIsMac
+                )
             }
+
             module("published-lib-consumer.iosTest") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosMain", DependencyScope.TEST)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:commonMain:1.0", DependencyScope.TEST)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:iosMain:1.0", DependencyScope.TEST)
+                libraryDependency(
+                    "Gradle: com.h0tk3y.mpp.demo:lib:iosMain:1.0", DependencyScope.TEST,
+                    isOptional = !HostManager.hostIsMac
+                )
             }
+
             module("published-lib-consumer.iosX64Main") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 moduleDependency("published-lib-consumer.iosMain", DependencyScope.COMPILE)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-iosx64:1.0", DependencyScope.COMPILE)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iosx64:(klib:)?1.0"), DependencyScope.COMPILE)
             }
+
+            module("published-lib-consumer.iosSimulatorArm64Main", isOptional = true) {
+                moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
+                moduleDependency("published-lib-consumer.iosMain", DependencyScope.COMPILE)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iossimulatorarm64:(klib:)?1.0"), DependencyScope.COMPILE)
+            }
+
             module("published-lib-consumer.iosX64Test") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.iosX64Main", DependencyScope.TEST)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-iosx64:1.0", DependencyScope.TEST)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iosx64:(klib:)?1.0"), DependencyScope.TEST)
             }
+
+            module("published-lib-consumer.iosSimulatorArm64Test", isOptional = true) {
+                moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
+                moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
+                moduleDependency("published-lib-consumer.iosMain", DependencyScope.TEST)
+                moduleDependency("published-lib-consumer.iosTest", DependencyScope.TEST)
+                moduleDependency("published-lib-consumer.iosSimulatorArm64Main", DependencyScope.TEST)
+                libraryDependency(Regex("Gradle: com.h0tk3y.mpp.demo:lib-iossimulatorarm64:(klib:)?1.0"), DependencyScope.TEST)
+            }
+
             module("published-lib-consumer.jsMain") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 moduleDependency("published-lib-consumer.jvmAndJsMain", DependencyScope.COMPILE)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.COMPILE)
+                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.COMPILE, isOptional = true)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-js:1.0", DependencyScope.COMPILE)
             }
+
             module("published-lib-consumer.jsTest") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jvmAndJsMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jsMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jsMain", DependencyScope.RUNTIME, isOptional = true)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.TEST)
+                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.TEST, isOptional = true)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-js:1.0", DependencyScope.TEST)
             }
+
             module("published-lib-consumer.jvmMain") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 moduleDependency("published-lib-consumer.jvmAndJsMain", DependencyScope.COMPILE)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.COMPILE)
+                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.COMPILE, isOptional = true)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-jvm:1.0", DependencyScope.COMPILE)
             }
+
             module("published-lib-consumer.jvmTest") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.commonTest", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jvmAndJsMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jvmMain", DependencyScope.TEST)
                 moduleDependency("published-lib-consumer.jvmMain", DependencyScope.RUNTIME, isOptional = true)
-                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.TEST)
+                libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:all:1.0", DependencyScope.TEST, isOptional = true)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib-jvm:1.0", DependencyScope.TEST)
             }
+
             module("published-lib-consumer.jvmAndJsMain") {
                 moduleDependency("published-lib-consumer.commonMain", DependencyScope.COMPILE)
                 libraryDependency("Gradle: com.h0tk3y.mpp.demo:lib:commonMain:1.0", DependencyScope.COMPILE)
@@ -745,8 +841,18 @@ class HmppImportAndHighlightingTests : MultiplePluginVersionGradleImportingTestC
         }
     }
 
+    @Test
+    @PluginTargetVersions(pluginVersion = "1.5.30+")
+    fun kt46625SupportedAndUnsupportedPlatform() {
+        configureByFiles()
+        importProject()
+        checkHighligthingOnAllModules()
+    }
+
     private fun configureAndImportProject() {
         configureByFiles()
         importProject()
     }
+
+    override fun printOutput(stream: PrintStream, text: String) = stream.println(text)
 }

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -19,11 +16,11 @@ import com.sun.jdi.*
 import org.jetbrains.kotlin.codegen.inline.KOTLIN_STRATA_NAME
 
 fun StackFrameProxyImpl.safeVisibleVariables(): List<LocalVariableProxyImpl> {
-    return wrapAbsentInformationException { visibleVariables() } ?: emptyList()
+    return wrapEvaluateException { visibleVariables() } ?: emptyList()
 }
 
 fun StackFrameProxyImpl.safeVisibleVariableByName(name: String): LocalVariableProxyImpl? {
-    return wrapAbsentInformationException { visibleVariableByName(name) }
+    return wrapEvaluateException { visibleVariableByName(name) }
 }
 
 fun StackFrame.safeVisibleVariables(): List<LocalVariable> {
@@ -80,6 +77,10 @@ fun StackFrameProxy.safeStackFrame(): StackFrame? {
 
 fun StackFrameProxyImpl.safeThreadProxy(): ThreadReferenceProxyImpl? {
     return wrapEvaluateException { this.threadProxy() }
+}
+
+fun StackFrameProxyImpl.safeThisObject(): ObjectReference? {
+    return wrapEvaluateException { thisObject() }
 }
 
 fun Location.safeSourceName(): String? {
@@ -153,6 +154,8 @@ private inline fun <T> wrapAbsentInformationException(block: () -> T): T? {
     } catch (e: AbsentInformationEvaluateException) {
         null
     } catch (e: InternalException) {
+        null
+    } catch (e: UnsupportedOperationException) {
         null
     }
 }

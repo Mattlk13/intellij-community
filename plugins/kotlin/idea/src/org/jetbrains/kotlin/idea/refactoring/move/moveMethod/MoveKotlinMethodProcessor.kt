@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.refactoring.move.moveMethod
 
 import com.intellij.ide.util.EditorHelper
@@ -40,6 +41,7 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.isAncestorOf
 import org.jetbrains.kotlin.resolve.scopes.receivers.ImplicitReceiver
 import org.jetbrains.kotlin.resolve.scopes.utils.getImplicitReceiversHierarchy
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 import org.jetbrains.kotlin.util.containingNonLocalDeclaration
 
 class MoveKotlinMethodProcessor(
@@ -197,7 +199,7 @@ class MoveKotlinMethodProcessor(
                             argumentExpression
                         } else return
                     } else {
-                        val getterName = "get${targetVariable.nameAsSafeName.identifier.capitalize()}"
+                        val getterName = "get${targetVariable.nameAsSafeName.identifier.capitalizeAsciiOnly()}"
                         JavaPsiFacade.getElementFactory(myProject).createExpressionFromText("${oldReceiver.text}.$getterName()", null)
                     }
 

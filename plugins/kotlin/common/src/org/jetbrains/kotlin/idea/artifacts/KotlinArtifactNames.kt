@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.artifacts
 
 object KotlinArtifactNames {
@@ -24,7 +25,6 @@ object KotlinArtifactNames {
     const val KOTLIN_DAEMON = "kotlin-daemon.jar"
     const val KOTLIN_SCRIPTING_COMPILER = "kotlin-scripting-compiler.jar"
     const val KOTLIN_SCRIPTING_COMPILER_IMPL = "kotlin-scripting-compiler-impl.jar"
-    const val KOTLIN_COROUTINES_EXPERIMENTAL_COMPAT = "kotlin-coroutines-experimental-compat.jar"
     const val ALLOPEN_COMPILER_PLUGIN = "allopen-compiler-plugin.jar"
     const val NOARG_COMPILER_PLUGIN = "noarg-compiler-plugin.jar"
     const val SAM_WITH_RECEIVER_COMPILER_PLUGIN = "sam-with-receiver-compiler-plugin.jar"

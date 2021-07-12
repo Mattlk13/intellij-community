@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.completion.test;
 
@@ -86,11 +83,6 @@ public abstract class JSBasicCompletionTestGenerated extends AbstractJSBasicComp
         @TestMetadata("ConsiderExtensionType.kt")
         public void testConsiderExtensionType() throws Exception {
             runTest("testData/basic/common/ConsiderExtensionType.kt");
-        }
-
-        @TestMetadata("CoroutineContext.kt")
-        public void testCoroutineContext() throws Exception {
-            runTest("testData/basic/common/CoroutineContext.kt");
         }
 
         @TestMetadata("CoroutineContextReleaseCoroutines.kt")
@@ -923,6 +915,16 @@ public abstract class JSBasicCompletionTestGenerated extends AbstractJSBasicComp
                 KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
             }
 
+            @TestMetadata("AutoPopupBreak.kt")
+            public void testAutoPopupBreak() throws Exception {
+                runTest("testData/basic/common/autoPopup/AutoPopupBreak.kt");
+            }
+
+            @TestMetadata("AutoPopupThis.kt")
+            public void testAutoPopupThis() throws Exception {
+                runTest("testData/basic/common/autoPopup/AutoPopupThis.kt");
+            }
+
             @TestMetadata("AutopopupInFunExtensionReceiver.kt")
             public void testAutopopupInFunExtensionReceiver() throws Exception {
                 runTest("testData/basic/common/autoPopup/AutopopupInFunExtensionReceiver.kt");
@@ -1447,6 +1449,11 @@ public abstract class JSBasicCompletionTestGenerated extends AbstractJSBasicComp
             @TestMetadata("ArrayLiteralAnnotationUseForVararg.kt")
             public void testArrayLiteralAnnotationUseForVararg() throws Exception {
                 runTest("testData/basic/common/fromSmart/ArrayLiteralAnnotationUseForVararg.kt");
+            }
+
+            @TestMetadata("CustomAnnotation.kt")
+            public void testCustomAnnotation() throws Exception {
+                runTest("testData/basic/common/fromSmart/CustomAnnotation.kt");
             }
 
             @TestMetadata("EnumEntries.kt")

@@ -3,6 +3,7 @@
   <xi:include href="inspections.xml" xpointer="xpointer(/idea-plugin/*)"/>
   <xi:include href="indexes.xml" xpointer="xpointer(/idea-plugin/*)"/>
   <xi:include href="jps.xml" xpointer="xpointer(/idea-plugin/*)"/>
+  <xi:include href="refIndex.xml" xpointer="xpointer(/idea-plugin/*)"/>
   <xi:include href="idea.xml" xpointer="xpointer(/idea-plugin/*)"/>
   <xi:include href="caches.xml" xpointer="xpointer(/idea-plugin/*)"/>
 
@@ -257,8 +258,6 @@
 
     <projectService serviceImplementation="org.jetbrains.kotlin.resolve.jvm.KotlinJavaPsiFacade"/>
 
-    <projectService serviceImplementation="org.jetbrains.kotlin.idea.caches.lightClasses.ClsJavaStubByVirtualFileCache"/>
-
     <projectService serviceInterface="org.jetbrains.kotlin.asJava.classes.LightClassInheritanceHelper"
                     serviceImplementation="org.jetbrains.kotlin.idea.caches.lightClasses.IdeLightClassInheritanceHelper"/>
 
@@ -295,6 +294,10 @@
     <projectService serviceInterface="org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport"
                     serviceImplementation="org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupportImpl"/>
 
+    <projectService serviceInterface="org.jetbrains.kotlin.idea.util.FirPluginOracleService"
+                    serviceImplementation="org.jetbrains.kotlin.idea.util.FirPluginOracleServiceFE10Impl"/>
+
+
     <errorHandler implementation="org.jetbrains.kotlin.idea.reporter.KotlinReportSubmitter"/>
 
     <registryKey key="kotlin.dispatch.thread.resolve.check"
@@ -307,6 +310,11 @@
                  defaultValue="true"
                  restartRequired="false"/>
 
+    <registryKey key="kotlin.resolve.scripting.limit.dependency.element.finder"
+                 description="Limit applicability of an element finder for scripting dependencies"
+                 defaultValue="true"
+                 restartRequired="true"/>
+
     <iconProvider implementation="org.jetbrains.kotlin.idea.KotlinIconProvider"/>
     <gotoSymbolContributor implementation="org.jetbrains.kotlin.idea.goto.KotlinGotoSymbolContributor"/>
     <gotoClassContributor implementation="org.jetbrains.kotlin.idea.goto.KotlinGotoClassContributor"/>
@@ -314,7 +322,9 @@
     <lang.importOptimizer language="kotlin" implementationClass="org.jetbrains.kotlin.idea.imports.KotlinImportOptimizer"/>
     <lang.namesValidator language="kotlin" implementationClass="org.jetbrains.kotlin.idea.refactoring.KotlinNamesValidator"/>
 
-    <compileServer.plugin classpath="jps/kotlin-jps-plugin.jar;kotlin-stdlib.jar;kotlin-stdlib-jdk7.jar;kotlin-stdlib-jdk8.jar;kotlin-reflect.jar;kotlin-plugin.jar;kotlin-jps-common.jar;kotlin-common.jar"/>
+    <compileServer.plugin classpath="jps/kotlin-jps-plugin.jar;kotlin-jps-common.jar;kotlin-common.jar"/>
+    <buildProcess.parametersProvider implementation="org.jetbrains.kotlin.idea.KotlinJpsClasspathProvider"/>
+
     <compiler.task execute="BEFORE" implementation="org.jetbrains.kotlin.idea.internal.makeBackup.MakeBackupCompileTask"/>
     <jps.plugin />
 
@@ -563,7 +573,7 @@
         implementationClass="org.jetbrains.kotlin.idea.hierarchy.overrides.KotlinOverrideHierarchyProvider" />
 
     <java.elementFinder implementation="org.jetbrains.kotlin.asJava.finder.JavaElementFinder"/>
-    <java.elementFinder implementation="org.jetbrains.kotlin.idea.core.script.KotlinScriptDependenciesClassFinder"/>
+    <java.elementFinder implementation="org.jetbrains.kotlin.idea.core.script.KotlinScriptDependenciesClassFinder" order="last"/>
     <java.shortNamesCache implementation="org.jetbrains.kotlin.idea.caches.KotlinShortNamesCache"/>
 
 
@@ -597,16 +607,17 @@
     <applicationService serviceImplementation="org.jetbrains.kotlin.idea.editor.KotlinEditorOptions"/>
 
     <editorSmartKeysConfigurable instance="org.jetbrains.kotlin.idea.editor.KotlinEditorOptionsConfigurable"/>
+    <search.topHitProvider implementation="org.jetbrains.kotlin.idea.editor.KotlinEditorOptionsTopHitProvider"/>
 
     <applicationService serviceImplementation="org.jetbrains.kotlin.idea.refactoring.KotlinRefactoringSettings"/>
 
-    <statementUpDownMover id="jetExpression"
+    <statementUpDownMover id="ktExpression"
                           implementation="org.jetbrains.kotlin.idea.codeInsight.upDownMover.KotlinExpressionMover"
                           order="before declaration" />
 
-    <statementUpDownMover id="jetDeclaration"
+    <statementUpDownMover id="ktDeclaration"
                           implementation="org.jetbrains.kotlin.idea.codeInsight.upDownMover.KotlinDeclarationMover"
-                          order="before jetExpression" />
+                          order="before ktExpression" />
 
     <moveLeftRightHandler language="kotlin" implementationClass="org.jetbrains.kotlin.idea.codeInsight.KotlinMoveLeftRightHandler"/>
 
@@ -700,7 +711,7 @@
 
     <applicationService serviceImplementation="org.jetbrains.kotlin.idea.codeInsight.KotlinCodeInsightSettings"/>
 
-    <referenceImporter implementation="org.jetbrains.kotlin.idea.quickfix.KotlinReferenceImporter"/>
+    <referenceImporter implementation="org.jetbrains.kotlin.idea.codeInsight.KotlinReferenceImporter"/>
     <autoImportOptionsProvider instance="org.jetbrains.kotlin.idea.codeInsight.KotlinCodeInsightWorkspaceSettingsProvider"/>
 
     <fileType.fileViewProviderFactory filetype="KJSM" implementationClass="com.intellij.psi.ClassFileViewProviderFactory"/>
@@ -725,6 +736,8 @@
 
     <statistics.counterUsagesCollector groupId="kotlin.code.vision" version="1"/>
     <codeInsight.inlayProvider language="kotlin" implementationClass="org.jetbrains.kotlin.idea.codeInsight.codevision.KotlinCodeVisionProvider"/>
+
+    <psi.referenceContributor implementation="org.jetbrains.kotlin.idea.references.KotlinWebReferenceContributor"/>
   </extensions>
 
   <resource-bundle>messages.KotlinBundle</resource-bundle>

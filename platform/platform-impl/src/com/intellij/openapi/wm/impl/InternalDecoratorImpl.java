@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.wm.impl;
 
 import com.intellij.ide.IdeBundle;
@@ -95,6 +95,14 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
   @Override
   public ActionToolbar getHeaderToolbar() {
     return header.getToolbar();
+  }
+
+  public ActionGroup getHeaderToolbarActions() {
+    return header.getToolbarActions();
+  }
+
+  public ActionGroup getHeaderToolbarWestActions() {
+    return header.getToolbarWestActions();
   }
 
   @Override
@@ -274,8 +282,7 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
   /**
    * @return tool window associated with the decorator.
    */
-  @NotNull
-  final ToolWindowImpl getToolWindow() {
+  @NotNull ToolWindowImpl getToolWindow() {
     return toolWindow;
   }
 
@@ -317,21 +324,28 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
     return component != notificationHeader ? component : null;
   }
 
+  @Nullable
+  public Rectangle getHeaderScreenBounds() {
+    if (!header.isShowing()) return null;
+    Rectangle bounds = header.getBounds();
+    bounds.setLocation(header.getLocationOnScreen());
+    return bounds;
+  }
+
   @Override
   public void addNotify() {
     super.addNotify();
-
-    JPanel divider = this.divider;
-    if (divider != null) {
-      IdeGlassPane glassPane = (IdeGlassPane)getRootPane().getGlassPane();
-      if (disposable != null) {
-        Disposer.dispose(disposable);
+      JPanel divider = this.divider;
+      if (divider != null) {
+        IdeGlassPane glassPane = (IdeGlassPane)getRootPane().getGlassPane();
+        if (disposable != null) {
+          Disposer.dispose(disposable);
+        }
+        disposable = Disposer.newDisposable();
+        ResizeOrMoveDocketToolWindowMouseListener listener = new ResizeOrMoveDocketToolWindowMouseListener(divider, glassPane, this);
+        glassPane.addMouseMotionPreprocessor(listener, disposable);
+        glassPane.addMousePreprocessor(listener, disposable);
       }
-      disposable = Disposer.newDisposable();
-      ResizeOrMoveDocketToolWindowMouseListener listener = new ResizeOrMoveDocketToolWindowMouseListener(divider, glassPane, this);
-      glassPane.addMouseMotionPreprocessor(listener, disposable);
-      glassPane.addMousePreprocessor(listener, disposable);
-    }
   }
 
   @Override
@@ -345,6 +359,30 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
     }
   }
 
+  public void updateBounds(@NotNull MouseEvent dragEvent) {
+    //"Undock" mode only, for "Dock" mode processing see com.intellij.openapi.wm.impl.content.ToolWindowContentUi.initMouseListeners
+    ToolWindowAnchor anchor = toolWindow.getAnchor();
+    Container windowPane = getParent();
+    Point lastPoint = SwingUtilities.convertPoint(dragEvent.getComponent(), dragEvent.getPoint(), windowPane);
+    lastPoint.x = MathUtil.clamp(lastPoint.x, 0, windowPane.getWidth());
+    lastPoint.y = MathUtil.clamp(lastPoint.y, 0, windowPane.getHeight());
+
+    Rectangle bounds = getBounds();
+    if (anchor == ToolWindowAnchor.TOP) {
+      setBounds(0, 0, bounds.width, lastPoint.y);
+    }
+    else if (anchor == ToolWindowAnchor.LEFT) {
+      setBounds(0, 0, lastPoint.x, bounds.height);
+    }
+    else if (anchor == ToolWindowAnchor.BOTTOM) {
+      setBounds(0, lastPoint.y, bounds.width, windowPane.getHeight() - lastPoint.y);
+    }
+    else if (anchor == ToolWindowAnchor.RIGHT) {
+      setBounds(lastPoint.x, 0, windowPane.getWidth() - lastPoint.x, bounds.height);
+    }
+    validate();
+  }
+  
   private static final class ResizeOrMoveDocketToolWindowMouseListener extends MouseAdapter {
     private final JComponent divider;
     private final IdeGlassPane glassPane;
@@ -365,7 +403,7 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
       }
 
       SwingUtilities.convertPointFromScreen(point, divider);
-      return Math.abs(decorator.toolWindow.getWindowInfo().getAnchor().isHorizontal() ? point.y : point.x) < 6;
+      return Math.abs(decorator.toolWindow.getWindowInfo().getAnchor().isHorizontal() ? point.y : point.x) <= ToolWindowsPane.getHeaderResizeArea();
     }
 
     private void updateCursor(@NotNull MouseEvent event, boolean isInDragZone) {
@@ -402,27 +440,7 @@ public final class InternalDecoratorImpl extends InternalDecorator implements Qu
       if (!isDragging) {
         return;
       }
-
-      ToolWindowAnchor anchor = decorator.toolWindow.getAnchor();
-      Container windowPane = decorator.getParent();
-      Point lastPoint = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), windowPane);
-      lastPoint.x = MathUtil.clamp(lastPoint.x, 0, windowPane.getWidth());
-      lastPoint.y = MathUtil.clamp(lastPoint.y, 0, windowPane.getHeight());
-
-      Rectangle bounds = decorator.getBounds();
-      if (anchor == ToolWindowAnchor.TOP) {
-        decorator.setBounds(0, 0, bounds.width, lastPoint.y);
-      }
-      else if (anchor == ToolWindowAnchor.LEFT) {
-        decorator.setBounds(0, 0, lastPoint.x, bounds.height);
-      }
-      else if (anchor == ToolWindowAnchor.BOTTOM) {
-        decorator.setBounds(0, lastPoint.y, bounds.width, windowPane.getHeight() - lastPoint.y);
-      }
-      else if (anchor == ToolWindowAnchor.RIGHT) {
-        decorator.setBounds(lastPoint.x, 0, windowPane.getWidth() - lastPoint.x, bounds.height);
-      }
-      decorator.validate();
+      decorator.updateBounds(e);
       e.consume();
     }
   }

@@ -1,18 +1,4 @@
-/*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.findUsages.dialogs;
 
@@ -29,7 +15,7 @@ import com.intellij.ui.StateRestoringCheckBox;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.kotlin.asJava.LightClassUtilsKt;
 import org.jetbrains.kotlin.asJava.elements.KtLightMethod;
-import org.jetbrains.kotlin.idea.KotlinBundleIndependent;
+import org.jetbrains.kotlin.idea.KotlinIndependentBundle;
 import org.jetbrains.kotlin.idea.findUsages.KotlinFunctionFindUsagesOptions;
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport;
 import org.jetbrains.kotlin.psi.KtDeclaration;
@@ -70,14 +56,14 @@ public class KotlinFindFunctionUsagesDialog extends FindMethodUsagesDialog {
 
         if (findWhatPanel != null) {
             Utils.renameCheckbox(
-                    findWhatPanel,
-                    JavaBundle.message("find.what.implementing.methods.checkbox"),
-                    KotlinBundleIndependent.message("find.declaration.implementing.methods.checkbox")
+              findWhatPanel,
+              JavaBundle.message("find.what.implementing.methods.checkbox"),
+              KotlinIndependentBundle.message("find.declaration.implementing.methods.checkbox")
             );
             Utils.renameCheckbox(
-                    findWhatPanel,
-                    JavaBundle.message("find.what.overriding.methods.checkbox"),
-                    KotlinBundleIndependent.message("find.declaration.overriding.methods.checkbox")
+              findWhatPanel,
+              JavaBundle.message("find.what.overriding.methods.checkbox"),
+              KotlinIndependentBundle.message("find.declaration.overriding.methods.checkbox")
             );
         }
 
@@ -89,15 +75,15 @@ public class KotlinFindFunctionUsagesDialog extends FindMethodUsagesDialog {
         super.addUsagesOptions(optionsPanel);
 
         if (!Utils.renameCheckbox(
-                optionsPanel,
-                JavaBundle.message("find.options.include.overloaded.methods.checkbox"),
-                KotlinBundleIndependent.message("find.declaration.include.overloaded.methods.checkbox")
+          optionsPanel,
+          JavaBundle.message("find.options.include.overloaded.methods.checkbox"),
+          KotlinIndependentBundle.message("find.declaration.include.overloaded.methods.checkbox")
         )) {
             addCheckboxToPanel(
-                    KotlinBundleIndependent.message("find.declaration.include.overloaded.methods.checkbox"),
-                    FindSettings.getInstance().isSearchOverloadedMethods(),
-                    optionsPanel,
-                    false
+              KotlinIndependentBundle.message("find.declaration.include.overloaded.methods.checkbox"),
+              FindSettings.getInstance().isSearchOverloadedMethods(),
+              optionsPanel,
+              false
             );
         }
         PsiElement element = LightClassUtilsKt.getUnwrapped(getPsiElement());
@@ -110,10 +96,10 @@ public class KotlinFindFunctionUsagesDialog extends FindMethodUsagesDialog {
         KotlinFunctionFindUsagesOptions options = getFindUsagesOptions();
         if (isActual) {
             expectedUsages = addCheckboxToPanel(
-                    KotlinBundleIndependent.message("find.usages.checkbox.name.expected.functions"),
-                    options.getSearchExpected(),
-                    optionsPanel,
-                    false
+              KotlinIndependentBundle.message("find.usages.checkbox.name.expected.functions"),
+              options.getSearchExpected(),
+              optionsPanel,
+              false
             );
         }
     }

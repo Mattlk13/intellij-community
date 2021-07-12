@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.test
 
@@ -38,12 +35,14 @@ import org.jetbrains.kotlin.idea.debugger.test.util.render
 import org.jetbrains.kotlin.idea.test.ConfigLibraryUtil
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.psiUtil.getElementTextWithContext
+import org.jetbrains.kotlin.test.InTextDirectivesUtils
+import org.jetbrains.kotlin.test.KotlinBaseTest
 import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstance
 
 abstract class KotlinDescriptorTestCaseWithStepping : KotlinDescriptorTestCase() {
     companion object {
         //language=RegExp
-        val mavenDependencyRegex = """maven\(([a-zA-Z0-9_\-.]+):([a-zA-Z0-9_\-.]+):([a-zA-Z0-9_\-.]+)\)"""
+        const val MAVEN_DEPENDENCY_REGEX = """maven\(([a-zA-Z0-9_\-.]+):([a-zA-Z0-9_\-.]+):([a-zA-Z0-9_\-.]+)\)"""
     }
 
     private val dp: DebugProcessImpl
@@ -237,6 +236,9 @@ abstract class KotlinDescriptorTestCaseWithStepping : KotlinDescriptorTestCase()
         }
     }
 
+    protected fun countBreakpointsNumber(file: KotlinBaseTest.TestFile) =
+        InTextDirectivesUtils.findLinesWithPrefixesRemoved(file.content, "//Breakpoint!").size
+
     protected fun SuspendContextImpl.invokeInManagerThread(callback: () -> Unit) {
         assert(debugProcess.isAttached)
         debugProcess.managerThread.invokeCommand(object : DebuggerCommand {
@@ -246,7 +248,7 @@ abstract class KotlinDescriptorTestCaseWithStepping : KotlinDescriptorTestCase()
     }
 
     override fun addMavenDependency(compilerFacility: DebuggerTestCompilerFacility, library: String) {
-        val regex = Regex(mavenDependencyRegex)
+        val regex = Regex(MAVEN_DEPENDENCY_REGEX)
         val result = regex.matchEntire(library) ?: return
         val (_, groupId: String, artifactId: String, version: String) = result.groupValues
         addMavenDependency(compilerFacility, groupId, artifactId, version)

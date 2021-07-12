@@ -1,13 +1,9 @@
-/*
-* Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
-* Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
-*/
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger
 
 import com.intellij.debugger.ui.tree.render.CompoundRendererProvider
 import com.sun.jdi.Type
-import java.util.concurrent.CompletableFuture
 import java.util.function.Function
 
 class KotlinClassRendererProvider : CompoundRendererProvider() {
@@ -21,8 +17,7 @@ class KotlinClassRendererProvider : CompoundRendererProvider() {
 
     override fun getChildrenRenderer() = classRenderer
 
-    override fun getIsApplicableChecker() =
-        Function { type: Type? -> CompletableFuture.completedFuture(classRenderer.isApplicable(type)) }
+    override fun getIsApplicableChecker() = Function { type: Type? -> classRenderer.isApplicableAsync(type) }
 
     override fun isEnabled() = true
 }

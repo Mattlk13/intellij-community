@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -10,11 +7,17 @@ import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
 import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
+import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.intentions.RemoveExplicitTypeIntention
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.descriptorUtil.isCompanionObject
+import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.types.AbbreviatedType
+import org.jetbrains.kotlin.types.KotlinType
 
 class RedundantExplicitTypeInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean) =
@@ -69,6 +72,8 @@ class RedundantExplicitTypeInspection : AbstractKotlinInspection() {
                 }
                 is KtNameReferenceExpression -> {
                     if (typeReference.text != initializer.getReferencedName()) return false
+                    val initializerType = initializer.getType(property.analyze(BodyResolveMode.PARTIAL))
+                    if (initializerType != type && initializerType.isCompanionObject()) return false
                 }
                 is KtCallExpression -> {
                     if (typeReference.text != initializer.calleeExpression?.text) return false
@@ -77,5 +82,8 @@ class RedundantExplicitTypeInspection : AbstractKotlinInspection() {
             }
             return true
         }
+
+        private fun KotlinType?.isCompanionObject() =
+            this?.constructor?.declarationDescriptor?.isCompanionObject() == true
     }
 }

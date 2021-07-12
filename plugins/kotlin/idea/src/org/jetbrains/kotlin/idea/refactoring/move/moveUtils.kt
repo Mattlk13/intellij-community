@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.move
 
@@ -58,6 +55,7 @@ import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.scopes.receivers.ImplicitClassReceiver
 import org.jetbrains.kotlin.resolve.scopes.receivers.ImplicitReceiver
 import org.jetbrains.kotlin.types.expressions.DoubleColonLHS
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 import org.jetbrains.kotlin.utils.addIfNotNull
 import java.io.File
 import java.lang.System.currentTimeMillis
@@ -408,7 +406,7 @@ fun guessNewFileName(declarationsToMove: Collection<KtNamedDeclaration>): String
     val newFileName = representative?.run {
         if (containingKtFile.isScript()) "$name.kts" else "$name.${KotlinFileType.EXTENSION}"
     } ?: declarationsToMove.first().containingFile.name
-    return newFileName.capitalize()
+    return newFileName.capitalizeAsciiOnly()
 }
 
 // returns true if successful

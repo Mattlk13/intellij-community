@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.caches.resolve
 
@@ -51,7 +48,7 @@ class JsPlatformKindResolution : IdePlatformKindResolution {
 
     override val kind get() = JsIdePlatformKind
 
-    override fun getKeyForBuiltIns(moduleInfo: ModuleInfo, sdkInfo: SdkInfo?): BuiltInsCacheKey {
+    override fun getKeyForBuiltIns(moduleInfo: ModuleInfo, sdkInfo: SdkInfo?, stdlibInfo: LibraryInfo?): BuiltInsCacheKey {
         return BuiltInsCacheKey.DefaultBuiltInsKey
     }
 
@@ -59,7 +56,8 @@ class JsPlatformKindResolution : IdePlatformKindResolution {
         moduleInfo: IdeaModuleInfo,
         projectContext: ProjectContext,
         resolverForProject: ResolverForProject<IdeaModuleInfo>,
-        sdkDependency: SdkInfo?
+        sdkDependency: SdkInfo?,
+        stdlibDependency: LibraryInfo?,
     ): KotlinBuiltIns {
         return DefaultBuiltIns.Instance
     }

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.introduce.extractionEngine
 
@@ -56,6 +53,7 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getCalleeExpressionIfAny
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope
 import org.jetbrains.kotlin.types.*
 import org.jetbrains.kotlin.types.typeUtil.makeNullable
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 import org.jetbrains.kotlin.utils.DFS.*
 import java.util.*
 
@@ -479,11 +477,11 @@ internal class MutableParameter(
 
     var refCount: Int = 0
 
-    fun addDefaultType(jetType: KotlinType) {
+    fun addDefaultType(kotlinType: KotlinType) {
         assert(writable) { "Can't add type to non-writable parameter $currentName" }
 
-        if (jetType in possibleTypes) {
-            defaultTypes.add(jetType)
+        if (kotlinType in possibleTypes) {
+            defaultTypes.add(kotlinType)
         }
     }
 
@@ -736,7 +734,7 @@ private fun ExtractionData.suggestFunctionNames(returnType: KotlinType): List<St
     expressions.singleOrNull()?.let { expr ->
         val property = expr.getStrictParentOfType<KtProperty>()
         if (property?.initializer == expr) {
-            property.name?.let { functionNames.add(KotlinNameSuggester.suggestNameByName("get" + it.capitalize(), validator)) }
+            property.name?.let { functionNames.add(KotlinNameSuggester.suggestNameByName("get" + it.capitalizeAsciiOnly(), validator)) }
         }
     }
 

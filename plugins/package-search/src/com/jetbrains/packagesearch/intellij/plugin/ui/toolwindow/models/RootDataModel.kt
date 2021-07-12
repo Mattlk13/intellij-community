@@ -4,8 +4,9 @@ import com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.panels.manageme
 import com.jetbrains.packagesearch.intellij.plugin.util.TraceInfo
 
 internal data class RootDataModel(
-    val projectModules: List<ModuleModel>,
+    val moduleModels: List<ModuleModel>,
     val packageModels: List<PackageModel>,
+    val packagesToUpdate: PackagesToUpdate,
     val headerData: PackagesHeaderData,
     val targetModules: TargetModules,
     val allKnownRepositories: KnownRepositories.All,
@@ -18,8 +19,9 @@ internal data class RootDataModel(
     companion object {
 
         val EMPTY = RootDataModel(
-            projectModules = emptyList(),
+            moduleModels = emptyList(),
             packageModels = emptyList(),
+            packagesToUpdate = PackagesToUpdate.EMPTY,
             headerData = PackagesHeaderData.EMPTY,
             targetModules = TargetModules.None,
             allKnownRepositories = KnownRepositories.All.EMPTY,

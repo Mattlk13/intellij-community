@@ -26,10 +26,12 @@ import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.roots.impl.libraries.LibraryTableTracker
 import com.intellij.openapi.vfs.impl.VirtualFilePointerTracker
 import com.intellij.project.TestProjectManager
 import com.intellij.project.stateStore
 import com.intellij.util.containers.forEachGuaranteed
+import com.intellij.util.io.isDirectory
 import com.intellij.util.io.sanitizeFileName
 import com.intellij.util.throwIfNotEmpty
 import kotlinx.coroutines.runBlocking
@@ -111,7 +113,8 @@ class ProjectRule(private val runPostStartUpActivities: Boolean = false,
 
   private var sharedProject: ProjectEx? = null
   private var testClassName: String? = null
-  var virtualFilePointerTracker: VirtualFilePointerTracker? = null
+  var virtualFilePointerTracker: VirtualFilePointerTracker? =null
+  var libraryTracker: LibraryTableTracker? = null
   var projectTracker: AccessToken? = null
 
   override fun before(description: Description) {
@@ -126,6 +129,7 @@ class ProjectRule(private val runPostStartUpActivities: Boolean = false,
     val options = createTestOpenProjectOptions(runPostStartUpActivities = runPostStartUpActivities).copy(preloadServices = preloadServices)
     val project = (ProjectManager.getInstance() as TestProjectManager).openProject(projectFile, options) as ProjectEx
     virtualFilePointerTracker = VirtualFilePointerTracker()
+    libraryTracker = LibraryTableTracker()
     return project
   }
 
@@ -135,6 +139,7 @@ class ProjectRule(private val runPostStartUpActivities: Boolean = false,
     l.catchAndStoreExceptions { sharedProject?.let { PlatformTestUtil.forceCloseProjectWithoutSaving(it) } }
     l.catchAndStoreExceptions { projectTracker?.finish() }
     l.catchAndStoreExceptions { virtualFilePointerTracker?.assertPointersAreDisposed() }
+    l.catchAndStoreExceptions { libraryTracker?.assertDisposed() }
     l.catchAndStoreExceptions {
       sharedProject = null
       sharedModule = null
@@ -416,16 +421,23 @@ suspend fun loadProject(projectPath: Path, task: suspend (Project) -> Unit) {
  */
 fun loadProjectAndCheckResults(projectPaths: List<Path>, tempDirectory: TemporaryDirectory, checkProject: suspend (Project) -> Unit) {
   @Suppress("RedundantSuspendModifier")
-  suspend fun copyProjectFiles(dir: VirtualFile): Path {
-    val projectDir = VfsUtil.virtualToIoFile(dir)
+  suspend fun copyProjectFiles(targetDir: VirtualFile): Path {
+    val projectDir = VfsUtil.virtualToIoFile(targetDir)
+    var projectFileName: String? = null
     for (projectPath in projectPaths) {
-      FileUtil.copyDir(projectPath.toFile(), projectDir)
+      val dir = if (projectPath.isDirectory()) projectPath
+      else {
+        projectFileName = projectPath.fileName.toString()
+        projectPath.parent
+      }
+      FileUtil.copyDir(dir.toFile(), projectDir)
     }
-    VfsUtil.markDirtyAndRefresh(false, true, true, dir)
-    return projectDir.toPath()
+    VfsUtil.markDirtyAndRefresh(false, true, true, targetDir)
+    return if (projectFileName != null) projectDir.toPath().resolve(projectFileName) else projectDir.toPath()
   }
   runBlocking {
-    createOrLoadProject(tempDirectory, ::copyProjectFiles, loadComponentState = true, useDefaultProjectSettings = false) {
+    createOrLoadProject(tempDirectory, ::copyProjectFiles, directoryBased = projectPaths.all { it.isDirectory() },
+                        loadComponentState = true, useDefaultProjectSettings = false) {
       checkProject(it)
     }
   }

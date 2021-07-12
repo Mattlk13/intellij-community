@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.configuration
 
@@ -137,18 +134,6 @@ class GroovyBuildScriptManipulator(
         }
 
         return oldText != scriptFile.text
-    }
-
-    override fun changeCoroutineConfiguration(coroutineOption: String): PsiElement? {
-        val snippet = "coroutines \"$coroutineOption\""
-        val kotlinBlock = scriptFile.getKotlinBlock()
-        kotlinBlock.getBlockOrCreate("experimental").apply {
-            addOrReplaceExpression(snippet) { stmt ->
-                (stmt as? GrMethodCall)?.invokedExpression?.text == "coroutines"
-            }
-        }
-
-        return kotlinBlock.parent
     }
 
     override fun changeLanguageFeatureConfiguration(

@@ -1,27 +1,14 @@
-/*
- * Copyright 2000-2011 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package git4idea.repo;
 
 import com.intellij.dvcs.ignore.IgnoredToExcludedSynchronizer;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.options.advanced.AdvancedSettings;
 import com.intellij.openapi.progress.util.BackgroundTaskUtil;
+import com.intellij.openapi.progress.util.ProgressIndicatorUtils;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsException;
@@ -34,6 +21,7 @@ import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.update.ComparableObject;
 import com.intellij.util.ui.update.DisposableUpdate;
 import com.intellij.util.ui.update.MergingUpdateQueue;
+import com.intellij.util.ui.update.Update;
 import git4idea.GitContentRevision;
 import git4idea.index.GitIndexStatusUtilKt;
 import git4idea.index.LightFileStatus.StatusRecord;
@@ -41,6 +29,7 @@ import git4idea.status.GitRefreshListener;
 import org.jetbrains.annotations.*;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class GitUntrackedFilesHolder implements Disposable {
@@ -128,7 +117,7 @@ public class GitUntrackedFilesHolder implements Disposable {
   }
 
   /**
-   * Marks files as possibly untracked to be checked on the next {@link #retrieveUntrackedFilePaths} call.
+   * Marks files as possibly untracked to be checked on the next {@link #update()} call.
    *
    * @param files files that are possibly untracked.
    */
@@ -347,7 +336,7 @@ public class GitUntrackedFilesHolder implements Disposable {
   @NotNull
   private RefreshResult refreshFiles(@Nullable List<FilePath> dirty) {
     try {
-      boolean withIgnored = Registry.is("git.process.ignored");
+      boolean withIgnored = AdvancedSettings.getBoolean("vcs.process.ignored");
       List<StatusRecord> fileStatuses = GitIndexStatusUtilKt.getFileStatus(myProject, myRoot, ContainerUtil.notNullize(dirty),
                                                                            false, true, withIgnored);
 
@@ -395,6 +384,9 @@ public class GitUntrackedFilesHolder implements Disposable {
     }
 
     public void waitFor() {
+      CountDownLatch waiter = new CountDownLatch(1);
+      myQueue.queue(Update.create(waiter, () -> waiter.countDown()));
+      ProgressIndicatorUtils.awaitWithCheckCanceled(waiter);
       myQueue.waitForAllExecuted(10, TimeUnit.SECONDS);
     }
   }

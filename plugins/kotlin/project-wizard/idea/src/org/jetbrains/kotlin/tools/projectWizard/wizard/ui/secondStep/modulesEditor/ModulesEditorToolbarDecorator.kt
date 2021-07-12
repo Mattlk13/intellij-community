@@ -1,3 +1,4 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.tools.projectWizard.wizard.ui.secondStep.modulesEditor
 
 import com.intellij.icons.AllIcons
@@ -13,6 +14,7 @@ import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Sourceset
 import org.jetbrains.kotlin.tools.projectWizard.wizard.KotlinNewProjectWizardUIBundle
 import org.jetbrains.kotlin.tools.projectWizard.wizard.ui.createPanelWithPopupHandler
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
+import java.util.*
 import javax.swing.JComponent
 
 class ModulesEditorToolbarDecorator(
@@ -64,46 +66,26 @@ class ModulesEditorToolbarDecorator(
                 }
                 val moduleKindTextToAdd = when (tree.selectedSettingItem?.safeAs<Module>()?.kind) {
                     ModuleKind.multiplatform -> KotlinNewProjectWizardBundle.message("module.kind.target")
-                    ModuleKind.singleplatformJvm -> KotlinNewProjectWizardBundle.message("module.kind.module")
-                    ModuleKind.singleplatformJsBrowser -> KotlinNewProjectWizardBundle.message("module.kind.js.browser.module")
-                    ModuleKind.singleplatformJsNode -> KotlinNewProjectWizardBundle.message("module.kind.js.node.module")
-                    ModuleKind.singleplatformAndroid -> KotlinNewProjectWizardBundle.message("module.kind.android.module")
+                    ModuleKind.singlePlatformJvm -> KotlinNewProjectWizardBundle.message("module.kind.module")
+                    ModuleKind.singlePlatformJsBrowser -> KotlinNewProjectWizardBundle.message("module.kind.js.browser.module")
+                    ModuleKind.singlePlatformJsNode -> KotlinNewProjectWizardBundle.message("module.kind.js.node.module")
+                    ModuleKind.singlePlatformAndroid -> KotlinNewProjectWizardBundle.message("module.kind.android.module")
                     ModuleKind.target -> ""
                     null -> ""
                 }
 
-                text = KotlinNewProjectWizardUIBundle.message("editor.modules.add", moduleKindTextToAdd.capitalize())
+                text = KotlinNewProjectWizardUIBundle.message("editor.modules.add", moduleKindTextToAdd.capitalize(Locale.US))
             }
             event.presentation.isEnabled
         }
 
-        setRemoveAction {
-            val moduleKindText = selectedModuleKindText ?: KotlinNewProjectWizardBundle.message("module.kind.module")
-            if (Messages.showOkCancelDialog(
-                    tree,
-                    buildString {
-                        val moduleName = selectedModule?.name!!
-                        if (tree.selectedSettingItem.safeAs<Module>()?.kind != ModuleKind.target) {
-                            appendLine(KotlinNewProjectWizardUIBundle.message("editor.modules.remove.selected.module", moduleName))
-                        } else {
-                            appendLine(KotlinNewProjectWizardUIBundle.message("editor.modules.remove.selected.target", moduleName))
-                        }
-                    },
-                    KotlinNewProjectWizardUIBundle.message("editor.modules.remove.selected.question", moduleKindText),
-                    KotlinNewProjectWizardUIBundle.message("editor.modules.remove.selected.remove"),
-                    KotlinNewProjectWizardUIBundle.message("editor.modules.remove.selected.cancel"),
-                    AllIcons.General.QuestionDialog
-                ) == Messages.OK
-            ) {
-                model.removeSelected()
-            }
-        }
+        setRemoveAction { model.removeSelected() }
         setRemoveActionUpdater { event ->
             event.presentation.apply {
                 isEnabled = tree.selectedSettingItem is Module
                 text = KotlinNewProjectWizardUIBundle.message(
                     "editor.modules.remove.tooltip",
-                    selectedModuleKindText?.let { " ${it.capitalize()}" }.orEmpty()
+                    selectedModuleKindText?.let { " ${it.capitalize(Locale.US)}" }.orEmpty()
                 )
             }
             event.presentation.isEnabled
@@ -138,9 +120,9 @@ class ModulesEditorToolbarDecorator(
 private val Module.kindText
     get() = when (kind) {
         ModuleKind.multiplatform -> KotlinNewProjectWizardBundle.message("module.kind.module")
-        ModuleKind.singleplatformJvm -> KotlinNewProjectWizardBundle.message("module.kind.module")
-        ModuleKind.singleplatformJsBrowser -> KotlinNewProjectWizardBundle.message("module.kind.module")
-        ModuleKind.singleplatformJsNode -> KotlinNewProjectWizardBundle.message("module.kind.module")
-        ModuleKind.singleplatformAndroid -> KotlinNewProjectWizardBundle.message("module.kind.android.module")
+        ModuleKind.singlePlatformJvm -> KotlinNewProjectWizardBundle.message("module.kind.module")
+        ModuleKind.singlePlatformJsBrowser -> KotlinNewProjectWizardBundle.message("module.kind.module")
+        ModuleKind.singlePlatformJsNode -> KotlinNewProjectWizardBundle.message("module.kind.module")
+        ModuleKind.singlePlatformAndroid -> KotlinNewProjectWizardBundle.message("module.kind.android.module")
         ModuleKind.target -> KotlinNewProjectWizardBundle.message("module.kind.target")
     }

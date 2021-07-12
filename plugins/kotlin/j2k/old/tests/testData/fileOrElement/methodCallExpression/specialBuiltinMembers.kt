@@ -1,3 +1,4 @@
+// ERROR: Using 'toShort(): Short' is an error. Unclear conversion. To achieve the same result convert to Int explicitly and then to Short.
 import java.util.*
 
 internal enum class E {

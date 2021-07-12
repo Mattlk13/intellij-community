@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.templates
 
@@ -29,7 +26,7 @@ class SimpleNodeJsTemplate : Template() {
     override val description: String = KotlinNewProjectWizardBundle.message("module.template.simple.nodejs.description")
 
 
-    override fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean =
+    override fun isApplicableTo(module: Module, projectKind: ProjectKind): Boolean =
         module.configurator.moduleType == ModuleType.js
 
     @NonNls
@@ -72,7 +69,7 @@ class SimpleNodeJsTemplate : Template() {
     override fun Reader.getFileTemplates(module: ModuleIR): List<FileTemplateDescriptorWithPath> =
         withSettingsOf(module.originalModule) {
             buildList {
-                +(FileTemplateDescriptor("$id/main.kt.vm") asSrcOf SourcesetType.main)
+                +(FileTemplateDescriptor("$id/main.kt.vm", "Main.kt".asPath()) asSrcOf SourcesetType.main)
                 +(FileTemplateDescriptor("$id/GreetingTest.kt.vm") asSrcOf SourcesetType.test)
             }
         }

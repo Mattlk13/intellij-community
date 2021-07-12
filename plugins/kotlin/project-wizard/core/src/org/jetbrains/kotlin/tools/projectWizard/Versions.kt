@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard
 
@@ -32,15 +29,15 @@ object Versions {
     }
 
     object JS_WRAPPERS {
-        val KOTLIN_REACT = wrapperVersion("17.0.1")
+        val KOTLIN_REACT = wrapperVersion("17.0.2")
         val KOTLIN_REACT_DOM = KOTLIN_REACT
-        val KOTLIN_STYLED = wrapperVersion("5.2.1")
+        val KOTLIN_STYLED = wrapperVersion("5.3.0")
         val KOTLIN_REACT_ROUTER_DOM = wrapperVersion("5.2.0")
         val KOTLIN_REDUX = wrapperVersion("4.0.5")
-        val KOTLIN_REACT_REDUX = wrapperVersion("7.2.2")
+        val KOTLIN_REACT_REDUX = wrapperVersion("7.2.3")
 
         private fun wrapperVersion(version: String): Version =
-            version("$version-pre.148-kotlin-1.4.30")
+            version("$version-pre.206-kotlin-1.5.10")
     }
 
     object GRADLE_PLUGINS {

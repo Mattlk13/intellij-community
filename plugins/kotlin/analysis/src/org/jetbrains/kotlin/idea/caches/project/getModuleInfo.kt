@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.project
 
@@ -45,6 +42,12 @@ fun ModuleInfo.findSdkAcrossDependencies(): SdkInfo? {
     val project = (this as? IdeaModuleInfo)?.project ?: return null
 
     return SdkInfoCache.getInstance(project).findOrGetCachedSdk(this)
+}
+
+fun IdeaModuleInfo.findJvmStdlibAcrossDependencies(): LibraryInfo? {
+    val project = project ?: return null
+
+    return KotlinStdlibCache.getInstance(project).findStdlibInModuleDependencies(this)
 }
 
 fun getModuleInfoByVirtualFile(project: Project, virtualFile: VirtualFile): IdeaModuleInfo? =

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.trackers
 
@@ -27,6 +24,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.containers.ContainerUtil
 import org.jetbrains.kotlin.idea.util.application.getServiceSafe
 import org.jetbrains.kotlin.kdoc.psi.api.KDoc
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.anyDescendantOfType
 import org.jetbrains.kotlin.psi.psiUtil.getTopmostParentOfType
@@ -72,9 +70,11 @@ class PureKotlinCodeBlockModificationListener(project: Project) : Disposable {
                 }
             }
 
-        private fun isCommentChange(changeSet: TreeChangeEvent): Boolean = isSpecificChange(changeSet) { it is PsiComment || it is KDoc }
+        private inline fun isCommentChange(changeSet: TreeChangeEvent): Boolean = isSpecificChange(changeSet) { it is PsiComment || it is KDoc }
 
-        private fun isFormattingChange(changeSet: TreeChangeEvent): Boolean = isSpecificChange(changeSet) { it is PsiWhiteSpace }
+        private inline fun isFormattingChange(changeSet: TreeChangeEvent): Boolean = isSpecificChange(changeSet) { it is PsiWhiteSpace }
+
+        private inline fun isStringLiteralChange(changeSet: TreeChangeEvent): Boolean = isSpecificChange(changeSet) { it?.elementType == KtTokens.REGULAR_STRING_PART }
 
         /**
          * Has to be aligned with [getInsideCodeBlockModificationScope] :
@@ -104,6 +104,12 @@ class PureKotlinCodeBlockModificationListener(project: Project) : Disposable {
             // should not be local declaration
             if (KtPsiUtil.isLocal(blockDeclaration))
                 return null
+
+            PsiTreeUtil.collectParents(element, KtStringTemplateExpression::class.java, true) {
+                it == blockDeclaration
+            }.lastOrNull()?.let {
+                return BlockModificationScopeElement(blockDeclaration, it)
+            }
 
             when (blockDeclaration) {
                 is KtNamedFunction -> {
@@ -239,7 +245,10 @@ class PureKotlinCodeBlockModificationListener(project: Project) : Disposable {
                     // skip change if it contains only virtual/fake change
                     if (changedElements.isNotEmpty()) {
                         // ignore formatting (whitespaces etc)
-                        if (isFormattingChange(changeSet) || isCommentChange(changeSet)) return
+                        if (isFormattingChange(changeSet) ||
+                            isCommentChange(changeSet) ||
+                            isStringLiteralChange(changeSet)
+                        ) return
                     }
 
                     val inBlockElements = inBlockModifications(changedElements)

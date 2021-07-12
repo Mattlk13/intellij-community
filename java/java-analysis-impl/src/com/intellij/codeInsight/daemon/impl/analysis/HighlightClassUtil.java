@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 /*
  * Checks and Highlights problems with classes
@@ -34,6 +34,8 @@ import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.util.io.FileUtilRt;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.pom.java.LanguageLevel;
@@ -308,7 +310,11 @@ public final class HighlightClassUtil {
     return errorResult;
   }
   
-  static HighlightInfo checkClassMemberDeclaredOutside(@NotNull PsiErrorElement errorElement) { 
+  static HighlightInfo checkClassMemberDeclaredOutside(@NotNull PsiErrorElement errorElement) {
+    PsiJavaFile file = ObjectUtils.tryCast(errorElement.getContainingFile(), PsiJavaFile.class);
+    if (file == null) return null;
+    String fileName = FileUtilRt.getNameWithoutExtension(file.getName());
+    if (!StringUtil.isJavaIdentifier(fileName)) return null;
     MemberModel model = MemberModel.create(errorElement);
     if (model == null) return null;
     HighlightInfo info = HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
@@ -1095,7 +1101,7 @@ public final class HighlightClassUtil {
     return null;
   }
 
-  static HighlightInfo checkExtendsSealedClass(PsiClass aClass, PsiClass superClass, PsiJavaCodeReferenceElement elementToHighlight) {
+   public static HighlightInfo checkExtendsSealedClass(PsiClass aClass, PsiClass superClass, PsiJavaCodeReferenceElement elementToHighlight) {
     if (superClass.hasModifierProperty(PsiModifier.SEALED)) {
       if (PsiUtil.isLocalClass(aClass)) {
         return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
@@ -1105,7 +1111,8 @@ public final class HighlightClassUtil {
 
       PsiClassType[] permittedTypes = superClass.getPermitsListTypes();
       if (permittedTypes.length > 0) {
-        if (Arrays.stream(permittedTypes).map(permittedType -> permittedType.resolve()).anyMatch(permittedClass -> aClass.equals(permittedClass))) {
+        PsiManager manager = superClass.getManager();
+        if (ContainerUtil.exists(permittedTypes, permittedType -> manager.areElementsEquivalent(aClass, permittedType.resolve()))) {
           return null;
         }
       }
@@ -1181,7 +1188,8 @@ public final class HighlightClassUtil {
         @Nullable PsiElement resolve = permitted.resolve();
         if (resolve instanceof PsiClass) {
           PsiClass inheritorClass = (PsiClass)resolve;
-          if (!ContainerUtil.exists(inheritorClass.getSuperTypes(), type -> aClass.equals(type.resolve()))) {
+          PsiManager manager = inheritorClass.getManager();
+          if (!ContainerUtil.exists(inheritorClass.getSuperTypes(), type -> manager.areElementsEquivalent(aClass, type.resolve()))) {
             HighlightInfo info = HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR).range(permitted)
               .descriptionAndTooltip(JavaErrorBundle.message("invalid.permits.clause.direct.implementation",
                                                              inheritorClass.getName(),

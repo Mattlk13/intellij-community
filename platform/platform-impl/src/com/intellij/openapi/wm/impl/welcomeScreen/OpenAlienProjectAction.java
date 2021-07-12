@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
+import com.intellij.openapi.util.NlsSafe;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -32,11 +33,12 @@ public class OpenAlienProjectAction extends AnAction {
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
     DefaultActionGroup actionGroup = new DefaultActionGroup();
-    for (String path : myProjectPaths) {
+    for (@NlsSafe String path : myProjectPaths) {
       actionGroup.add(new AnAction(path) {
         @Override
         public void actionPerformed(@NotNull AnActionEvent e) {
           ProjectUtil.openOrImport(Path.of(path));
+          projectOpened();
         }
       });
     }
@@ -44,4 +46,6 @@ public class OpenAlienProjectAction extends AnAction {
       .createActionGroupPopup(IdeBundle.message("popup.title.open.project"), actionGroup, e.getDataContext(), JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
                               false).showUnderneathOf(Objects.requireNonNull(e.getData(PlatformDataKeys.CONTEXT_COMPONENT)));
   }
+
+  protected void projectOpened() {}
 }

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.nj2k.tree
 
@@ -51,6 +48,7 @@ interface JKOperatorToken {
         val EXCL = JKKtSingleValueOperatorToken(KtTokens.EXCL)
         val EQEQEQ = JKKtSingleValueOperatorToken(KtTokens.EQEQEQ)
         val EXCLEQEQEQ = JKKtSingleValueOperatorToken(KtTokens.EXCLEQEQEQ)
+        val ELVIS = JKKtSingleValueOperatorToken(KtTokens.ELVIS)
 
         val AND = JKKtWordOperatorToken("and")
         val OR = JKKtWordOperatorToken("or")

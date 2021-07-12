@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.project
 
@@ -186,6 +183,15 @@ fun ModuleSourceInfo.toDescriptor() = KotlinCacheService.getInstance(module.proj
 fun PsiElement.getPlatformModuleInfo(desiredPlatform: TargetPlatform): PlatformModuleInfo? {
     assert(!desiredPlatform.isCommon()) { "Platform module cannot have Common platform" }
     val moduleInfo = getNullableModuleInfo() as? ModuleSourceInfo ?: return null
+    return doGetPlatformModuleInfo(moduleInfo, desiredPlatform)
+}
+
+fun getPlatformModuleInfo(moduleInfo: ModuleSourceInfo, desiredPlatform: TargetPlatform): PlatformModuleInfo? {
+    assert(!desiredPlatform.isCommon()) { "Platform module cannot have Common platform" }
+    return doGetPlatformModuleInfo(moduleInfo, desiredPlatform)
+}
+
+private fun doGetPlatformModuleInfo(moduleInfo: ModuleSourceInfo, desiredPlatform: TargetPlatform): PlatformModuleInfo? {
     val platform = moduleInfo.platform
     return when {
         platform.isCommon() -> {

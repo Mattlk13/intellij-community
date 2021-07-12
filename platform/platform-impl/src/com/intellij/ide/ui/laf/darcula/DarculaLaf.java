@@ -1,10 +1,9 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.ide.ui.laf.darcula;
 
 import com.intellij.diagnostic.LoadingState;
 import com.intellij.ide.IdeEventQueue;
 import com.intellij.ide.ui.UITheme;
-import com.intellij.ide.ui.laf.DarculaMetalTheme;
 import com.intellij.ide.ui.laf.IdeaLaf;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.Application;
@@ -16,7 +15,6 @@ import com.intellij.ui.TableActions;
 import com.intellij.ui.scale.JBUIScale;
 import com.intellij.ui.scale.ScaleContext;
 import com.intellij.util.Alarm;
-import com.intellij.util.SystemProperties;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.MultiResolutionImageProvider;
 import com.intellij.util.ui.StartupUiUtil;
@@ -39,7 +37,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
@@ -130,10 +127,6 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
       patchComboBox(metalDefaults, defaults);
       defaults.remove("Spinner.arrowButtonBorder");
       defaults.put("Spinner.arrowButtonSize", JBUI.size(16, 5).asUIResource());
-      MetalLookAndFeel.setCurrentTheme(createMetalTheme());
-      if (SystemInfoRt.isLinux && JBUIScale.isUsrHiDPI()) {
-        applySystemFonts(defaults);
-      }
       if (SystemInfoRt.isMac) {
         defaults.put("RootPane.defaultButtonWindowKeyBindings", new Object[]{
           "ENTER", "press",
@@ -153,28 +146,11 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
     return super.getDefaults();
   }
 
-  private static void applySystemFonts(UIDefaults defaults) {
-    try {
-      String fqn = StartupUiUtil.getSystemLookAndFeelClassName();
-      Constructor<?> constructor = Class.forName(fqn).getDeclaredConstructor();
-      constructor.setAccessible(true);
-      Object systemLookAndFeel = constructor.newInstance();
-      final Method superMethod = BasicLookAndFeel.class.getDeclaredMethod("getDefaults");
-      superMethod.setAccessible(true);
-      Map<Object, Object> systemDefaults = (UIDefaults)superMethod.invoke(systemLookAndFeel);
-      for (Map.Entry<Object, Object> entry : systemDefaults.entrySet()) {
-        if (entry.getValue() instanceof Font) {
-          defaults.put(entry.getKey(), entry.getValue());
-        }
-      }
-    }
-    catch (Exception e) {
-      log(e);
-    }
-  }
-
+  /** @deprecated metal themes are obsolete, since everything's in JSON now */
+  @Deprecated(forRemoval = true)
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   protected DefaultMetalTheme createMetalTheme() {
-    return new DarculaMetalTheme();
+    return new DefaultMetalTheme();
   }
 
   private static void patchComboBox(UIDefaults metalDefaults, UIDefaults defaults) {
@@ -205,8 +181,7 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
 
   @Nullable
   protected String getSystemPrefix() {
-    String osSuffix = SystemInfoRt.isMac ? "mac" : SystemInfoRt.isWindows ? "windows" : "linux";
-    return getPrefix() + "_" + osSuffix;
+    return null;
   }
 
   @Override
@@ -273,82 +248,22 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
   }
 
   protected void loadDefaults(UIDefaults defaults) {
-    if (SystemProperties.getBooleanProperty("ide.load.laf.as.json", true)) {
-      loadDefaultsFromJson(defaults);
-    } else{
-      loadDefaultsFromProperties(defaults);
-    }
+    loadDefaultsFromJson(defaults);
   }
 
   protected void loadDefaultsFromJson(UIDefaults defaults) {
-    String filename = getPrefix() + ".theme.json";
-    try (InputStream stream = getClass().getResourceAsStream(filename)) {
-     assert stream != null : "Can't load " + filename;
-     UITheme theme = UITheme.loadFromJson(stream, "Darcula", getClass().getClassLoader(), Function.identity());
-     theme.applyProperties(defaults);
-    }
-    catch (IOException e) {
-      log(e);
+    loadDefaultsFromJson(defaults, getPrefix());
+    if (getSystemPrefix() != null) {
+      loadDefaultsFromJson(defaults, getSystemPrefix());
     }
   }
 
-  protected void loadDefaultsFromProperties(UIDefaults defaults) {
-    try {
-      Map<String, String> map = new HashMap<>(300);
-      //noinspection NonSynchronizedMethodOverridesSynchronizedMethod
-      @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
-      Properties properties = new Properties() {
-        @Override
-        public Object put(Object key, Object value) {
-          return map.put((String)key, (String)value);
-        }
-      };
-      try (InputStream stream = getClass().getResourceAsStream(getPrefix() + ".properties")) {
-        properties.load(stream);
-      }
-
-      String systemPrefix = getSystemPrefix();
-      if (systemPrefix != null && !systemPrefix.isEmpty()) {
-        try (InputStream stream = getClass().getResourceAsStream(systemPrefix + ".properties")) {
-          properties.load(stream);
-        }
-      }
-
-      Map<String, Object> darculaGlobalSettings = new HashMap<>(32);
-      String prefix = getPrefix();
-      prefix = prefix.substring(prefix.lastIndexOf("/") + 1) + ".";
-
-      for (String key : map.keySet()) {
-        if (key.startsWith(prefix)) {
-          Object value = parseValue(key, map.get(key));
-          String darculaKey = key.substring(prefix.length());
-          if (value == SYSTEM) {
-            darculaGlobalSettings.remove(darculaKey);
-          }
-          else {
-            darculaGlobalSettings.put(darculaKey, value);
-          }
-        }
-      }
-
-      UIDefaults multiUiDefaults = UIManager.getDefaults();
-      for (Object key : defaults.keySet()) {
-        if (key instanceof String && ((String)key).contains(".")) {
-          String s = (String)key;
-          String darculaKey = s.substring(s.lastIndexOf('.') + 1);
-          if (darculaGlobalSettings.containsKey(darculaKey)) {
-            // MultiUIDefaults misses correct property merging
-            multiUiDefaults.remove(key);
-            defaults.put(key, darculaGlobalSettings.get(darculaKey));
-          }
-        }
-      }
-
-      for (Map.Entry<String, String> entry : map.entrySet()) {
-        // MultiUIDefaults misses correct property merging
-        multiUiDefaults.remove(entry.getKey());
-        defaults.put(entry.getKey(), parseValue(entry.getKey(), entry.getValue()));
-      }
+  private void loadDefaultsFromJson(UIDefaults defaults, String prefix) {
+    String filename = prefix + ".theme.json";
+    try (InputStream stream = getClass().getResourceAsStream(filename)) {
+      assert stream != null : "Can't load " + filename;
+      UITheme theme = UITheme.loadFromJson(stream, "Darcula", getClass().getClassLoader(), Function.identity());
+      theme.applyProperties(defaults);
     }
     catch (IOException e) {
       log(e);
@@ -358,13 +273,6 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
   protected Object parseValue(String key, @NotNull String value) {
     if ("system".equals(value)) {
       return SYSTEM;
-    }
-
-    if (value.endsWith(".png") || value.endsWith(".svg")) {
-      Icon icon = IconLoader.findIcon(value, getClass(), true, false);
-      if (icon != null) {
-        return icon;
-      }
     }
 
     return UITheme.parseValue(key, value, getClass().getClassLoader());
@@ -431,9 +339,33 @@ public class DarculaLaf extends BasicLookAndFeel implements UserDataHolder {
       Class<?> aClass = DarculaLaf.class.getClassLoader().loadClass(UIManager.getSystemLookAndFeelClassName());
       return (BasicLookAndFeel)MethodHandles.lookup().findConstructor(aClass, MethodType.methodType(void.class)).invoke();
     }
-    else {
-      return new IdeaLaf();
+
+    Map<Object, Object> fontDefaults = new HashMap<>();
+
+    if (SystemInfoRt.isLinux) {
+      // Normally, GTK LaF is considered "system" when (1) a GNOME session is active, and (2) GTK library is available.
+      // Here, we weaken the requirements to only (2) and force GTK LaF installation to let it detect the system fonts
+      // and scale them based on Xft.dpi value.
+      try {
+        @SuppressWarnings("SpellCheckingInspection") String name = "com.sun.java.swing.plaf.gtk.GTKLookAndFeel";
+        Class<?> aClass = DarculaLaf.class.getClassLoader().loadClass(name);
+        LookAndFeel gtk = (LookAndFeel)MethodHandles.lookup().findConstructor(aClass, MethodType.methodType(void.class)).invoke();
+        if (gtk.isSupportedLookAndFeel()) {  // GTK is available
+          gtk.initialize();  // on JBR 11, overrides `SunGraphicsEnvironment#uiScaleEnabled` (sets `#uiScaleEnabled_overridden` to `false`)
+          UIDefaults gtkDefaults = gtk.getDefaults();
+          for (Object key : gtkDefaults.keySet()) {
+            if (key.toString().endsWith(".font")) {
+              fontDefaults.put(key, gtkDefaults.get(key));  // `UIDefaults#get` unwraps lazy values
+            }
+          }
+        }
+      }
+      catch (Exception e) {
+        Logger.getInstance(DarculaLaf.class).debug(e);
+      }
     }
+
+    return new IdeaLaf(fontDefaults.isEmpty() ? null : fontDefaults);
   }
 
   @ApiStatus.Internal

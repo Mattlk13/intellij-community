@@ -1,22 +1,7 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.project
 
-import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ModuleRootManager
@@ -40,6 +25,7 @@ import org.jetbrains.kotlin.idea.compiler.configuration.Kotlin2JvmCompilerArgume
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCompilerSettings
 import org.jetbrains.kotlin.idea.facet.getLibraryLanguageLevel
+import org.jetbrains.kotlin.idea.util.application.getService
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.platform.*
 import org.jetbrains.kotlin.platform.impl.isCommon
@@ -116,8 +102,7 @@ fun Module.getStableName(): Name {
 @JvmOverloads
 fun Project.getLanguageVersionSettings(
     contextModule: Module? = null,
-    javaTypeEnhancementState: JavaTypeEnhancementState? = null,
-    isReleaseCoroutines: Boolean? = null
+    javaTypeEnhancementState: JavaTypeEnhancementState? = null
 ): LanguageVersionSettings {
     val kotlinFacetSettings = contextModule?.let {
         KotlinFacetSettingsProvider.getInstance(this)?.getInitializedSettings(it)
@@ -136,18 +121,7 @@ fun Project.getLanguageVersionSettings(
         compilerSettings.additionalArgumentsAsList
     )
 
-    val extraLanguageFeatures = additionalArguments.configureLanguageFeatures(MessageCollector.NONE).apply {
-        configureCoroutinesSupport(
-            CoroutineSupport.byCompilerArguments(KotlinCommonCompilerArgumentsHolder.getInstance(this@getLanguageVersionSettings).settings),
-            languageVersion
-        )
-        if (isReleaseCoroutines != null) {
-            put(
-                LanguageFeature.ReleaseCoroutines,
-                if (isReleaseCoroutines) LanguageFeature.State.ENABLED else LanguageFeature.State.DISABLED
-            )
-        }
-    }
+    val extraLanguageFeatures = additionalArguments.configureLanguageFeatures(MessageCollector.NONE)
 
     val extraAnalysisFlags = additionalArguments.configureAnalysisFlags(MessageCollector.NONE).apply {
         if (javaTypeEnhancementState != null) put(JvmAnalysisFlags.javaTypeEnhancementState, javaTypeEnhancementState)
@@ -228,7 +202,6 @@ private fun Module.computeLanguageVersionSettings(): LanguageVersionSettings {
     }
 
     val languageFeatures = facetSettings?.mergedCompilerArguments?.configureLanguageFeatures(MessageCollector.NONE)?.apply {
-        configureCoroutinesSupport(facetSettings.coroutineSupport, languageVersion)
         configureMultiplatformSupport(facetSettings.targetPlatform?.idePlatformKind, this@computeLanguageVersionSettings)
     }.orEmpty()
 
@@ -281,18 +254,6 @@ private fun parseArguments(
     return platformKind.createArguments { parseCommandLineArguments(additionalArguments, this) }
 }
 
-fun MutableMap<LanguageFeature, LanguageFeature.State>.configureCoroutinesSupport(
-    coroutineSupport: LanguageFeature.State?,
-    languageVersion: LanguageVersion
-) {
-    val state = if (languageVersion >= LanguageVersion.KOTLIN_1_3) {
-        LanguageFeature.State.ENABLED
-    } else {
-        coroutineSupport ?: LanguageFeature.Coroutines.defaultState
-    }
-    put(LanguageFeature.Coroutines, state)
-}
-
 fun MutableMap<LanguageFeature, LanguageFeature.State>.configureMultiplatformSupport(
     platformKind: IdePlatformKind<*>?,
     module: Module?
@@ -303,9 +264,8 @@ fun MutableMap<LanguageFeature, LanguageFeature.State>.configureMultiplatformSup
 }
 
 val PsiElement.languageVersionSettings: LanguageVersionSettings
-    get() {
-        if (ServiceManager.getService(project, ProjectFileIndex::class.java) == null) {
-            return LanguageVersionSettingsImpl.DEFAULT
-        }
-        return IDELanguageSettingsProvider.getLanguageVersionSettings(this.getModuleInfo(), project)
+    get() = if (project.getService<ProjectFileIndex>() == null) {
+        LanguageVersionSettingsImpl.DEFAULT
+    } else {
+        IDELanguageSettingsProvider.getLanguageVersionSettings(this.getModuleInfo(), project)
     }

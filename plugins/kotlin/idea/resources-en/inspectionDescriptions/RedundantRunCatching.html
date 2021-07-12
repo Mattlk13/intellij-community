@@ -1,6 +1,14 @@
 <html>
 <body>
-This inspection reports <b>runCatching</b> call that is immediately followed by <b>getOrThrow</b>.
-Such a call can be replaced with just <b>run</b> call.
+Reports <code>runCatching</code> calls that are immediately followed by <code>getOrThrow</code>.
+Such calls can be replaced with just <code>run</code>.
+<p><b>Example:</b></p>
+<pre><code>
+  fun foo() = runCatching { doSomething() }.getOrThrow()
+</code></pre>
+<p>After the quick-fix is applied:</p>
+<pre><code>
+  fun foo() = run { doSomething() }
+</code></pre>
 </body>
 </html>

@@ -36,6 +36,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.Path2D;
+import java.beans.PropertyChangeEvent;
 
 public abstract class ComboBoxAction extends AnAction implements CustomComponentAction {
   private static Icon myIcon;
@@ -169,11 +170,12 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
       addMouseListener(new MouseAdapter() {
         @Override
         public void mousePressed(final MouseEvent e) {
-          if (SwingUtilities.isLeftMouseButton(e)) {
+          if (SwingUtilities.isLeftMouseButton(e) && performClickOnMousePress()) {
             e.consume();
             if (e.isShiftDown()) {
               doShiftClick();
-            } else {
+            }
+            else {
               doClick();
             }
           }
@@ -192,21 +194,29 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
       });
 
       myPresentation.addPropertyChangeListener(evt -> {
-        String propertyName = evt.getPropertyName();
-        if (Presentation.PROP_TEXT.equals(propertyName)) {
-          setText((String)evt.getNewValue());
-        }
-        else if (Presentation.PROP_DESCRIPTION.equals(propertyName)) {
-          myTooltipText = (String)evt.getNewValue();
-          updateTooltipText();
-        }
-        else if (Presentation.PROP_ICON.equals(propertyName)) {
-          setIcon((Icon)evt.getNewValue());
-        }
-        else if (Presentation.PROP_ENABLED.equals(propertyName)) {
-          setEnabled((Boolean)evt.getNewValue());
-        }
+        presentationChanged(evt);
       });
+    }
+
+    protected void presentationChanged(PropertyChangeEvent evt) {
+      String propertyName = evt.getPropertyName();
+      if (Presentation.PROP_TEXT.equals(propertyName)) {
+        setText((String)evt.getNewValue());
+      }
+      else if (Presentation.PROP_DESCRIPTION.equals(propertyName)) {
+        myTooltipText = (String)evt.getNewValue();
+        updateTooltipText();
+      }
+      else if (Presentation.PROP_ICON.equals(propertyName)) {
+        setIcon((Icon)evt.getNewValue());
+      }
+      else if (Presentation.PROP_ENABLED.equals(propertyName)) {
+        setEnabled((Boolean)evt.getNewValue());
+      }
+    }
+
+    protected boolean performClickOnMousePress() {
+      return true;
     }
 
     @TestOnly
@@ -343,7 +353,7 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
 
       if (UIUtil.isUnderWin10LookAndFeel()) {
         Icon icon = getArrowIcon(isEnabled());
-        int x = getWidth() - icon.getIconWidth() - getInsets().right - getMargin().right - JBUIScale.scale(3);
+        int x = getWidth() - icon.getIconWidth() - getInsets().right - getMargin().right - JBUIScale.scale(3) + getArrowGap();
         int y = (getHeight() - icon.getIconHeight()) / 2;
         icon.paintIcon(null, g, x, y);
       }
@@ -351,7 +361,7 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
         Graphics2D g2 = (Graphics2D)g.create();
         try {
           int iconSize = JBUIScale.scale(16);
-          int x = getWidth() - iconSize - getInsets().right - getMargin().right; // Different icons correction
+          int x = getWidth() - iconSize - getInsets().right - getMargin().right + getArrowGap(); // Different icons correction
           int y = (getHeight() - iconSize)/2;
 
           g2.translate(x, y);
@@ -374,6 +384,13 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
       }
     }
 
+    /*
+    should be used with margin
+     */
+    protected int getArrowGap() {
+      return 0;
+    }
+
     protected boolean isArrowVisible(@NotNull Presentation presentation) {
       return true;
     }
@@ -387,15 +404,6 @@ public abstract class ComboBoxAction extends AnAction implements CustomComponent
     protected void updateMargin() {
       setMargin(JBUI.insets(0, 8, 0, 5));
     }
-
-    /**
-     * @deprecated This method is noop. Set icon, text and tooltip in the constructor
-     * or property change listener for proper computation of preferred size.
-     * Other updates happen in Swing.
-     */
-    @Deprecated
-    @ApiStatus.ScheduledForRemoval(inVersion = "2021.1")
-    protected void updateButtonSize() {}
 
     @ApiStatus.Experimental
     protected void doShiftClick() {

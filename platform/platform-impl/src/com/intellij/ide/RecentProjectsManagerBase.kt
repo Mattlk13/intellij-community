@@ -250,12 +250,15 @@ open class RecentProjectsManagerBase : RecentProjectsManager(), PersistentStateC
 
   protected open fun getProjectDisplayName(project: Project): String? = null
 
-  fun getProjectIcon(path: String, isDark: Boolean): Icon {
-    return projectIconHelper.getProjectIcon(path, isDark, false)
+  fun getProjectIcon(path: String): Icon {
+    return projectIconHelper.getProjectIcon(path, false)
   }
 
-  fun getProjectIcon(path: String, isDark: Boolean, generateFromName: Boolean): Icon {
-    return projectIconHelper.getProjectIcon(path, isDark, generateFromName)
+  @Deprecated("Use getProjectIcon(String, Boolean)", ReplaceWith("getProjectIcon(path, generateFromName)"))
+  fun getProjectIcon(path: String, isDark: Boolean, generateFromName: Boolean) = getProjectIcon(path, generateFromName)
+
+  fun getProjectIcon(path: String, generateFromName: Boolean): Icon {
+    return projectIconHelper.getProjectIcon(path, generateFromName)
   }
 
   fun getProjectOrAppIcon(path: String): Icon {
@@ -594,6 +597,7 @@ open class RecentProjectsManagerBase : RecentProjectsManager(), PersistentStateC
         if (info.frame !== frameInfo) {
           info.frame = frameInfo
         }
+        info.displayName = getProjectDisplayName(project)
         info.projectWorkspaceId = workspaceId
         info.frameTitle = frame.title
       }
@@ -682,6 +686,19 @@ int32 "extendedState"
     }
     else {
       Files.copy(selfieFile, lastLink, StandardCopyOption.REPLACE_EXISTING)
+    }
+  }
+
+  fun patchRecentPaths(patcher: (String) -> String?) {
+    synchronized(stateLock) {
+      for (path in state.additionalInfo.keys.toList()) {
+        patcher(path)?.let { newPath ->
+          state.additionalInfo.remove(path)?.let { info ->
+            state.additionalInfo[newPath] = info
+          }
+        }
+      }
+      modCounter.incrementAndGet()
     }
   }
 

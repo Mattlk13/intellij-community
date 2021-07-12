@@ -22,12 +22,6 @@ import java.util.List;
 
 public abstract class StatusText {
   public static final SimpleTextAttributes DEFAULT_ATTRIBUTES = SimpleTextAttributes.GRAYED_ATTRIBUTES;
-  /**
-   * @deprecated Use {@link #getDefaultEmptyText()} instead
-   */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2021.2")
-  public static final String DEFAULT_EMPTY_TEXT = "Nothing to show";
 
   private static final int Y_GAP = 2;
 
@@ -197,6 +191,11 @@ public abstract class StatusText {
     int x = (ownerRec.width - size.width) / 2;
     int y = (ownerRec.height - size.height) / (myShowAboveCenter ? 3 : 2);
     return new Rectangle(x, y, size.width, size.height);
+  }
+
+  public Point getPointBelow() {
+    final var textComponentBound = getTextComponentBound();
+    return new Point(textComponentBound.x, textComponentBound.y + textComponentBound.height);
   }
 
   public final boolean isShowAboveCenter() {

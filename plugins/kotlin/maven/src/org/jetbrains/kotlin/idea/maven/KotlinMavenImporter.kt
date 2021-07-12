@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.maven
 
@@ -190,10 +187,6 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
         arguments.multiPlatform = configuration?.getChild("multiPlatform")?.text?.trim()?.toBoolean() ?: false
         arguments.suppressWarnings = configuration?.getChild("nowarn")?.text?.trim()?.toBoolean() ?: false
 
-        configuration?.getChild("experimentalCoroutines")?.text?.trim()?.let {
-            arguments.coroutinesState = it
-        }
-
         when (arguments) {
             is K2JVMCompilerArguments -> {
                 arguments.classpath = configuration?.getChild("classpath")?.text
@@ -256,7 +249,6 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
 
         kotlinFacet.configureFacet(
             compilerVersion,
-            LanguageFeature.Coroutines.defaultState,
             platform,
             modifiableModelsProvider
         )

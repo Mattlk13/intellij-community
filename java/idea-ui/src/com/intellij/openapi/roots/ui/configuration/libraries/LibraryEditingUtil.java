@@ -163,6 +163,7 @@ public final class LibraryEditingUtil {
       @NotNull
       @Override
       public String getTextFor(TypeForNewLibrary value) {
+        //noinspection HardCodedStringLiteral
         return value.getCreateActionName();
       }
 
@@ -213,7 +214,7 @@ public final class LibraryEditingUtil {
     }
 
     public Icon getIcon() {
-      Icon icon = myType.getIcon(null);
+      Icon icon = myType != null ? myType.getIcon(null) : null;
       return icon != null ? icon : PlatformIcons.LIBRARY_ICON;
     }
 

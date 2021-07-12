@@ -1,10 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.updateSettings.impl;
 
 import com.intellij.execution.CommandLineUtil;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.IdeBundle;
 import com.intellij.ide.actions.WhatsNewAction;
+import com.intellij.ide.nls.NlsMessages;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.notification.Notification;
@@ -27,7 +28,6 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.ui.LicensingFacade;
 import com.intellij.util.SystemProperties;
 import com.intellij.util.containers.ContainerUtil;
-import com.intellij.util.text.DateFormatUtil;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,7 +41,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.intellij.openapi.updateSettings.impl.UpdateCheckerComponent.SELF_UPDATE_STARTED_FOR_BUILD_PROPERTY;
+import static com.intellij.openapi.updateSettings.impl.UpdateCheckerService.SELF_UPDATE_STARTED_FOR_BUILD_PROPERTY;
 import static com.intellij.openapi.util.Pair.pair;
 
 /**
@@ -92,11 +92,11 @@ public final class UpdateInfoDialog extends AbstractUpdateDialog {
     myWriteProtected = false;
     myLicenseInfo = getLicensingInfo(myLoadedResult);
     myTestPatch = patchFile;
-    myWhatsNewAction = project == null ? null : new AbstractAction("[T] What's New") {
+    String whatsNewUrl = myLoadedResult.getNewBuild().getBlogPost();
+    myWhatsNewAction = project == null || whatsNewUrl == null ? null : new AbstractAction("[T] What's New") {
       @Override
       public void actionPerformed(ActionEvent e) {
-        BuildInfo newBuild = myLoadedResult.getNewBuild();
-        WhatsNewAction.openWhatsNewFile(project, newBuild.getBlogPost(), newBuild.getMessage());
+        WhatsNewAction.openWhatsNewPage(project, whatsNewUrl);
         close(OK_EXIT_CODE);
       }
     };
@@ -125,7 +125,7 @@ public final class UpdateInfoDialog extends AbstractUpdateDialog {
 
     Date expiration = la.getLicenseExpirationDate();
     if (expiration != null) {
-      return pair(IdeBundle.message("updates.interim.build", DateFormatUtil.formatAboutDialogDate(expiration)), Boolean.FALSE);
+      return pair(IdeBundle.message("updates.interim.build", NlsMessages.formatDateLong(expiration)), Boolean.FALSE);
     }
     else {
       return null;
@@ -246,8 +246,11 @@ public final class UpdateInfoDialog extends AbstractUpdateDialog {
           String title = IdeBundle.message("updates.notification.title", ApplicationNamesInfo.getInstance().getFullProductName());
           String downloadUrl = UpdateInfoPanel.downloadUrl(myLoadedResult.getNewBuild(), myLoadedResult.getUpdatedChannel());
           String message = IdeBundle.message("update.downloading.patch.error", e.getMessage(), downloadUrl);
-          UpdateChecker.getNotificationGroup().createNotification(
-            title, message, NotificationType.ERROR, NotificationListener.URL_OPENING_LISTENER, "ide.patch.download.failed").notify(null);
+          UpdateChecker.getNotificationGroup()
+            .createNotification(title, message, NotificationType.ERROR)
+            .setListener(NotificationListener.URL_OPENING_LISTENER)
+            .setDisplayId("ide.patch.download.failed")
+            .notify(null);
 
           return;
         }
@@ -263,14 +266,16 @@ public final class UpdateInfoDialog extends AbstractUpdateDialog {
           else {
             String title = IdeBundle.message("updates.notification.title", ApplicationNamesInfo.getInstance().getFullProductName());
             String message = IdeBundle.message("update.ready.message");
-            NotificationListener.Adapter listener = new NotificationListener.Adapter() {
-              @Override
-              protected void hyperlinkActivated(@NotNull Notification notification, @NotNull HyperlinkEvent e) {
-                restartLaterAndRunCommand(command);
-              }
-            };
-            UpdateChecker.getNotificationGroup().createNotification(
-              title, message, NotificationType.INFORMATION, listener, "ide.update.suggest.restart").notify(null);
+            UpdateChecker.getNotificationGroup()
+              .createNotification(title, message, NotificationType.INFORMATION)
+              .setListener(new NotificationListener.Adapter() {
+                @Override
+                protected void hyperlinkActivated(@NotNull Notification notification, @NotNull HyperlinkEvent e) {
+                  restartLaterAndRunCommand(command);
+                }
+              })
+              .setDisplayId("ide.update.suggest.restart")
+              .notify(null);
           }
         }
         else {

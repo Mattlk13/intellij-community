@@ -7,11 +7,14 @@ import com.google.common.hash.Hashing;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.plugins.cl.PluginAwareClassLoader;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.IconPathPatcher;
-import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.NotNullLazyValue;
+import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.ui.ColorHexUtil;
 import com.intellij.ui.ColorUtil;
+import com.intellij.ui.Gray;
+import com.intellij.util.ObjectUtils;
 import com.intellij.util.SVGLoader;
 import com.intellij.util.ui.JBDimension;
 import com.intellij.util.ui.JBInsets;
@@ -20,6 +23,7 @@ import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import javax.swing.*;
 import javax.swing.plaf.BorderUIResource;
@@ -29,8 +33,6 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -62,7 +64,6 @@ public final class UITheme {
   private ClassLoader providerClassLoader = getClass().getClassLoader();
   private String editorSchemeName;
   private SVGLoader.SvgElementColorPatcherProvider colorPatcher;
-  private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
   private static final String OS_MACOS_KEY = "os.mac";
   private static final String OS_WINDOWS_KEY = "os.windows";
@@ -139,6 +140,8 @@ public final class UITheme {
     if (provider != null) {
       theme.providerClassLoader = provider;
     }
+
+    initializeNamedColors(theme);
 
     if (theme.icons == null || theme.icons.isEmpty()) {
       return theme;
@@ -231,12 +234,30 @@ public final class UITheme {
     return theme;
   }
 
+  private static void initializeNamedColors(UITheme theme) {
+    Map<String, Object> map = theme.colors;
+    if (map == null) return;
+
+    Set<String> namedColors = map.keySet();
+    for (String key : namedColors) {
+      Object value = map.get(key);
+      if (value instanceof String && !((String)value).startsWith("#")) {
+        map.put(key, ObjectUtils.notNull(map.get(map.get(key)), Gray.TRANSPARENT));
+      }
+    }
+  }
+
   private static String toColorString(@NotNull String key, boolean darkTheme) {
     if (darkTheme && colorPalette.get(key + ".Dark") != null) {
       key += ".Dark";
     }
     String color = colorPalette.get(key);
     return color == null ? key.toLowerCase(Locale.ENGLISH) : color.toLowerCase(Locale.ENGLISH);
+  }
+
+  @TestOnly
+  public static Map<String, String> getColorPalette() {
+    return Collections.unmodifiableMap(colorPalette);
   }
 
   private static final @NonNls Map<String, String> colorPalette;
@@ -270,7 +291,7 @@ public final class UITheme {
       Map.entry("Checkbox.Background.Default.Dark", "#43494A"),
       Map.entry("Checkbox.Background.Disabled", "#F2F2F2"),
       Map.entry("Checkbox.Background.Disabled.Dark", "#3C3F41"),
-      Map.entry("Checkbox.Border.Default", "#878787"),
+      Map.entry("Checkbox.Border.Default", "#b0b0b0"),
       Map.entry("Checkbox.Border.Default.Dark", "#6B6B6B"),
       Map.entry("Checkbox.Border.Disabled", "#BDBDBD"),
       Map.entry("Checkbox.Border.Disabled.Dark", "#545556"),
@@ -280,9 +301,9 @@ public final class UITheme {
       Map.entry("Checkbox.Focus.Wide.Dark", "#3D6185"),
       Map.entry("Checkbox.Foreground.Disabled", "#ABABAB"),
       Map.entry("Checkbox.Foreground.Disabled.Dark", "#606060"),
-      Map.entry("Checkbox.Background.Selected", "#4D89C9"),
+      Map.entry("Checkbox.Background.Selected", "#4F9EE3"),
       Map.entry("Checkbox.Background.Selected.Dark", "#43494A"),
-      Map.entry("Checkbox.Border.Selected", "#4982CC"),
+      Map.entry("Checkbox.Border.Selected", "#4B97D9"),
       Map.entry("Checkbox.Border.Selected.Dark", "#6B6B6B"),
       Map.entry("Checkbox.Foreground.Selected", "#FFFFFF"),
       Map.entry("Checkbox.Foreground.Selected.Dark", "#A7A7A7"),
@@ -399,12 +420,13 @@ public final class UITheme {
                                             Map<String, Object> map,
                                             String key,
                                             UIDefaults defaults) {
-    String osKey = SystemInfo.isWindows ? OS_WINDOWS_KEY :
-                   SystemInfo.isMac ? OS_MACOS_KEY :
-                   SystemInfo.isLinux ? OS_LINUX_KEY : null;
+    String osKey = SystemInfoRt.isWindows ? OS_WINDOWS_KEY :
+                   SystemInfoRt.isMac ? OS_MACOS_KEY :
+                   SystemInfoRt.isLinux ? OS_LINUX_KEY : null;
     if (osKey != null && map.containsKey(osKey)) {
       apply(theme, key, map.get(osKey), defaults);
-    } else if (map.containsKey(OS_DEFAULT_KEY)) {
+    }
+    else if (map.containsKey(OS_DEFAULT_KEY)) {
       apply(theme, key, map.get(OS_DEFAULT_KEY), defaults);
     }
   }
@@ -438,6 +460,13 @@ public final class UITheme {
         return Boolean.TRUE;
       case "false":
         return Boolean.FALSE;
+    }
+
+    if (value.endsWith(".png") || value.endsWith(".svg")) {
+      Icon icon = IconLoader.findIcon(value, classLoader);
+      if (icon != null) {
+        return icon;
+      }
     }
 
     if (key.endsWith("Insets") || key.endsWith("padding")) {
@@ -481,21 +510,7 @@ public final class UITheme {
       return parseGrayFilter(value);
     }
     else {
-      Icon icon;
-      if (value.startsWith("AllIcons.")) {
-        Icon result;
-        try {
-          MethodHandle getter = LOOKUP.findStaticGetter(AllIcons.class, value.substring(value.lastIndexOf('.') + 1), Icon.class);
-          result = (Icon)getter.invoke();
-        }
-        catch (Throwable e) {
-          result = null;
-        }
-        icon = result;
-      }
-      else {
-        icon = null;
-      }
+      Icon icon = value.startsWith("AllIcons.") ? IconLoader.getReflectiveIcon(value, AllIcons.class.getClassLoader()) : null;
       if (icon != null) {
         return new IconUIResource(icon);
       }

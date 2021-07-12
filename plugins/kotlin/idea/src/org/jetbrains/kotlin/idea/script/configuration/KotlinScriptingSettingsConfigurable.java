@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.script.configuration;
 
 import com.intellij.openapi.options.ConfigurationException;
@@ -32,7 +29,7 @@ public class KotlinScriptingSettingsConfigurable implements SearchableConfigurab
     private JPanel panelScriptDefinitionsChooser;
     private JPanel additionalSettingsPanel;
 
-    private final List<UnnamedConfigurable> scriptingSuppportSettingsConfigurables = new ArrayList<>();
+    private final List<UnnamedConfigurable> scriptingSupportSettingsConfigurables = new ArrayList<>();
 
     private final KotlinScriptDefinitionsModel model;
 
@@ -75,7 +72,7 @@ public class KotlinScriptingSettingsConfigurable implements SearchableConfigurab
             additionalSettingsPanel.add(new TitledSeparator(provider.getTitle()));
 
             UnnamedConfigurable configurable = provider.createConfigurable();
-            scriptingSuppportSettingsConfigurables.add(configurable);
+            scriptingSupportSettingsConfigurables.add(configurable);
 
             additionalSettingsPanel.add(configurable.createComponent());
         }
@@ -84,7 +81,7 @@ public class KotlinScriptingSettingsConfigurable implements SearchableConfigurab
 
     @Override
     public boolean isModified() {
-        for (UnnamedConfigurable supportSpecificSetting : scriptingSuppportSettingsConfigurables) {
+        for (UnnamedConfigurable supportSpecificSetting : scriptingSupportSettingsConfigurables) {
             if (supportSpecificSetting.isModified()) {
                 return true;
             }
@@ -107,7 +104,7 @@ public class KotlinScriptingSettingsConfigurable implements SearchableConfigurab
             manager.reorderScriptDefinitions();
         }
 
-        for (UnnamedConfigurable supportSpecificSetting : scriptingSuppportSettingsConfigurables) {
+        for (UnnamedConfigurable supportSpecificSetting : scriptingSupportSettingsConfigurables) {
             supportSpecificSetting.apply();
         }
     }
@@ -115,7 +112,7 @@ public class KotlinScriptingSettingsConfigurable implements SearchableConfigurab
     @Override
     public void reset() {
         model.setDefinitions(manager.getAllDefinitions(), settings);
-        for (UnnamedConfigurable supportSpecificSetting : scriptingSuppportSettingsConfigurables) {
+        for (UnnamedConfigurable supportSpecificSetting : scriptingSupportSettingsConfigurables) {
             supportSpecificSetting.reset();
         }
     }

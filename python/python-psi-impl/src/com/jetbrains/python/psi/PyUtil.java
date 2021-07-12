@@ -51,6 +51,7 @@ import com.jetbrains.python.pyi.PyiStubSuppressor;
 import one.util.streamex.StreamEx;
 import org.jetbrains.annotations.*;
 
+import javax.swing.*;
 import java.io.File;
 import java.util.*;
 
@@ -75,8 +76,8 @@ public final class PyUtil {
   /**
    * @see PyUtil#flattenedParensAndTuples
    */
-  protected static List<PyExpression> unfoldParentheses(PyExpression[] targets, List<PyExpression> receiver,
-                                                        boolean unfoldListLiterals, boolean unfoldStarExpressions) {
+  private static List<PyExpression> unfoldParentheses(PyExpression[] targets, List<PyExpression> receiver,
+                                                      boolean unfoldListLiterals, boolean unfoldStarExpressions) {
     // NOTE: this proliferation of instanceofs is not very beautiful. Maybe rewrite using a visitor.
     for (PyExpression exp : targets) {
       if (exp instanceof PyParenthesizedExpression) {
@@ -681,7 +682,7 @@ public final class PyUtil {
    * from the write action, because in this case {@code function} will be executed right in the current thread (presumably EDT)
    * without any progress whatsoever to avoid possible deadlock.
    *
-   * @see ApplicationImpl#runProcessWithProgressSynchronously(Runnable, String, boolean, Project, JComponent, String)
+   * @see com.intellij.openapi.application.impl.ApplicationImpl#runProcessWithProgressSynchronously(Runnable, String, boolean, boolean, Project, JComponent, String)
    */
   public static void runWithProgress(@Nullable Project project, @Nls(capitalization = Nls.Capitalization.Title) @NotNull String title,
                                      boolean modal, boolean canBeCancelled, @NotNull final Consumer<? super ProgressIndicator> function) {
@@ -1307,7 +1308,7 @@ public final class PyUtil {
   }
 
   @Nullable
-  public static PsiElement findPrevAtOffset(PsiFile psiFile, int caretOffset, Class... toSkip) {
+  public static PsiElement findPrevAtOffset(PsiFile psiFile, int caretOffset, @NotNull Class<? extends PsiElement> @NotNull ... toSkip) {
     PsiElement element;
     if (caretOffset < 0) {
       return null;
@@ -1345,7 +1346,7 @@ public final class PyUtil {
   }
 
   @Nullable
-  public static PsiElement findNextAtOffset(@NotNull final PsiFile psiFile, int caretOffset, Class... toSkip) {
+  public static PsiElement findNextAtOffset(@NotNull final PsiFile psiFile, int caretOffset, @NotNull Class<? extends PsiElement> @NotNull ... toSkip) {
     PsiElement element = psiFile.findElementAt(caretOffset);
     if (element == null) {
       return null;
@@ -1512,7 +1513,7 @@ public final class PyUtil {
                                              @NotNull String memberName,
                                              @Nullable PyExpression location,
                                              @NotNull TypeEvalContext context) {
-    final PyResolveContext resolveContext = PyResolveContext.defaultContext().withTypeEvalContext(context);
+    final PyResolveContext resolveContext = PyResolveContext.defaultContext(context);
     final List<? extends RatedResolveResult> resolveResults = type.resolveMember(memberName, location, AccessDirection.READ,
                                                                                  resolveContext);
 

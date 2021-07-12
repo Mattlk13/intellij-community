@@ -1,3 +1,4 @@
+// IGNORE_BACKEND: JVM_WITH_IR_EVALUATOR, JVM_IR_WITH_IR_EVALUATOR
 LineBreakpoint created at primitivesCoertion.kt:10
 Run Java
 Connected to the target VM
@@ -6,5 +7,3 @@ Compile bytecode for a
 Disconnected from the target VM
 
 Process finished with exit code 0
-42
-[1]

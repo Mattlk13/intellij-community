@@ -24,27 +24,20 @@ abstract class NewModuleStep<T> : ModuleWizardStep() {
   final override fun getComponent() = panel
 
   fun LayoutBuilder.nameAndPath() {
-    row {
-      twoColumnRow(
-        { label(UIBundle.message("label.project.wizard.new.project.name")) },
-        { textField(baseSettings::name) }
-      )
-    }
-    row {
-      twoColumnRow(
-        { label(UIBundle.message("label.project.wizard.new.project.location")) },
-        {
-          textFieldWithBrowseButton(baseSettings::path, UIBundle.message("dialog.title.project.name"), /*context.project*/null,
-                                    FileChooserDescriptorFactory.createSingleFolderDescriptor())
-        }
-      )
-    }
+    row(UIBundle.message("label.project.wizard.new.project.name")) {
+      textField(baseSettings::name)
+    }.largeGapAfter()
+
+    row(UIBundle.message("label.project.wizard.new.project.location")) {
+      textFieldWithBrowseButton(baseSettings::path, UIBundle.message("dialog.title.project.name"), /*context.project*/null,
+                                FileChooserDescriptorFactory.createSingleFolderDescriptor())
+    }.largeGapAfter()
   }
 
   fun LayoutBuilder.gitCheckbox() {
     row {
-      checkBox(UIBundle.message("label.project.wizard.new.project.git.checkbox"), baseSettings::git).withLargeLeftGap()
-    }
+      checkBox(UIBundle.message("label.project.wizard.new.project.git.checkbox"), baseSettings::git)
+    }.largeGapAfter()
   }
 
   companion object {

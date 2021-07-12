@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators
 
@@ -10,6 +7,7 @@ import org.jetbrains.kotlin.tools.projectWizard.KotlinNewProjectWizardBundle
 import org.jetbrains.kotlin.tools.projectWizard.core.TaskResult
 import org.jetbrains.kotlin.tools.projectWizard.core.Writer
 import org.jetbrains.kotlin.tools.projectWizard.core.compute
+import org.jetbrains.kotlin.tools.projectWizard.core.entity.settings.ModuleConfiguratorSetting
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.KotlinBuildSystemPluginIR
 import org.jetbrains.kotlin.tools.projectWizard.phases.GenerationPhase
 import org.jetbrains.kotlin.tools.projectWizard.plugins.buildSystem.gradle.GradlePlugin
@@ -20,7 +18,17 @@ import java.nio.file.Path
 
 object MppModuleConfigurator : ModuleConfigurator,
     ModuleConfiguratorWithSettings,
+    ModuleConfiguratorWithTests,
     ModuleConfiguratorSettings() {
+
+    @OptIn(ExperimentalStdlibApi::class)
+    override fun getConfiguratorSettings(): List<ModuleConfiguratorSetting<*, *>> = buildList {
+        addAll(super<ModuleConfiguratorWithTests>.getConfiguratorSettings())
+    }
+
+    override fun defaultTestFramework(): KotlinTestFramework {
+        return KotlinTestFramework.COMMON
+    }
 
     override val moduleKind = ModuleKind.multiplatform
 

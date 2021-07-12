@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.nj2k.postProcessing.processings
 
@@ -52,6 +49,7 @@ import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.checker.KotlinTypeChecker
 import org.jetbrains.kotlin.types.isError
 import org.jetbrains.kotlin.types.typeUtil.isUnit
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.decapitalizeAsciiOnly
 import org.jetbrains.kotlin.util.isJavaDescriptor
 import org.jetbrains.kotlin.utils.addToStdlib.cast
 import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstanceOrNull
@@ -369,7 +367,7 @@ private class ConvertGettersAndSettersToPropertyStatefulProcessing(
         return declarations
             .asSequence()
             .mapNotNull { it.asPropertyAccessor() }
-            .groupBy { it.name.removePrefix("is").decapitalize() }
+            .groupBy { it.name.removePrefix("is").decapitalizeAsciiOnly() }
             .values
             .mapNotNull { group ->
                 val realGetter = group.firstIsInstanceOrNull<RealGetter>()

@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
@@ -31,9 +28,12 @@ import org.jetbrains.kotlin.idea.FrontendInternals
 import org.jetbrains.kotlin.idea.caches.lightClasses.IDELightClassContexts
 import org.jetbrains.kotlin.idea.caches.lightClasses.LazyLightClassDataHolder
 import org.jetbrains.kotlin.idea.project.languageVersionSettings
+import org.jetbrains.kotlin.idea.project.platform
 import org.jetbrains.kotlin.idea.resolve.frontendService
 import org.jetbrains.kotlin.idea.stubindex.KotlinTypeAliasShortNameIndex
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.platform.jvm.JdkPlatform
+import org.jetbrains.kotlin.platform.subplatformsOfType
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.deprecation.DeprecationResolver
@@ -82,7 +82,7 @@ class IDELightClassGenerationSupport(project: Project) : LightClassGenerationSup
                 BindingContext.EMPTY, ClassBuilderMode.LIGHT_CLASSES,
                 moduleName, languageVersionSettings,
                 useOldInlineClassesManglingScheme = false,
-                jvmTarget = JvmTarget.JVM_1_8,
+                jvmTarget = module?.platform?.subplatformsOfType<JdkPlatform>()?.firstOrNull()?.targetVersion ?: JvmTarget.DEFAULT,
                 typePreprocessor = KotlinType::cleanFromAnonymousTypes,
                 namePreprocessor = ::tryGetPredefinedName
             )

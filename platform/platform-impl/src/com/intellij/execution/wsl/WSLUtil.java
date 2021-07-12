@@ -1,22 +1,26 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution.wsl;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.execution.process.*;
+import com.intellij.execution.process.ProcessOutput;
+import com.intellij.jna.JnaLoader;
 import com.intellij.openapi.application.Experiments;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.NlsSafe;
+import com.intellij.openapi.util.NotNullLazyValue;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.util.io.WindowsRegistryUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.ThreeState;
 import com.intellij.util.containers.ContainerUtil;
+import com.sun.jna.platform.win32.Advapi32Util;
+import com.sun.jna.platform.win32.WinReg;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -41,6 +45,7 @@ public final class WSLUtil {
    * {@link com.intellij.execution.wsl.ui.WslDistributionComboBox}. If no WSL distributions installed,
    * it will show "No installed distributions" message.
    */
+  @ApiStatus.ScheduledForRemoval(inVersion = "2022.1")
   @Deprecated
   public static boolean hasAvailableDistributions() {
     return !getAvailableDistributions().isEmpty();
@@ -156,22 +161,80 @@ public final class WSLUtil {
     return FileUtil.toSystemDependentName(Character.toUpperCase(wslPath.charAt(driveLetterIndex)) + ":" + wslPath.substring(slashIndex));
   }
 
-  @NotNull
-  public static ThreeState isWsl1(@NotNull WSLDistribution distribution) {
+  public static @NotNull ThreeState isWsl1(@NotNull WSLDistribution distribution) {
+    int version = getWslVersion(distribution);
+    return version < 0 ? ThreeState.UNSURE : ThreeState.fromBoolean(version == 1);
+  }
+
+  /**
+   * @param distribution
+   * @return version if it can be determined or -1 instead
+   */
+  public static int getWslVersion(@NotNull WSLDistribution distribution) {
+    int version = getVersionFromWslCli(distribution);
+    if (version < 0) {
+      version = getVersionByUname(distribution);
+    }
+    return version;
+  }
+
+  private static int getVersionFromWslCli(@NotNull WSLDistribution distribution) {
     try {
-      ProcessOutput output = distribution.executeOnWsl(10_000, "uname", "-v");
-      if (output.getExitCode() != 0) return ThreeState.UNSURE;
-      return ThreeState.fromBoolean(output.getStdout().contains("Microsoft"));
+      final List<WslDistributionAndVersion> versions = WslDistributionManager.getInstance().loadInstalledDistributionsWithVersions();
+      final WslDistributionAndVersion distributionAndVersion =
+        ContainerUtil.find(versions, version -> version.getDistributionName().equals(distribution.getMsId()));
+      if (distributionAndVersion != null) {
+        return distributionAndVersion.getVersion();
+      }
+      LOG.warn("WSL distribution '" + distribution.getMsId() + "' not found");
+    }
+    catch (IOException | IllegalStateException e) {
+      LOG.warn("Failed to calculate version for " + distribution.getMsId() + ": " + e.getMessage());
+    }
+    return -1;
+  }
+
+  // To be removed when old WSL installations (without wsl.exe) are gone.
+  private static int getVersionByUname(@NotNull WSLDistribution distribution) {
+    try {
+      ProcessOutput output = distribution.executeOnWsl(WSLDistribution.DEFAULT_TIMEOUT, "uname", "-v");
+      if (output.checkSuccess(LOG)) {
+        return output.getStdout().contains("Microsoft") ? 1 : 2;
+      }
     }
     catch (ExecutionException e) {
       LOG.warn(e);
-      return ThreeState.UNSURE;
     }
+    return -1;
   }
 
   public static @NotNull @NlsSafe String getMsId(@NotNull @NlsSafe String msOrInternalId) {
     WslDistributionDescriptor descriptor = ContainerUtil.find(WSLDistributionService.getInstance().getDescriptors(),
                                                               d -> d.getId().equals(msOrInternalId));
     return descriptor != null ? descriptor.getMsId() : msOrInternalId;
+  }
+
+  /**
+   * @return windows release id number (e.g 1903) or -1 in case of error
+   */
+  public static int getWindowsReleaseId() {
+    return WINDOWS_RELEASE_ID.getValue();
+  }
+
+  private static final NotNullLazyValue<Integer> WINDOWS_RELEASE_ID =
+    NotNullLazyValue.createValue(() -> StringUtil.parseInt(getWindowsReleaseIdString(), -1));
+
+  private static @Nullable String getWindowsReleaseIdString() {
+    try {
+      if (JnaLoader.isLoaded()) {
+        return Advapi32Util.registryGetStringValue(WinReg.HKEY_LOCAL_MACHINE,
+                                                   "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                                                   "ReleaseId");
+      }
+    }
+    catch (Throwable e) {
+      LOG.warn("Cannot read Windows version", e);
+    }
+    return WindowsRegistryUtil.readRegistryValue("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "ReleaseId");
   }
 }

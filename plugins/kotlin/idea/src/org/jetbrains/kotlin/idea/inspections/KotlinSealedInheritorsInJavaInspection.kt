@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -27,22 +24,20 @@ class KotlinSealedInheritorsInJavaInspection : LocalInspectionTool() {
             return sealedBaseClasses.orEmpty() + sealedBaseInterfaces.orEmpty()
         }
 
-        private fun PsiReferenceList.listSealedMembers(): List<PsiReference>? = referencedTypes
-            ?.filter { it.isKotlinSealed() }
-            ?.mapNotNull { it as? PsiClassReferenceType }
-            ?.map { it.reference }
+        private fun PsiReferenceList.listSealedMembers(): List<PsiReference> = referencedTypes
+            .filter { it.isKotlinSealed() }
+            .mapNotNull { it as? PsiClassReferenceType }
+            .map { it.reference }
 
         private fun PsiClassType.isKotlinSealed(): Boolean = resolve()?.isKotlinSealed() == true
 
         private fun PsiClass.isKotlinSealed(): Boolean = this is KtUltraLightClass && getDescriptor()?.isSealed() == true
-
-        private val PsiClass.abstractionTypeName: String
-            get() = if (isInterface) "interface" else "class"
     }
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : JavaElementVisitor() {
             override fun visitClass(aClass: PsiClass?) {
+                if (aClass is PsiTypeParameter) return
                 aClass?.listSealedParentReferences()?.forEach {
                     holder.registerProblem(
                         it, KotlinBundle.message("inheritance.of.kotlin.sealed", 0.takeIf { aClass.isInterface } ?: 1),

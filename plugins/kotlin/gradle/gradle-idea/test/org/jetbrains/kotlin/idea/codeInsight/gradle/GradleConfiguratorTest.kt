@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight.gradle
 
@@ -450,59 +447,6 @@ class GradleConfiguratorTest : KotlinGradleImportingTestCase() {
                     object : ExternalLibraryDescriptor("org.jetbrains.kotlin", "kotlin-reflect", "1.0.0", "1.0.0") {
                         override fun getLibraryClassesRoots() = emptyList<String>()
                     })
-            }
-
-            checkFiles(files)
-        }
-    }
-
-    @Test
-    fun testAddCoroutinesSupport() {
-        val files = importProjectFromTestData()
-
-        runInEdtAndWait {
-            runWriteAction {
-                KotlinWithGradleConfigurator.changeCoroutineConfiguration(myTestFixture.module, "enable")
-            }
-
-            checkFiles(files)
-        }
-    }
-
-    @Test
-    fun testAddCoroutinesSupportGSK() {
-        val files = importProjectFromTestData()
-
-        runInEdtAndWait {
-            runWriteAction {
-                KotlinWithGradleConfigurator.changeCoroutineConfiguration(myTestFixture.module, "enable")
-            }
-
-            checkFiles(files)
-        }
-    }
-
-    @Test
-    fun testChangeCoroutinesSupport() {
-        val files = importProjectFromTestData()
-
-        runInEdtAndWait {
-            runWriteAction {
-                KotlinWithGradleConfigurator.changeCoroutineConfiguration(myTestFixture.module, "enable")
-            }
-
-            checkFiles(files)
-        }
-    }
-
-    @TargetVersions("4.4+")
-    @Test
-    fun testChangeCoroutinesSupportGSK49() {
-        val files = importProjectFromTestData()
-
-        runInEdtAndWait {
-            runWriteAction {
-                KotlinWithGradleConfigurator.changeCoroutineConfiguration(myTestFixture.module, "enable")
             }
 
             checkFiles(files)

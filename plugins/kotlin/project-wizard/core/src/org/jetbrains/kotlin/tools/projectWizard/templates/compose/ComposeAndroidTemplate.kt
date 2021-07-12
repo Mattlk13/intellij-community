@@ -1,7 +1,4 @@
-/*
- * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.templates.compose
 
@@ -10,14 +7,13 @@ import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.tools.projectWizard.KotlinNewProjectWizardBundle
 import org.jetbrains.kotlin.tools.projectWizard.Versions
 import org.jetbrains.kotlin.tools.projectWizard.core.*
-import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.*
-import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.GradleImportIR
+import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.BuildSystemIR
+import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.GradleOnlyPluginByNameIR
+import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.ModuleIR
+import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.RepositoryIR
 import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.irsList
-import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.multiplatform.TargetConfigurationIR
-import org.jetbrains.kotlin.tools.projectWizard.ir.buildsystem.gradle.multiplatform.addWithJavaIntoJvmTarget
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.AndroidModuleConfigurator
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.AndroidSinglePlatformModuleConfigurator
-import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.inContextOfModuleConfigurator
 import org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators.moduleType
 import org.jetbrains.kotlin.tools.projectWizard.plugins.buildSystem.BuildSystemPlugin
 import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ModuleType
@@ -25,12 +21,13 @@ import org.jetbrains.kotlin.tools.projectWizard.plugins.kotlin.ProjectKind
 import org.jetbrains.kotlin.tools.projectWizard.plugins.pomIR
 import org.jetbrains.kotlin.tools.projectWizard.plugins.templates.TemplatesPlugin
 import org.jetbrains.kotlin.tools.projectWizard.settings.JavaPackage
-import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.*
+import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.DefaultRepository
+import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Module
+import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.ModuleKind
+import org.jetbrains.kotlin.tools.projectWizard.settings.buildsystem.Repositories
 import org.jetbrains.kotlin.tools.projectWizard.settings.javaPackage
 import org.jetbrains.kotlin.tools.projectWizard.templates.FileTemplateDescriptor
-import org.jetbrains.kotlin.tools.projectWizard.templates.FileTemplateDescriptorWithPath
 import org.jetbrains.kotlin.tools.projectWizard.templates.Template
-import org.jetbrains.kotlin.tools.projectWizard.templates.asSrcOf
 
 class ComposeAndroidTemplate : Template() {
     @NonNls
@@ -40,11 +37,11 @@ class ComposeAndroidTemplate : Template() {
     override val description: String = KotlinNewProjectWizardBundle.message("module.template.compose.desktop.description")
 
 
-    override fun isSupportedByModuleType(module: Module, projectKind: ProjectKind): Boolean =
+    override fun isApplicableTo(module: Module, projectKind: ProjectKind): Boolean =
         module.configurator.moduleType == ModuleType.android && projectKind == ProjectKind.COMPOSE
 
     override fun isApplicableTo(reader: Reader, module: Module): Boolean =
-        module.kind == ModuleKind.singleplatformAndroid
+        module.kind == ModuleKind.singlePlatformAndroid
 
     override fun Writer.getIrsToAddToBuildFile(
         module: ModuleIR

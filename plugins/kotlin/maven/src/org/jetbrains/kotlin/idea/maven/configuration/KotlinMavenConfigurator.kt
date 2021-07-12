@@ -1,7 +1,4 @@
-/*
- * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.maven.configuration
 
@@ -30,14 +27,12 @@ import org.jetbrains.idea.maven.model.MavenId
 import org.jetbrains.idea.maven.project.MavenProjectsManager
 import org.jetbrains.idea.maven.utils.MavenArtifactScope
 import org.jetbrains.kotlin.config.ApiVersion
-import org.jetbrains.kotlin.config.CoroutineSupport
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.idea.configuration.*
 import org.jetbrains.kotlin.idea.facet.getRuntimeLibraryVersion
 import org.jetbrains.kotlin.idea.facet.toApiVersion
 import org.jetbrains.kotlin.idea.framework.ui.ConfigureDialogWithModulesAndVersion
 import org.jetbrains.kotlin.idea.maven.*
-import org.jetbrains.kotlin.idea.quickfix.ChangeCoroutineSupportFix
 import org.jetbrains.kotlin.idea.quickfix.ChangeGeneralLanguageFeatureSupportFix
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.idea.versions.LibraryJarDescriptor
@@ -249,28 +244,6 @@ protected constructor(
         JavaProjectModelModificationService.getInstance(module.project).addDependency(module, library, scope)
     }
 
-    override fun changeCoroutineConfiguration(module: Module, state: LanguageFeature.State) {
-        val runtimeUpdateRequired = state != LanguageFeature.State.DISABLED &&
-                getRuntimeLibraryVersion(module).toApiVersion() == ApiVersion.KOTLIN_1_0
-
-        val messageTitle = ChangeCoroutineSupportFix.getFixText(state)
-        if (runtimeUpdateRequired) {
-            Messages.showErrorDialog(
-                module.project,
-                KotlinMavenBundle.message("update.language.version.coroutines"),
-                messageTitle
-            )
-            return
-        }
-
-        val element = changeMavenCoroutineConfiguration(module, CoroutineSupport.getCompilerArgument(state), messageTitle)
-
-        if (element != null) {
-            OpenFileDescriptor(module.project, element.containingFile.virtualFile, element.textRange.startOffset).navigate(true)
-        }
-
-    }
-
     override fun changeGeneralFeatureConfiguration(
         module: Module,
         feature: LanguageFeature,
@@ -297,28 +270,6 @@ protected constructor(
             OpenFileDescriptor(module.project, element.containingFile.virtualFile, element.textRange.startOffset).navigate(true)
         }
 
-    }
-
-    private fun changeMavenCoroutineConfiguration(
-        module: Module,
-        value: String,
-        messageTitle: String
-    ): PsiElement? {
-        fun doChangeMavenCoroutineConfiguration(): PsiElement? {
-            val psi = findModulePomFile(module) as? XmlFile ?: return null
-            val pom = PomFile.forFileOrNull(psi) ?: return null
-            return pom.changeCoroutineConfiguration(value)
-        }
-
-        val element = doChangeMavenCoroutineConfiguration()
-        if (element == null) {
-            Messages.showErrorDialog(
-                module.project,
-                KotlinMavenBundle.message("error.failed.update.pom"),
-                messageTitle
-            )
-        }
-        return element
     }
 
     private fun changeMavenFeatureConfiguration(

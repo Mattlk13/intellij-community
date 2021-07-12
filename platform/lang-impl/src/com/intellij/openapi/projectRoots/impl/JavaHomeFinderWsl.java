@@ -54,7 +54,6 @@ class JavaHomeFinderWsl extends JavaHomeFinderBasic {
       String converted = Stream.of(value.split(":"))
         .filter(p -> !DEFAULT_PATHS.contains(p) && !p.startsWith(mntRoot))
         .map(myDistro::getWindowsPath)
-        .filter(Objects::nonNull)
         .collect(Collectors.joining(File.pathSeparator));
       return converted.isEmpty() ? null : converted;
     }
