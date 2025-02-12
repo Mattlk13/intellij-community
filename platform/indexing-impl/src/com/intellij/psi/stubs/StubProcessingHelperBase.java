@@ -2,6 +2,8 @@
 package com.intellij.psi.stubs;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.util.Pair;
@@ -18,6 +20,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.stubs.StubInconsistencyReporter.SourceOfCheck;
 import com.intellij.util.Processor;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.indexing.FileBasedIndex;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -96,7 +99,7 @@ public abstract class StubProcessingHelperBase {
                           ", requiredClass=" + requiredClass +
                           ", operation=" + debugOperationName.get() +
                           ", stubIdList=" + debugStubIdList + "@" + stubIdListIdx +
-                          ".\nref: 20240717";
+                          ".\nref: 20250127";
 
     StubTree stubTree = ((PsiFileWithStubSupport)psiFile).getStubTree();
     if (stubTree == null && psiFile instanceof PsiFileImpl) stubTree = ((PsiFileImpl)psiFile).calcStubTree();
@@ -152,7 +155,7 @@ public abstract class StubProcessingHelperBase {
                             "psiFile=" + psiFile +
                             ", psiFile.class=" + psiFile.getClass() +
                             ", requiredClass=" + requiredClass +
-                            ".\nref: 50cf572587cf";
+                            ".\nref: 20250127";
       inconsistencyDetected(objectStubTree, (PsiFileWithStubSupport)psiFile, extraMessage, WrongPsiFileClassInNonPsiStub);
       return true;
     }
@@ -168,10 +171,18 @@ public abstract class StubProcessingHelperBase {
   ) {
     try {
       StubTextInconsistencyException.checkStubTextConsistency(psiFile, SourceOfCheck.WrongTypePsiInStubHelper);
-      LOG.error(extraMessage + "\n" + StubTreeLoader.getInstance().stubTreeAndIndexDoNotMatch(stubTree, psiFile, null, source));
+      String dumbState = DumbService.isDumb(psiFile.getProject()) ?
+                         "\ndumbMode,dumbModeAccessType=" + FileBasedIndex.getInstance().getCurrentDumbModeAccessType(null) :
+                         "\nno dumbMode";
+
+      LOG.error(extraMessage + dumbState + "\n" + StubTreeLoader.getInstance().stubTreeAndIndexDoNotMatch(stubTree, psiFile, null, source));
     }
-    finally {
+    catch (ProcessCanceledException pce) {
+      throw pce;
+    }
+    catch (Throwable t) {
       onInternalError(psiFile.getVirtualFile());
+      throw t;
     }
   }
 

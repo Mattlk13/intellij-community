@@ -1,7 +1,5 @@
 package com.intellij.notebooks.visualization.ui.cellsDnD
 
-import com.intellij.icons.AllIcons
-import com.intellij.notebooks.ui.visualization.NotebookEditorAppearanceUtils.isOrdinaryNotebookEditor
 import com.intellij.notebooks.ui.visualization.NotebookUtil.notebookAppearance
 import com.intellij.notebooks.visualization.NotebookCellInlayManager
 import com.intellij.notebooks.visualization.getCell
@@ -11,10 +9,10 @@ import com.intellij.notebooks.visualization.ui.EditorCellInput
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.impl.EditorImpl
-import com.intellij.openapi.util.registry.Registry
+import com.intellij.openapi.util.NlsSafe
+import com.intellij.openapi.util.text.StringUtil
+import org.jetbrains.annotations.Nls
 import java.awt.Cursor
-import java.awt.Graphics
-import java.awt.Graphics2D
 import java.awt.Point
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -25,20 +23,27 @@ import javax.swing.SwingUtilities
 class EditorCellDraggableBar(
   private val editor: EditorImpl,
   private val cellInput: EditorCellInput,
+  private val foldInput: () -> Unit,
+  private val unfoldInput: () -> Unit,
 ) : Disposable {
-  private var panel: JComponent? = null
+  private var panel: DraggableBarComponent? = null
 
   private val boundsChangeListener = object : JupyterBoundsChangeListener {
     override fun boundsChanged() = updateBounds()
   }
 
-  private val dragIcon = AllIcons.General.Drag
-
   private val inlayManager = NotebookCellInlayManager.get(editor)
 
   init {
-    if (Registry.`is`("jupyter.editor.dnd.cells")) createAndAddDraggableBar()
+    JupyterBoundsChangeHandler.get(editor).subscribe(boundsChangeListener)
   }
+
+  var visible: Boolean = false
+    set(value) {
+      if (value) createAndAddDraggableBar()
+      else removeDraggableBar()
+      field = value
+    }
 
   fun updateBounds() {
     panel?.let {
@@ -49,24 +54,34 @@ class EditorCellDraggableBar(
         it.properties.priority == editor.notebookAppearance.JUPYTER_CELL_SPACERS_INLAY_PRIORITY
       }?.bounds ?: return@let
 
+      val upperInlayBounds = inlays.lastOrNull {
+        it.properties.isShownAbove == true &&
+        it.properties.priority == editor.notebookAppearance.JUPYTER_CELL_SPACERS_INLAY_PRIORITY
+      }?.bounds ?: return@let
+
       val x = editor.gutterComponentEx.iconAreaOffset
       val width = editor.gutterComponentEx.getIconsAreaWidth()
 
-      val y = lowerInlayBounds.y
-      val height = lowerInlayBounds.height
+      val y = upperInlayBounds.y + upperInlayBounds.height + editor.lineHeight
+      val height = lowerInlayBounds.y + lowerInlayBounds.height - y
 
       it.setBounds(x, y, width, height)
     }
   }
 
   private fun createAndAddDraggableBar() {
-    if (!editor.isOrdinaryNotebookEditor()) return
-
     val panel = DraggableBarComponent()
     editor.gutterComponentEx.add(panel)
+    editor.gutterComponentEx.setComponentZOrder(panel, editor.gutterComponentEx.componentCount - 1)
     this.panel = panel
-    JupyterBoundsChangeHandler.get(editor).subscribe(boundsChangeListener)
     updateBounds()
+  }
+
+  private fun removeDraggableBar() {
+    panel?.let {
+      editor.gutterComponentEx.remove(it)
+      panel = null
+    }
   }
 
   override fun dispose() {
@@ -85,10 +100,15 @@ class EditorCellDraggableBar(
     private var dragStartPoint: Point? = null
 
     private var currentlyHighlightedCell: CellDropTarget = CellDropTarget.NoCell
+    private var dragPreview: CellDragCellPreviewWindow? = null
+
+    private var wasFolded: Boolean = false
+    private var inputFoldedState: Boolean = false
+    private var outputInitialStates: MutableMap<Int, Boolean> = mutableMapOf()
 
     init {
-      cursor = Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)  // todo: need to find a better cursor
-      isOpaque = false
+      cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+      isOpaque = true
 
       addMouseListener(object : MouseAdapter() {
         override fun mousePressed(e: MouseEvent) {
@@ -99,28 +119,40 @@ class EditorCellDraggableBar(
         }
 
         override fun mouseReleased(e: MouseEvent) {
-          if (!isDragging) return
-          isDragging = false
-          val dropLocation = e.locationOnScreen
+          if (!isDragging || dragStartPoint == null) {
+            isDragging = false
+            return
+          }
 
-          val editorLocationOnScreen = editor.contentComponent.locationOnScreen
-          val x = dropLocation.x - editorLocationOnScreen.x
-          val y = dropLocation.y - editorLocationOnScreen.y
-          val editorPoint = Point(x, y)
+          val dragDistance = e.locationOnScreen.distance(dragStartPoint!!)
+          if (dragDistance < 5) {
+            clearDragState()
+            unfoldCellIfNeeded()
+            return
+          }
 
-          val targetCell = getCellUnderCursor(editorPoint)
+          clearDragState()
+          val targetCell = retrieveTargetCell(e)
+          unfoldCellIfNeeded()
 
           ApplicationManager.getApplication().messageBus
-            .syncPublisher(CellDropNotifier.CELL_DROP_TOPIC)
+            .syncPublisher(CellDropNotifier.getTopicForEditor(editor))
             .cellDropped(CellDropEvent(cellInput.cell, targetCell))
-
-          deleteDropIndicator()
         }
+
       })
 
       addMouseMotionListener(object : MouseMotionAdapter() {
         override fun mouseDragged(e: MouseEvent)  {
           if (!isDragging) return
+
+          if (dragPreview == null) {
+            dragPreview = CellDragCellPreviewWindow(getPlaceholderText(), editor)
+            dragPreview?.isVisible = true
+            foldDraggedCell()
+          }
+
+          dragPreview?.followCursor(e.locationOnScreen)
           val currentLocation = e.locationOnScreen
           handleDrag(currentLocation)
         }
@@ -140,14 +172,43 @@ class EditorCellDraggableBar(
       return CellDropTarget.TargetCell(realCell)
     }
 
-    override fun paintComponent(g: Graphics?) {
-      super.paintComponent(g)
-      val g2d = g as Graphics2D
+    private fun retrieveTargetCell(e: MouseEvent): CellDropTarget {
+      val dropLocation = e.locationOnScreen
+      val editorLocationOnScreen = editor.contentComponent.locationOnScreen
+      val x = dropLocation.x - editorLocationOnScreen.x
+      val y = dropLocation.y - editorLocationOnScreen.y
+      val editorPoint = Point(x, y)
 
-      // todo: deal with empty lower panels - in such case, icon does not fit
-      val iconX = (width - dragIcon.iconWidth) / 2
-      val iconY = (height - dragIcon.iconHeight) / 2
-      dragIcon.paintIcon(this, g2d, iconX, iconY)
+      return getCellUnderCursor(editorPoint)
+    }
+
+    private fun foldDraggedCell() {
+      inputFoldedState = cellInput.folded
+      foldInput()
+
+      cellInput.cell.view?.outputs?.outputs?.forEachIndexed { index, output ->
+        outputInitialStates[index] = output.collapsed
+        output.collapsed = true
+      }
+      wasFolded = true
+    }
+
+    private fun unfoldCellIfNeeded() {
+      if (wasFolded == false) return
+      if (inputFoldedState == false) unfoldInput()
+
+      cellInput.cell.view?.outputs?.outputs?.forEachIndexed { index, output ->
+        output.collapsed = outputInitialStates[index] == true
+      }
+      outputInitialStates.clear()
+      wasFolded = false
+    }
+
+    private fun clearDragState() {
+      dragPreview?.dispose()
+      dragPreview = null
+      isDragging = false
+      deleteDropIndicator()
     }
 
     private fun handleDrag(currentLocationOnScreen: Point) {
@@ -164,16 +225,22 @@ class EditorCellDraggableBar(
       currentlyHighlightedCell = targetCell
 
       when (targetCell) {
-        is CellDropTarget.TargetCell -> targetCell.cell.view?.highlightAbovePanel()
+        is CellDropTarget.TargetCell -> targetCell.cell.view?.addDropHighlightIfApplicable()
         CellDropTarget.BelowLastCell -> addHighlightAfterLastCell()
         else -> { }
       }
     }
 
     private fun deleteDropIndicator() = when(currentlyHighlightedCell) {
-      is CellDropTarget.TargetCell -> (currentlyHighlightedCell as CellDropTarget.TargetCell).cell.view?.removeHighlightAbovePanel()
+      is CellDropTarget.TargetCell -> (currentlyHighlightedCell as CellDropTarget.TargetCell).cell.view?.removeDropHighlightIfPresent()
       CellDropTarget.BelowLastCell -> removeHighlightAfterLastCell()
       else -> { }
+    }
+
+    @Nls
+    private fun getPlaceholderText(): String {
+      @NlsSafe val firstNotEmptyString = cellInput.cell.source.get ().lines().firstOrNull { it.trim().isNotEmpty() }
+      return StringUtil.shortenTextWithEllipsis(firstNotEmptyString ?: "\u2026", 20, 0)
     }
 
     private fun addHighlightAfterLastCell() = inlayManager?.belowLastCellPanel?.addDropHighlight()

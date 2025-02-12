@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.icons;
 
 import com.intellij.ui.IconManager;
@@ -372,6 +372,7 @@ public class AllIcons {
     /** 16x16 */ public static final @NotNull Icon ThawAll = load("expui/debugger/thawAll.svg", "debugger/thawAll.svg", -247611348, 0);
     /** 16x16 */ public static final @NotNull Icon ThreadAtBreakpoint = load("expui/debugger/threadAtBreakpoint.svg", "debugger/threadAtBreakpoint.svg", -2130465671, 0);
     /** 16x16 */ public static final @NotNull Icon ThreadCurrent = load("expui/debugger/threadCurrent.svg", "debugger/threadCurrent.svg", -580743407, 0);
+    /** 16x16 */ public static final @NotNull Icon ThreadDaemon = load("expui/debugger/threadDaemon.svg", -783029600, 2);
     /** 16x16 */ public static final @NotNull Icon ThreadFrozen = load("expui/debugger/threadFrozen.svg", "debugger/threadFrozen.svg", 579300096, 0);
     /** 16x16 */ public static final @NotNull Icon ThreadGroup = load("expui/debugger/threads.svg", "debugger/threadGroup.svg", 1735881944, 0);
     /** 16x16 */ public static final @NotNull Icon ThreadGroupCurrent = load("expui/debugger/threadGroupCurrent.svg", "debugger/threadGroupCurrent.svg", -46476841, 0);
@@ -379,12 +380,12 @@ public class AllIcons {
     /** 16x16 */ public static final @NotNull Icon Threads = load("expui/debugger/threads.svg", "debugger/threads.svg", 49928727, 2);
 
     public static final class ThreadStates {
-      /** 16x16 */ public static final @NotNull Icon Daemon_sign = load("debugger/threadStates/daemon_sign.svg", -1004603604, 2);
       /** 16x16 */ public static final @NotNull Icon Idle = load("expui/status/success.svg", "debugger/threadStates/idle.svg", -623903127, 2);
       /** 16x16 */ public static final @NotNull Icon Socket = load("debugger/threadStates/socket.svg", 1241843581, 2);
     }
 
     /** 16x16 */ public static final @NotNull Icon ThreadSuspended = load("expui/debugger/threads.svg", "debugger/threadSuspended.svg", 1956118369, 0);
+    /** 16x16 */ public static final @NotNull Icon ThreadVirtual = load("expui/debugger/threadVirtual.svg", 706712162, 2);
     /** 16x16 */ public static final @NotNull Icon Value = load("expui/debugger/value.svg", "debugger/value.svg", 2139427402, 0);
     /** 16x16 */ public static final @NotNull Icon VariablesTab = load("expui/debugger/variablesTab.svg", "debugger/variablesTab.svg", -2045357702, 2);
     /** 16x16 */ public static final @NotNull Icon ViewBreakpoints = load("expui/run/viewBreakpoints.svg", "debugger/viewBreakpoints.svg", -1788984126, 2);
@@ -1314,6 +1315,14 @@ public class AllIcons {
   }
 
   /** 16x16 */ public static final @NotNull Icon Stub = load("expui/stub.svg", -784127213, 2);
+
+  public static final class Survey {
+    /** 16x16 */ public static final @NotNull Icon Dissatisfied = load("expui/survey/dissatisfied.svg", 1799600033, 2);
+    /** 16x16 */ public static final @NotNull Icon Neutral = load("expui/survey/neutral.svg", 19446713, 2);
+    /** 16x16 */ public static final @NotNull Icon Satisfied = load("expui/survey/satisfied.svg", -670378856, 2);
+    /** 16x16 */ public static final @NotNull Icon VeryDissatisfied = load("expui/survey/veryDissatisfied.svg", 229691784, 2);
+    /** 16x16 */ public static final @NotNull Icon VerySatisfied = load("expui/survey/verySatisfied.svg", -116389630, 2);
+  }
 
   public static final class Table {
     /** 16x16 */ public static final @NotNull Icon Pagination = load("expui/table/pagination.svg", "table/pagination.svg", -773531095, 2);

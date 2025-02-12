@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
 import com.intellij.codeInspection.ProblemsHolder
@@ -83,8 +83,7 @@ internal class ConvertSecondaryConstructorToPrimaryInspection :
         return isReachableByDelegationFrom(delegatedConstructor, visited + constructor)
     }
 
-    context(KaSession)
-    override fun prepareContext(secondaryConstructor: KtSecondaryConstructor): SecondaryConstructorContext? {
+    override fun KaSession.prepareContext(secondaryConstructor: KtSecondaryConstructor): SecondaryConstructorContext? {
         val klass = secondaryConstructor.containingClassOrObject ?: return null
 
         for (constructorDescriptor in klass.secondaryConstructors) {
@@ -179,10 +178,10 @@ internal class ConvertSecondaryConstructorToPrimaryInspection :
         return rightTarget to leftTarget
     }
 
-    override fun createQuickFix(
+    override fun createQuickFixes(
         element: KtSecondaryConstructor,
         elementContext: SecondaryConstructorContext
-    ): KotlinModCommandQuickFix<KtSecondaryConstructor> = object : KotlinModCommandQuickFix<KtSecondaryConstructor>() {
+    ): Array<KotlinModCommandQuickFix<KtSecondaryConstructor>> = arrayOf(object : KotlinModCommandQuickFix<KtSecondaryConstructor>() {
         override fun getFamilyName(): @IntentionFamilyName String = KotlinBundle.message("convert.to.primary.constructor")
         override fun applyFix(
             project: Project,
@@ -265,5 +264,5 @@ internal class ConvertSecondaryConstructorToPrimaryInspection :
                 propertyCommentSaver?.restore(addedParameter)
             }
         }
-    }
+    })
 }

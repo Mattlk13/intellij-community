@@ -228,7 +228,7 @@ private fun ChangeScope.runEffects(list: List<Effect>) {
         e.effect(this)
       }
       catch (x: Throwable) {
-        logger.error(x, "failed running effect ${e.javaClass} in offer")
+        logger.error(x, "failed running effect ${e::class} in offer")
       }
     }
   }
@@ -349,7 +349,7 @@ private suspend fun remoteKernelConnection(
         dbSnapshot.selectPartitions(emptySet()).change {
           context.impl.mutableDb.initPartition(SharedPart)
           val eidMemoizer = Memoizer<EID>()
-          context.applySnapshot(snapshot) { uid ->
+          context.applyWorkspaceSnapshot(snapshot) { uid ->
             dbSnapshot.lookupOne(uidAttribute(), uid) ?: eidMemoizer.memo(false, uid) { EidGen.freshEID(SharedPart) }
           }
         }.dbAfter

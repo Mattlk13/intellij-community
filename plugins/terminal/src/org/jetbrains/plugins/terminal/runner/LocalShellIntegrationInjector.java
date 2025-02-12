@@ -51,8 +51,8 @@ public final class LocalShellIntegrationInjector {
 
   // todo: it would be great to extract block terminal configuration from here
   public static @NotNull ShellStartupOptions injectShellIntegration(@NotNull ShellStartupOptions options,
-                                                                    boolean blockTerminalEnabled,
-                                                                    boolean reworkedBlockTerminalEnabled) {
+                                                                    boolean isGenOneTerminal,
+                                                                    boolean isGenTwoTerminal) {
     List<String> shellCommand = options.getShellCommand();
     String shellExe = ContainerUtil.getFirstItem(shellCommand);
     if (shellCommand == null || shellExe == null) return options;
@@ -77,13 +77,13 @@ public final class LocalShellIntegrationInjector {
         integration = new ShellIntegration(ShellType.BASH, isBlockTerminal ? new CommandBlockIntegration() : null);
       }
       else if (ShellNameUtil.isZshName(shellName)) {
-        String zdotdir = envs.get(ZDOTDIR);
-        if (StringUtil.isNotEmpty(zdotdir)) {
-          envs.put("_INTELLIJ_ORIGINAL_ZDOTDIR", zdotdir);
+        String originalZDotDir = envs.get(ZDOTDIR);
+        if (StringUtil.isNotEmpty(originalZDotDir)) {
+          envs.put("JETBRAINS_INTELLIJ_ORIGINAL_ZDOTDIR", originalZDotDir);
         }
-        String zshDir = PathUtil.getParentPath(rcFilePath);
-        envs.put(ZDOTDIR, zshDir);
-        envs.put(IJ_ZSH_DIR, zshDir);
+        String intellijZDotDir = PathUtil.getParentPath(rcFilePath);
+        envs.put(ZDOTDIR, intellijZDotDir);
+        envs.put(IJ_ZSH_DIR, PathUtil.getParentPath(intellijZDotDir));
         integration = new ShellIntegration(ShellType.ZSH, isBlockTerminal ? new CommandBlockIntegration() : null);
       }
       else if (shellName.equals(ShellNameUtil.FISH_NAME)) {
@@ -100,10 +100,12 @@ public final class LocalShellIntegrationInjector {
       }
     }
 
-    if ((blockTerminalEnabled || reworkedBlockTerminalEnabled) && integration != null && integration.getCommandBlockIntegration() != null) {
-      var commandBlocksOption = reworkedBlockTerminalEnabled
-                                ? "INTELLIJ_TERMINAL_COMMAND_BLOCKS_REWORKED"
-                                : "INTELLIJ_TERMINAL_COMMAND_BLOCKS";
+    if ((isGenOneTerminal || isGenTwoTerminal) && integration != null && integration.getCommandBlockIntegration() != null) {
+      // If Gen1 is enabled, use its integration even if Gen2 is enabled.
+      // So the Gen1 setting takes precedence over Gen2 setting.
+      var commandBlocksOption = isGenOneTerminal
+                                ? "INTELLIJ_TERMINAL_COMMAND_BLOCKS"
+                                : "INTELLIJ_TERMINAL_COMMAND_BLOCKS_REWORKED";
       envs.put(commandBlocksOption, "1");
       // Pretend to be Fig.io terminal to avoid it breaking IntelliJ shell integration:
       // at startup it runs a sub-shell without IntelliJ shell integration
@@ -134,7 +136,7 @@ public final class LocalShellIntegrationInjector {
   private static @Nullable String findRCFile(@NotNull String shellName) {
     String rcfile = switch (shellName) {
       case ShellNameUtil.BASH_NAME, ShellNameUtil.SH_NAME -> "shell-integrations/bash/bash-integration.bash";
-      case ShellNameUtil.ZSH_NAME -> "shell-integrations/zsh/.zshenv";
+      case ShellNameUtil.ZSH_NAME -> "shell-integrations/zsh/zdotdir/.zshenv";
       case ShellNameUtil.FISH_NAME -> "shell-integrations/fish/fish-integration.fish";
       default -> null;
     };

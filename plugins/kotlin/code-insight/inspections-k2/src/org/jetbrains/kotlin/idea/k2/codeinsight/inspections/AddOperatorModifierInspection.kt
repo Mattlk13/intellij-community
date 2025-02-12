@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
@@ -24,8 +24,8 @@ class AddOperatorModifierInspection : KotlinApplicableInspectionBase.Simple<KtNa
     override fun isApplicableByPsi(element: KtNamedFunction): Boolean =
         element.nameIdentifier != null && !element.hasModifier(KtTokens.OPERATOR_KEYWORD)
 
-    override fun createQuickFix(element: KtNamedFunction, context: Unit): KotlinModCommandQuickFix<KtNamedFunction> =
-        object : KotlinModCommandQuickFix<KtNamedFunction>() {
+    override fun createQuickFixes(element: KtNamedFunction, context: Unit): Array<KotlinModCommandQuickFix<KtNamedFunction>> =
+        arrayOf(object : KotlinModCommandQuickFix<KtNamedFunction>() {
 
             override fun getFamilyName(): String = KotlinBundle.message("add.operator.modifier")
 
@@ -34,7 +34,7 @@ class AddOperatorModifierInspection : KotlinApplicableInspectionBase.Simple<KtNa
                 element: KtNamedFunction,
                 updater: ModPsiUpdater,
             ) = element.addModifier(KtTokens.OPERATOR_KEYWORD)
-        }
+        })
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): KtVisitorVoid = object : KtVisitorVoid() {
         override fun visitNamedFunction(function: KtNamedFunction) {
@@ -42,9 +42,8 @@ class AddOperatorModifierInspection : KotlinApplicableInspectionBase.Simple<KtNa
         }
     }
 
-    context(KaSession@KaSession)
     @OptIn(KaExperimentalApi::class)
-    override fun prepareContext(element: KtNamedFunction): Unit? {
+    override fun KaSession.prepareContext(element: KtNamedFunction): Unit? {
         val canBeOperator = analyze(element) {
             var symbol = element.symbol as? KaNamedFunctionSymbol
             symbol?.canBeOperator == true && !symbol.isOperator

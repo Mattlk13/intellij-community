@@ -2,6 +2,7 @@
 package com.intellij.openapi.editor.impl.view;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
 import java.util.function.Consumer;
@@ -11,9 +12,11 @@ import java.util.function.Consumer;
  */
 abstract class TextFragment implements LineFragment {
   final float @NotNull [] myCharPositions; // i-th value is the x coordinate of right edge of i-th character (counted in visual order)
+  final @Nullable EditorView myView;
 
-  TextFragment(int charCount) {
+  TextFragment(int charCount, @Nullable EditorView view) {
     assert charCount > 0;
+    this.myView = view;
     myCharPositions = new float[charCount]; // populated by subclasses' constructors
   }
 
@@ -52,6 +55,17 @@ abstract class TextFragment implements LineFragment {
   @Override
   public int visualToLogicalColumn(float startX, int startColumn, int column) {
     return column;
+  }
+
+  boolean isGridCellAlignmentEnabled() {
+    return myView != null && myView.getEditor().getSettings().getCharacterGridWidthMultiplier() != null;
+  }
+
+  @Nullable Float adjustedWidthOrNull(int codePoint,  float width) {
+    assert myView != null;
+    var actualWidth = myView.getCodePointWidth(codePoint, Font.PLAIN); // in the grid mode all font styles should have identical widths
+    if (Math.abs(width - actualWidth) < 0.001) return null;
+    return actualWidth;
   }
 
   private final class TextFragmentWindow implements LineFragment {

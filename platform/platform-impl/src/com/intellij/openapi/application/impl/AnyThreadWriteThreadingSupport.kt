@@ -80,14 +80,13 @@ private class ThreadState() {
     }
   }
 
-  fun join(): Boolean {
+  fun join() {
     check(isLockStoredInContext) { "Operation is not supported when lock is not stored in context" }
     val shared = sharedCount.decrementAndGet()
     check(shared >= 0) { "Lock balance problem: lock ${this} un-shared more than shared (${shared})" }
     if (shared == 0) {
       sharedLock = null
     }
-    return shared == 0
   }
 
   val hasPermit get() = permit != null
@@ -124,6 +123,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
 
   private var myReadActionListener: ReadActionListener? = null
   private var myWriteActionListener: WriteActionListener? = null
+  private var myWriteIntentActionListener: WriteIntentReadActionListener? = null
 
   private val myWriteActionsStack = Stack<Class<*>>()
   private var myWriteStackBase = 0
@@ -136,15 +136,18 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
   private val myReadActionsInThread = ThreadLocal.withInitial { 0 }
   private val myImpatientReader = ThreadLocal.withInitial { false }
 
+  // todo: reimplement with listeners in IJPL-177760
+  private val myTopmostReadAction = ThreadLocal.withInitial { false }
+
   @Volatile
   private var myWriteAcquired: Thread? = null
 
-  override fun getPermitAsContextElement(shared: Boolean): CoroutineContext {
+  override fun getPermitAsContextElement(baseContext: CoroutineContext, shared: Boolean): CoroutineContext {
     if (!isLockStoredInContext) {
       return EmptyCoroutineContext
     }
 
-    val element = currentThreadContext()[LockStateContextElement]
+    val element = baseContext[LockStateContextElement]
     if (element?.threadState?.permit != null) {
       if (shared) {
         element.threadState.fork()
@@ -156,13 +159,6 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     if (ts.permit != null) {
       if (shared) {
         ts.fork()
-        // If we share WriteIntentLock for the first time, we should take secondary permit for our thread
-        if (ts.permit is WriteIntentPermit) {
-          val sps = mySecondaryPermits.get()
-          if (sps.isEmpty()) {
-            sps.add(getWriteIntentPermit(ts.sharedLock!!))
-          }
-        }
       }
       return LockStateContextElement(ts)
     }
@@ -177,18 +173,16 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
 
     if (ctx is LockStateContextElement) {
       val ts = ctx.threadState
-      if (ts.join() && ts.permit is WriteIntentPermit) {
-        val sps = mySecondaryPermits.get()
-        if (sps.size == 1) {
-          val p = sps.removeLast()
-          check(p is WriteIntentPermit) { "Unbalanced calls to getPermitAsContextElement / returnPermitFromContextElement: got ${p} from stack" }
-          p.release()
-        }
-      }
+      ts.join()
     }
   }
 
   override fun hasPermitAsContextElement(context: CoroutineContext): Boolean = isLockStoredInContext && context[LockStateContextElement] != null
+
+  override fun isInTopmostReadAction(): Boolean {
+    // once a read action was requested
+    return myTopmostReadAction.get()
+  }
 
   private fun getThreadState(): ThreadState {
     val ctxState = if (isLockStoredInContext) currentThreadContext()[LockStateContextElement]?.threadState else null
@@ -229,28 +223,34 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
 
   // @Throws(E::class)
   override fun <T, E : Throwable?> runWriteIntentReadAction(computation: ThrowableComputable<T, E>): T {
+    fireBeforeWriteIntentReadActionStart(computation.javaClass)
+    val currentReadState = myTopmostReadAction.get()
+    myTopmostReadAction.set(false)
+
     val ts = getThreadState()
     var release = true
     var releaseSecondary = false
+
+    // See similar technique in `startWrite`
+    val sharedLock = ts.sharedLock
+    if (sharedLock != null) {
+      // Check secondary protection lock
+      val sps = mySecondaryPermits.get()
+      when (sps.lastOrNull()) {
+        null -> {
+          sps.add(getWriteIntentPermit(sharedLock))
+          releaseSecondary = true
+        }
+        is ReadPermit -> error("WriteIntentReadAction can not be called from ReadAction")
+        is WriteIntentPermit, is WritePermit -> {}
+      }
+    }
 
     when (ts.permit) {
       null -> ts.acquire(getWriteIntentPermit())
       is ReadPermit -> error("WriteIntentReadAction can not be called from ReadAction")
       is WriteIntentPermit -> {
         // Volatile read
-        val sharedLock = ts.sharedLock
-        if (sharedLock != null) {
-          // Check secondary protection lock
-          val sps = mySecondaryPermits.get()
-          when (sps.lastOrNull()) {
-            null -> {
-              sps.add(getWriteIntentPermit(sharedLock))
-              releaseSecondary = true
-            }
-            is ReadPermit -> error("WriteIntentReadAction can not be called from ReadAction")
-            is WriteIntentPermit, is WritePermit -> {}
-          }
-        }
         release = false
         checkWriteFromRead("Write Intent Read", "Write Intent")
       }
@@ -263,9 +263,11 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     val prevImplicitLock = ThreadingAssertions.isImplicitLockOnEDT()
     try {
       ThreadingAssertions.setImplicitLockOnEDT(false)
+      fireWriteIntentActionStarted(computation.javaClass)
       return runWithTemporaryThreadLocal(ts) { computation.compute() }
     }
     finally {
+      fireWriteIntentActionFinished(computation.javaClass)
       ThreadingAssertions.setImplicitLockOnEDT(prevImplicitLock)
       if (release) {
         ts.release()
@@ -273,6 +275,8 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
       if (releaseSecondary) {
         mySecondaryPermits.get().removeLast().release()
       }
+      myTopmostReadAction.set(currentReadState)
+      afterWriteIntentReadActionFinished(computation.javaClass)
     }
   }
 
@@ -433,30 +437,34 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
   private fun <T, E : Throwable?> runReadAction(clazz: Class<*>, block: ThrowableComputable<T, E>): T {
     fireBeforeReadActionStart(clazz)
 
+    val currentReadState = myTopmostReadAction.get()
+    myTopmostReadAction.set(true)
+
     val ts = getThreadState()
     var release = false
     var releaseSecondary = false
+
+    // We must acquire read lock on the second permit first; see similar technique in `startWrite`
+    val sharedLock = ts.sharedLock
+    if (sharedLock != null) {
+      // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
+      val sps = mySecondaryPermits.get()
+      val last = sps.lastOrNull()
+      // If secondary lock does not protect this shared lock yet, get secondary lock
+      // If here is any secondary permit, then additional read permit will do nothing but prevent
+      // wil -> rl -> wl sequence which is (unfortunately) allowed and used now.
+      if (last == null) {
+        sps.add(acquireReadPermit(sharedLock))
+        releaseSecondary = true
+      }
+    }
+
     when (ts.permit) {
       null -> {
         ts.acquire(acquireReadPermit(lock))
         release = true
       }
-      is WriteIntentPermit -> {
-        val sharedLock = ts.sharedLock
-        if (sharedLock != null) {
-          // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
-          val sps = mySecondaryPermits.get()
-          val last = sps.lastOrNull()
-          // If secondary lock does not protect this shared lock yet, get secondary lock
-          // If here is any secondary permit, then additional read permit will do nothing but prevent
-          // wil -> rl -> wl sequence which is (unfortunately) allowed and used now.
-          if (last == null ) {
-            sps.add(acquireReadPermit(sharedLock))
-            releaseSecondary = true
-          }
-        }
-      }
-      is ReadPermit, is WritePermit -> {}
+      is ReadPermit, is WritePermit, is WriteIntentPermit -> {}
     }
 
     // For diagnostic purposes register that we in read action, even if we use stronger lock
@@ -480,6 +488,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
       if (releaseSecondary) {
         mySecondaryPermits.get().removeLast().release()
       }
+      myTopmostReadAction.set(currentReadState)
       fireAfterReadActionFinished(clazz)
     }
   }
@@ -487,9 +496,32 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
   override fun tryRunReadAction(action: Runnable): Boolean {
     fireBeforeReadActionStart(action.javaClass)
 
+    val currentReadState = myTopmostReadAction.get()
+    myTopmostReadAction.set(true)
+
     val ts = getThreadState()
     var release = false
     var releaseSecondary = false
+
+    // See similar technique in `startWrite`
+    val sharedLock = ts.sharedLock
+    if (sharedLock != null) {
+      // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
+      val sps = mySecondaryPermits.get()
+      val last = sps.lastOrNull()
+      // If secondary lock does not protect this shared lock yet, get secondary lock
+      // If here is any secondary permit, then additional read permit will do nothing but prevent
+      // wil -> rl -> wl sequence which is (unfortunately) allowed and used now.
+      if (last == null) {
+        val p = tryGetReadPermit(sharedLock)
+        if (p == null) {
+          return false
+        }
+        sps.add(p)
+        releaseSecondary = true
+      }
+    }
+
     when (ts.permit) {
       null -> {
         val p = tryGetReadPermit(lock)
@@ -499,26 +531,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
         ts.acquire(p)
         release = true
       }
-      is WriteIntentPermit -> {
-        val sharedLock = ts.sharedLock
-        if (sharedLock != null) {
-          // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
-          val sps = mySecondaryPermits.get()
-          val last = sps.lastOrNull()
-          // If secondary lock does not protect this shared lock yet, get secondary lock
-          // If here is any secondary permit, then additional read permit will do nothing but prevent
-          // wil -> rl -> wl sequence which is (unfortunately) allowed and used now.
-          if (last == null) {
-            val p = tryGetReadPermit(sharedLock)
-            if (p == null) {
-              return false
-            }
-            sps.add(p)
-            releaseSecondary = true
-          }
-        }
-      }
-      is ReadPermit, is WritePermit -> {}
+      is ReadPermit, is WritePermit, is WriteIntentPermit -> {}
     }
 
     // For diagnostic purposes register that we in read action, even if we use stronger lock
@@ -541,6 +554,8 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
       if (releaseSecondary) {
         mySecondaryPermits.get().removeLast().release()
       }
+
+      myTopmostReadAction.set(currentReadState)
       fireAfterReadActionFinished(action.javaClass)
     }
   }
@@ -555,6 +570,13 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     if (myWriteActionListener != null)
       error("WriteActionListener already registered")
     myWriteActionListener = listener
+  }
+
+  @ApiStatus.Internal
+  override fun setWriteIntentReadActionListener(listener: WriteIntentReadActionListener) {
+    if (myWriteIntentActionListener != null)
+      error("WriteActionListener already registered")
+    myWriteIntentActionListener = listener
   }
 
   @ApiStatus.Internal
@@ -588,7 +610,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     }
   }
 
-  private fun startWrite(ts: ThreadState, clazz: Class<*>): Pair<Boolean, Boolean> {
+  private fun startWrite(ts: ThreadState, clazz: Class<*>): Triple<Boolean, Boolean, Boolean> {
     // Read permit is incompatible
     check(!ts.hasRead) { "WriteAction can not be called from ReadAction" }
 
@@ -606,6 +628,36 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
 
     var release = false
     var releaseSecondary = false
+    val currentReadState = myTopmostReadAction.get()
+    myTopmostReadAction.set(false)
+
+    val sharedLock = ts.sharedLock
+    // If the shared lock is present, then the primary lock is at least in WIL state;
+    // The current process of interaction with the primary lock involves reading its mutable field for permit.
+    // We must establish mutual exclusion with other parties that attempt to read this field
+    // before proceeding with the operations on the primary lock.
+    if (sharedLock != null) {
+      // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
+      val sps = mySecondaryPermits.get()
+      val last = sps.lastOrNull()
+      when (last) {
+        null -> {
+          sps.add(measureWriteLock { getWritePermit(sharedLock) })
+          releaseSecondary = true
+        }
+        is WriteIntentPermit -> {
+          sps.add(measureWriteLock { runSuspend { last.acquireWritePermit() } })
+          releaseSecondary = true
+        }
+        is ReadPermit -> {
+          // Rollback pending
+          myWriteActionPending.decrementAndGet()
+          error("WriteAction can not be called from ReadAction")
+        }
+        is WritePermit -> {}
+      }
+    }
+
     when (ts.permit) {
       null -> {
         ts.acquire(measureWriteLock { getWritePermit(ts) })
@@ -614,28 +666,6 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
       // Read permit is impossible here, as it is first check before all "pendings"
       is ReadPermit -> {}
       is WriteIntentPermit -> {
-        val sharedLock = ts.sharedLock
-        if (sharedLock != null) {
-          // We need a secondary permit, read one. Optimization: if we have on as last, do nothing
-          val sps = mySecondaryPermits.get()
-          val last = sps.lastOrNull()
-          when (last) {
-            null -> {
-              sps.add(measureWriteLock { getWritePermit(sharedLock) })
-              releaseSecondary = true
-            }
-            is WriteIntentPermit -> {
-              sps.add(measureWriteLock { runSuspend { last.acquireWritePermit() } })
-              releaseSecondary = true
-            }
-            is ReadPermit -> {
-              // Rollback pending
-              myWriteActionPending.decrementAndGet()
-              error("WriteAction can not be called from ReadAction")
-            }
-            is WritePermit -> {}
-          }
-        }
         // Upgrade main permit
         ts.acquire(measureWriteLock { getWritePermit(ts) })
         release = true
@@ -652,10 +682,10 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     myWriteActionsStack.push(clazz)
     fireWriteActionStarted(ts, clazz)
 
-    return Pair(release, releaseSecondary)
+    return Triple(release, releaseSecondary, currentReadState)
   }
 
-  private fun endWrite(ts: ThreadState, clazz: Class<*>, releases: Pair<Boolean, Boolean>) {
+  private fun endWrite(ts: ThreadState, clazz: Class<*>, releases: Triple<Boolean, Boolean, Boolean>) {
     fireWriteActionFinished(ts, clazz)
     myWriteActionsStack.pop()
     if (releases.first) {
@@ -665,6 +695,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     if (releases.second) {
       mySecondaryPermits.get().removeLast().release()
     }
+    myTopmostReadAction.set(releases.third)
     if (releases.first) {
       fireAfterWriteActionFinished(ts, clazz)
     }
@@ -877,6 +908,22 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     finally {
       ts.inListener = false
     }
+  }
+
+  private fun fireBeforeWriteIntentReadActionStart(clazz: Class<*>) {
+    myWriteIntentActionListener?.beforeWriteIntentReadActionStart(clazz)
+  }
+
+  private fun fireWriteIntentActionStarted(clazz: Class<*>) {
+    myWriteIntentActionListener?.writeIntentReadActionStarted(clazz)
+  }
+
+  private fun fireWriteIntentActionFinished(clazz: Class<*>) {
+    myWriteIntentActionListener?.writeIntentReadActionFinished(clazz)
+  }
+
+  private fun afterWriteIntentReadActionFinished(clazz: Class<*>) {
+    myWriteIntentActionListener?.afterWriteIntentReadActionFinished(clazz)
   }
 
   private fun getWriteIntentPermit(lock: RWMutexIdea): WriteIntentPermit {

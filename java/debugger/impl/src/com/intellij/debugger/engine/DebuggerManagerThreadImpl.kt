@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nls
 import org.jetbrains.annotations.TestOnly
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 
 class DebuggerManagerThreadImpl(parent: Disposable, private val parentScope: CoroutineScope) :
@@ -356,7 +357,8 @@ class DebuggerManagerThreadImpl(parent: Disposable, private val parentScope: Cor
     /**
      * Debugger thread runs in a progress indicator itself, so we need to check whether we have any other progress indicator additionally.
      */
-    internal fun hasNonDefaultProgressIndicator(): Boolean {
+    @ApiStatus.Internal
+    fun hasNonDefaultProgressIndicator(): Boolean {
       val hasProgressIndicator = ProgressManager.getInstance().hasProgressIndicator()
       if (!hasProgressIndicator) return false
       if (!isManagerThread()) return true
@@ -552,7 +554,13 @@ else suspendCancellableCoroutine { continuation ->
       Result.success(block())
     }
     catch (e: Throwable) {
-      Result.failure(e)
+      when {
+        e is VMDisconnectedException || (e is CompletionException && e.cause is VMDisconnectedException) -> {
+          continuation.cancel()
+          throw e
+        }
+        else -> Result.failure(e)
+      }
     }
     continuation.resumeWith(result)
   }

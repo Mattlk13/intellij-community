@@ -4,8 +4,6 @@ package com.intellij.platform.debugger.impl.frontend.evaluate.quick
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.impl.editorId
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.platform.debugger.impl.frontend.evaluate.quick.common.RemoteValueHint
@@ -14,7 +12,6 @@ import com.intellij.frontend.FrontendType
 import com.intellij.platform.debugger.impl.frontend.FrontendXDebuggerManager
 import com.intellij.platform.project.projectId
 import com.intellij.xdebugger.XDebuggerManager
-import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
 import com.intellij.xdebugger.impl.evaluate.childCoroutineScope
 import com.intellij.xdebugger.impl.evaluate.quick.XValueHint
 import com.intellij.xdebugger.impl.evaluate.quick.common.AbstractValueHint
@@ -65,9 +62,10 @@ internal class XQuickEvaluateHandler : QuickEvaluateHandler() {
       if (Registry.`is`("debugger.valueLookupFrontendBackend") || (frontendType is FrontendType.RemoteDev && !frontendType.isLuxSupported)) {
         val currentSession = FrontendXDebuggerManager.getInstance(project).currentSession.value ?: return@async null
         val frontendEvaluator = currentSession.evaluator.value ?: return@async null
+        val valueMarkers = currentSession.valueMarkers
         val editorsProvider = currentSession.editorsProvider
-        // TODO[IJPL-160146]: support passing session: basically valueMarkers and currentPosition
-        XValueHint(project, editorsProvider, editor, point, type, offset, expressionInfo, frontendEvaluator, false)
+        // TODO[IJPL-160146]: support passing currentPosition
+        XValueHint(project, editorsProvider, editor, point, type, offset, expressionInfo, frontendEvaluator, valueMarkers, null, false)
       }
       else if (frontendType is FrontendType.RemoteDev) {
         RemoteValueHint(project, projectId, editor, point, type, offset, expressionInfo, fromPlugins = false)

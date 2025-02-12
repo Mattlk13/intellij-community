@@ -17,11 +17,11 @@ import com.intellij.platform.workspace.storage.EntitySource
 import com.intellij.platform.workspace.storage.MutableEntityStorage
 import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import com.intellij.platform.workspace.storage.url.VirtualFileUrlManager
-import com.intellij.util.containers.addIfNotNull
 import org.jetbrains.kotlin.idea.core.script.KOTLIN_SCRIPTS_MODULE_NAME
 import org.jetbrains.kotlin.idea.core.script.KotlinScriptEntitySource
 import org.jetbrains.kotlin.idea.core.script.LibraryDependencyFactory
 import org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager.Companion.toVfsRoots
+import org.jetbrains.kotlin.idea.core.script.dependencies.indexSourceRootsEagerly
 import org.jetbrains.kotlin.idea.core.script.k2.BaseScriptModel
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptConfigurationWithSdk
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptConfigurationsSource
@@ -46,7 +46,11 @@ internal class GradleScriptModel(
     val sourcePath: List<String> = listOf(),
     val imports: List<String> = listOf(),
     val javaHome: String? = null
-) : BaseScriptModel(virtualFile)
+) : BaseScriptModel(virtualFile) {
+    override fun toString(): String {
+        return "GradleScriptModel(virtualFile=$virtualFile)"
+    }
+}
 
 internal open class GradleScriptConfigurationsSource(override val project: Project) :
     ScriptConfigurationsSource<GradleScriptModel>(project) {
@@ -67,7 +71,7 @@ internal open class GradleScriptConfigurationsSource(override val project: Proje
         project.scriptDefinitionsSourceOfType<GradleScriptDefinitionsSource>()
 
     override suspend fun updateConfigurations(scripts: Iterable<GradleScriptModel>) {
-        val configurations = scripts.associate { it ->
+        val configurations = scripts.associate { it: GradleScriptModel ->
             val sourceCode = VirtualFileScriptSource(it.virtualFile)
             val definition = findScriptDefinition(project, sourceCode)
 
@@ -117,21 +121,19 @@ internal open class GradleScriptConfigurationsSource(override val project: Proje
             val sdkDependency = configurationWithSdk.sdk?.let { SdkDependency(SdkId(it.name, it.sdkType.name)) }
 
             val classes = toVfsRoots(configuration.dependenciesClassPath).toMutableSet()
-            val sources = toVfsRoots(configuration.dependenciesSources).toMutableSet()
 
-            val allDependencies = buildList {
-                addIfNotNull(sdkDependency)
-                addAll(getDependenciesFromGradleLibs(classes, sources,
-                                                     WorkspaceModel.getInstance(project).getVirtualFileUrlManager(), project))
-                addAll(updatedStorage.createDependenciesWithSources(classes, sources, source,
-                                                                    WorkspaceModel.getInstance(project).getVirtualFileUrlManager()
-                ))
-                add(updatedStorage.createDependencyWithKeyword(classes, sources, source,
-                                                               WorkspaceModel.getInstance(project).getVirtualFileUrlManager(), locationName, "accessors"))
-                add(updatedStorage.createDependencyWithKeyword(classes, sources, source,
-                                                               WorkspaceModel.getInstance(project).getVirtualFileUrlManager(), locationName, "groovy"))
-                addAll(classes.sortedBy { it.name }.map { updatedFactory.get(it, source) })
-            }
+            val allDependencies = listOfNotNull(sdkDependency) + buildList {
+                if (indexSourceRootsEagerly()) {
+                    val sources = toVfsRoots(configuration.dependenciesSources).toMutableSet()
+                    addAll(getDependenciesFromGradleLibs(classes, sources, fileUrlManager, project))
+                    addAll(updatedStorage.createDependenciesWithSources(classes, sources, source, fileUrlManager))
+                    add(updatedStorage.createDependencyWithKeyword(classes, sources, source, fileUrlManager, locationName, "accessors"))
+                    add(updatedStorage.createDependencyWithKeyword(classes, sources, source, fileUrlManager, locationName, "groovy"))
+                }
+
+                addAll(classes.map { updatedFactory.get(it, source) })
+            }.sortedBy { it.library.name }
+
             updatedStorage.addEntity(ModuleEntity("$definitionScriptModuleName.$locationName", allDependencies, source))
         }
 
@@ -185,11 +187,11 @@ internal open class GradleScriptConfigurationsSource(override val project: Proje
     ): List<LibraryDependency> {
 
         val dependencies: MutableList<LibraryDependency> = mutableListOf()
-        val sourcesNames = sources.associate { it.name to it }
+        val sourcesNames = sources.associateBy { it.name }
 
-        val pairs = classes.associate {
+        val pairs = classes.associateWith {
             val sourcesName = it.name.replace(".jar", "-sources.jar")
-            it to sourcesNames[sourcesName]
+            sourcesNames[sourcesName]
         }.filterValues { it != null }
 
         for ((left, right) in pairs) {

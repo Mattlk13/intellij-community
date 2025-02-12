@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel;
@@ -326,7 +326,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
     if (info == null || !UpdateHighlightersUtil.HighlightInfoPostFilters.accept(myProject, info)) {
       return;
     }
-    info.toolId = toolWrapper.getShortName();
+    info.setToolId(toolWrapper.getShortName());
     info.setGroup(HighlightInfoUpdaterImpl.MANAGED_HIGHLIGHT_INFO_GROUP);
     if (isInInjected) {
       Document documentRange = documentManager.getDocument(file);
@@ -376,7 +376,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
         registerQuickFixes(builder, fixes, shortName);
         HighlightInfo patched = builder.createUnconditionally();
         patched.markFromInjection();
-        patched.toolId = info.toolId;
+        patched.setToolId(info.getToolId());
         patched.setGroup(HighlightInfoUpdaterImpl.MANAGED_HIGHLIGHT_INFO_GROUP);
         outInfos.accept(patched);
       }
@@ -434,9 +434,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
       String displayNameByKey = HighlightDisplayKey.getDisplayNameByKey(key);
       LOG.assertTrue(displayNameByKey != null, key.toString());
 
-      result.add(Registry.is("llm.empty.intention.generation")
-                 ? new EmptyIntentionGeneratorIntention(displayNameByKey, descriptor.getDescriptionTemplate())
-                 : new EmptyIntentionAction(displayNameByKey));
+      result.add(new EmptyIntentionAction(displayNameByKey));
     }
     return result;
   }

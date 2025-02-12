@@ -24,13 +24,11 @@ import java.awt.Graphics2D
 import java.awt.geom.Rectangle2D
 
 internal class TerminalCursorPainter private constructor(
+  private val editor: EditorEx,
   private val outputModel: TerminalOutputModel,
   private val sessionModel: TerminalSessionModel,
   private val coroutineScope: CoroutineScope,
 ) {
-  private val editor: EditorEx
-    get() = outputModel.editor
-
   private var cursorPaintingJob: Job? = null
 
   private var curCursorState: CursorState = CursorState(
@@ -80,6 +78,17 @@ internal class TerminalCursorPainter private constructor(
         updateCursor(curCursorState)
       }
     }, coroutineScope.asDisposable())
+
+    // Handling the case when:
+    // 0. The cursor is at the end of the document.
+    // 1. Something was appended to the document.
+    // 2. An equal amount of text was removed from the beginning, so that the max document size is maintained.
+    // 3. As a result, the logical offset of the cursor stayed the same, but we still need to repaint it.
+    outputModel.addListener(coroutineScope.asDisposable(), object : TerminalOutputModelListener {
+      override fun afterContentChanged(startOffset: Int) {
+        updateCursor(curCursorState)
+      }
+    })
   }
 
   @RequiresEdt
@@ -169,9 +178,11 @@ internal class TerminalCursorPainter private constructor(
       highlighter.setCustomRenderer { _, _, g ->
         val offset = highlighter.startOffset
         val point = editor.offsetToPoint2D(offset)
+        val text = editor.document.text
+        val codePoint = if (offset in text.indices) text.codePointAt(offset) else 'W'.code
+        val cursorWidth = (editor as EditorImpl).view.getCodePointWidth(codePoint)
         val cursorHeight = editor.lineHeight
-        val rect = Rectangle2D.Double(point.x, point.y,
-                                      (editor as EditorImpl).charHeight.toDouble(), cursorHeight.toDouble())
+        val rect = Rectangle2D.Double(point.x, point.y, cursorWidth.toDouble(), cursorHeight.toDouble())
         g as Graphics2D
         paintCursor(g, rect)
       }
@@ -216,8 +227,8 @@ internal class TerminalCursorPainter private constructor(
     private val CURSOR_DARK: Color = Gray._0
 
     @RequiresEdt
-    fun install(outputModel: TerminalOutputModel, sessionModel: TerminalSessionModel, coroutineScope: CoroutineScope) {
-      TerminalCursorPainter(outputModel, sessionModel, coroutineScope)
+    fun install(editor: EditorEx, outputModel: TerminalOutputModel, sessionModel: TerminalSessionModel, coroutineScope: CoroutineScope) {
+      TerminalCursorPainter(editor, outputModel, sessionModel, coroutineScope)
     }
   }
 }

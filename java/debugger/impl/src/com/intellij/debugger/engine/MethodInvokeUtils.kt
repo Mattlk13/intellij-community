@@ -6,6 +6,7 @@ import com.intellij.debugger.engine.MethodInvokeUtils.getHelperExceptionStackTra
 import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.evaluation.expression.BoxingEvaluator
+import com.intellij.debugger.impl.DebuggerUtilsAsync
 import com.intellij.debugger.impl.DebuggerUtilsEx
 import com.intellij.debugger.impl.DebuggerUtilsEx.isVoid
 import com.intellij.debugger.impl.DebuggerUtilsImpl
@@ -87,6 +88,11 @@ internal fun tryInvokeWithHelper(
     require(DebuggerUtilsImpl.instanceOf(objRef.referenceType(), methodDeclaringType)) { "Invalid method" }
   }
 
+  // Class.forName may check getCallerClass which is different if helper is used
+  if (method.name().equals("forName") && methodDeclaringType.name() == CommonClassNames.JAVA_LANG_CLASS) {
+    return InvocationResult(false, null)
+  }
+
   val debugProcess = evaluationContext.debugProcess
   val invokerArgs = mutableListOf<Value?>()
 
@@ -122,7 +128,14 @@ internal fun tryInvokeWithHelper(
   }
 
   try {
-    return InvocationResult(true, DebuggerUtilsImpl.invokeHelperMethod(evaluationContext, MethodInvoker::class.java, helperMethodName, invokerArgs, false))
+    var value = DebuggerUtilsImpl.invokeHelperMethod(evaluationContext, MethodInvoker::class.java, helperMethodName, invokerArgs, false)
+    if (value is ArrayReference) { // wrapped
+      val wrapper = value
+      value = value.getValue(0)
+      DebuggerUtilsAsync.disableCollection(value)
+      wrapper.setValue(0, null) // clear the reference TODO: make async
+    }
+    return InvocationResult(true, value)
   }
   catch (e: Exception) {
     val helperExceptionStackTrace = getHelperExceptionStackTrace(evaluationContext, e)

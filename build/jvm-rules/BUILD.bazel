@@ -12,8 +12,8 @@ label_flag(
 
 label_flag(
     name = "worker-impl",
-    # build_setting_default = "//src/misc:worker-jvm",
-    build_setting_default = "//src/misc:worker-native",
+    build_setting_default = "//src/misc:worker-jvm",
+    # build_setting_default = "//src/misc:worker-native",
     visibility = ["//visibility:public"],
 )
 
@@ -188,6 +188,13 @@ jvm_import(
     name = "opentelemetry-exporter-logging-otlp",
     jar = "@opentelemetry-exporter-logging-otlp//file",
     source_jar = "@opentelemetry-exporter-logging-otlp-sources//file",
+    visibility = ["//visibility:public"],
+)
+
+jvm_import(
+    name = "proguard-core",
+    jar = "@proguard-core//file",
+    source_jar = "@proguard-core-sources//file",
     visibility = ["//visibility:public"],
 )
 

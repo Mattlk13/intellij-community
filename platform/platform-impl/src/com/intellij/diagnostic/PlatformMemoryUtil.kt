@@ -4,6 +4,7 @@ package com.intellij.diagnostic
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.util.SystemProperties
 import com.intellij.util.system.CpuArch
 import com.sun.jna.Library
 import com.sun.jna.Memory
@@ -111,8 +112,8 @@ abstract class PlatformMemoryUtil {
     private val INSTANCE: PlatformMemoryUtil = try {
       when {
         SystemInfo.isLinux -> LinuxMemoryUtil()
-        SystemInfo.isWin10OrNewer && CpuArch.isIntel64() -> WindowsMemoryUtil()
-        SystemInfo.isMac && CpuArch.isArm64() -> MacosMemoryUtil()
+        SystemInfo.isWin10OrNewer -> WindowsMemoryUtil()
+        SystemInfo.isMac -> MacosMemoryUtil()
         else -> DummyMemoryUtil()
       }
     }

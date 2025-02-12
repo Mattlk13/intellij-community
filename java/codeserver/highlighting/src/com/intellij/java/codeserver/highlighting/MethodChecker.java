@@ -6,6 +6,7 @@ import com.intellij.codeInsight.daemon.impl.analysis.JavaGenericsUtil;
 import com.intellij.java.codeserver.highlighting.errors.JavaErrorKinds;
 import com.intellij.java.codeserver.highlighting.errors.JavaIncompatibleTypeErrorContext;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.pom.java.JavaFeature;
 import com.intellij.pom.java.LanguageLevel;
@@ -48,12 +49,12 @@ final class MethodChecker {
     return signatures;
   }
 
-  void checkMustBeThrowable(@NotNull PsiClass aClass, @NotNull PsiElement context) {
-    PsiClassType type = JavaPsiFacade.getElementFactory(aClass.getProject()).createType(aClass);
-    PsiElementFactory factory = JavaPsiFacade.getElementFactory(context.getProject());
-    PsiClassType throwable = factory.createTypeByFQClassName(CommonClassNames.JAVA_LANG_THROWABLE, context.getResolveScope());
-    if (!TypeConversionUtil.isAssignable(throwable, type)) {
-      if (IncompleteModelUtil.isIncompleteModel(context) && IncompleteModelUtil.isPotentiallyConvertible(throwable, type, context)) return;
+  void checkMustBeThrowable(@NotNull PsiClass aClass, @NotNull PsiJavaCodeReferenceElement context) {
+    if (!InheritanceUtil.isInheritor(aClass, CommonClassNames.JAVA_LANG_THROWABLE)) {
+      PsiElementFactory factory = myVisitor.factory();
+      PsiClassType type = factory.createType(aClass);
+      PsiClassType throwable = factory.createTypeByFQClassName(CommonClassNames.JAVA_LANG_THROWABLE, context.getResolveScope());
+      if (myVisitor.isIncompleteModel() && IncompleteModelUtil.isPotentiallyConvertible(throwable, type, context)) return;
       myVisitor.report(JavaErrorKinds.TYPE_INCOMPATIBLE.create(context, new JavaIncompatibleTypeErrorContext(throwable, type)));
     }
   }
@@ -176,7 +177,7 @@ final class MethodChecker {
       // optimization: do not analyze unrelated methods from Object: in case of no inheritance they can't conflict
       return;
     }
-    PsiResolveHelper resolveHelper = JavaPsiFacade.getInstance(aClass.getProject()).getResolveHelper();
+    PsiResolveHelper resolveHelper = JavaPsiFacade.getInstance(myVisitor.project()).getResolveHelper();
 
     for (HierarchicalMethodSignature signature : visibleSignatures) {
       PsiMethod method = signature.getMethod();
@@ -400,6 +401,52 @@ final class MethodChecker {
     }
   }
 
+  void checkConstructorName(PsiMethod method) {
+    PsiClass aClass = method.getContainingClass();
+    if (aClass != null) {
+      String className = aClass instanceof PsiAnonymousClass ? null : aClass.getName();
+      if (className == null || !Comparing.strEqual(method.getName(), className)) {
+        myVisitor.report(JavaErrorKinds.METHOD_MISSING_RETURN_TYPE.create(method, className));
+      }
+    }
+  }
+
+  void checkAbstractMethodInConcreteClass(@NotNull PsiMethod method, @NotNull PsiKeyword elementToHighlight) {
+    PsiClass aClass = method.getContainingClass();
+    if (method.hasModifierProperty(PsiModifier.ABSTRACT)
+        && aClass != null
+        && (aClass.isEnum() || !aClass.hasModifierProperty(PsiModifier.ABSTRACT))
+        && !PsiUtilCore.hasErrorElementChild(method)) {
+      if (aClass.isEnum()) {
+        for (PsiField field : aClass.getFields()) {
+          if (field instanceof PsiEnumConstant) {
+            // only report an abstract method in enum when there are no enum constants to implement it
+            return;
+          }
+        }
+      }
+      myVisitor.report(JavaErrorKinds.METHOD_ABSTRACT_IN_NON_ABSTRACT_CLASS.create(elementToHighlight, method));
+    }
+  }
+
+  void checkConstructorInImplicitClass(@NotNull PsiMethod method) {
+    if (!method.isConstructor() || !(method.getContainingClass() instanceof PsiImplicitClass)) return;
+    myVisitor.report(JavaErrorKinds.CONSTRUCTOR_IN_IMPLICIT_CLASS.create(method));
+  }
+
+  void checkConstructorHandleSuperClassExceptions(@NotNull PsiMethod method) {
+    if (!method.isConstructor()) return;
+    PsiCodeBlock body = method.getBody();
+    PsiStatement[] statements = body == null ? null : body.getStatements();
+    if (statements == null) return;
+
+    // if we have unhandled exception inside the method body, we could not have been called here,
+    // so the only problem it can catch here is with super ctr only
+    Collection<PsiClassType> unhandled = ExceptionUtil.collectUnhandledExceptions(method, method.getContainingClass());
+    if (unhandled.isEmpty()) return;
+    myVisitor.report(JavaErrorKinds.EXCEPTION_UNHANDLED.create(method, unhandled));
+  }
+
   static @Nullable TextRange getCStyleDeclarationRange(@NotNull PsiVariable variable) {
     PsiIdentifier identifier = variable.getNameIdentifier();
     TextRange range = null;
@@ -481,7 +528,7 @@ final class MethodChecker {
       methodCount++;
     }
 
-    if (methodCount == 1 && aClass.isEnum() && isEnumSyntheticMethod(methodSignature, aClass.getProject())) {
+    if (methodCount == 1 && aClass.isEnum() && isEnumSyntheticMethod(methodSignature, myVisitor.project())) {
       methodCount++;
     }
     if (methodCount > 1) {

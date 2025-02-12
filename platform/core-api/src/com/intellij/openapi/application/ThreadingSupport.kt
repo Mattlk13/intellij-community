@@ -189,6 +189,15 @@ interface ThreadingSupport {
   fun setWriteActionListener(listener: WriteActionListener)
 
   /**
+   * Adds a [WriteIntentReadActionListener].
+   *
+   * Only one listener can be set. It is an error to set the second listener.
+   *
+   * @param listener the listener to set
+   */
+  fun setWriteIntentReadActionListener(listener: WriteIntentReadActionListener)
+
+  /**
    * Removes a [WriteActionListener].
    *
    * It is error to remove listener which was not set early.
@@ -310,11 +319,14 @@ interface ThreadingSupport {
   fun isInsideUnlockedWriteIntentLock(): Boolean
 
   @ApiStatus.Internal
-  fun getPermitAsContextElement(shared: Boolean): CoroutineContext
+  fun getPermitAsContextElement(baseContext: CoroutineContext, shared: Boolean): CoroutineContext
 
   @ApiStatus.Internal
   fun returnPermitFromContextElement(ctx: CoroutineContext)
 
   @ApiStatus.Internal
   fun hasPermitAsContextElement(context: CoroutineContext): Boolean
+
+  @ApiStatus.Internal
+  fun isInTopmostReadAction(): Boolean
 }

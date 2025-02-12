@@ -13,7 +13,6 @@ import com.intellij.openapi.editor.event.EditorMouseListener
 import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.ex.FocusChangeListener
-import com.intellij.openapi.observable.util.addKeyListener
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.terminal.JBTerminalSystemSettingsProviderBase
@@ -24,7 +23,10 @@ import org.jetbrains.annotations.NonNls
 import org.jetbrains.plugins.terminal.action.SendShortcutToTerminalAction
 import org.jetbrains.plugins.terminal.block.output.TerminalEventsHandler
 import java.awt.AWTEvent
-import java.awt.event.*
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
+import java.awt.event.MouseWheelListener
 import javax.swing.KeyStroke
 
 /**
@@ -46,8 +48,10 @@ import javax.swing.KeyStroke
  */
 internal abstract class TerminalEventDispatcher(
   private val editor: EditorEx,
+  private val settings: JBTerminalSystemSettingsProviderBase,
   private val parentDisposable: Disposable,
 ) : IdeEventQueue.EventDispatcher {
+  private val sendShortcutAction = SendShortcutToTerminalAction(this)
   private var myRegistered = false
   private var actionsToSkip: List<AnAction> = emptyList()
 
@@ -75,12 +79,12 @@ internal abstract class TerminalEventDispatcher(
 
   internal abstract fun handleKeyEvent(e: KeyEvent)
 
-  fun register(actionsToSkip: List<AnAction>) {
+  fun register() {
     ThreadingAssertions.assertEventDispatchThread()
-    this.actionsToSkip = actionsToSkip
+    this.actionsToSkip = getActionsToSkip()
     if (!myRegistered) {
       IdeEventQueue.getInstance().addDispatcher(this, parentDisposable)
-      sendShortcutAction.register(editor.contentComponent, this)
+      sendShortcutAction.register(editor.contentComponent, getActionsToSkip())
       myRegistered = true
     }
   }
@@ -95,9 +99,6 @@ internal abstract class TerminalEventDispatcher(
     }
   }
 
-  private val sendShortcutAction: SendShortcutToTerminalAction
-    get() = ActionManager.getInstance().getAction("Terminal.SendShortcut") as SendShortcutToTerminalAction
-
   private fun skipAction(e: KeyEvent): Boolean {
     val eventShortcut = KeyboardShortcut(KeyStroke.getKeyStrokeForEvent(e), null)
     for (action in actionsToSkip) {
@@ -105,7 +106,9 @@ internal abstract class TerminalEventDispatcher(
         if (sc.isKeyboard && sc.startsWith(eventShortcut)) {
           if (!Registry.`is`("terminal.Ctrl-E.opens.RecentFiles.popup",
                              false) && IdeActions.ACTION_RECENT_FILES == ActionManager.getInstance().getId(action)) {
-            return e.modifiersEx == InputEvent.CTRL_DOWN_MASK && e.keyCode == KeyEvent.VK_E
+            if (e.modifiersEx == InputEvent.CTRL_DOWN_MASK && e.keyCode == KeyEvent.VK_E) {
+              return false
+            }
           }
           return true
         }
@@ -114,10 +117,19 @@ internal abstract class TerminalEventDispatcher(
     return false
   }
 
+  private fun getActionsToSkip(): List<AnAction> {
+    val actionManager = ActionManager.getInstance()
+    val allowedActionIDs = if (settings.overrideIdeShortcuts()) OPTIONAL_ACTIONS + TERMINAL_ACTIONS else TERMINAL_ACTIONS
+    return allowedActionIDs.mapNotNull { actionId -> actionManager.getAction(actionId) }
+  }
+
   companion object {
+    /**
+     * The list of actions that can be invoked by shortcuts only if enabled in the settings.
+     */
     @Language("devkit-action-id")
     @NonNls
-    private val ACTIONS_TO_SKIP = listOf(
+    private val OPTIONAL_ACTIONS = listOf(
       "ActivateTerminalToolWindow",
       "ActivateProjectToolWindow",
       "ActivateFavoritesToolWindow",
@@ -165,26 +177,53 @@ internal abstract class TerminalEventDispatcher(
       "ResizeToolWindowDown",
       "MaximizeToolWindow",
       "MaintenanceAction",
+      // terminal actions, but included here because they're not essential
       "TerminalIncreaseFontSize",
       "TerminalDecreaseFontSize",
       "TerminalResetFontSize",
-      "Terminal.CopySelectedText",
     )
 
-    fun getActionsToSkip(): List<AnAction> {
-      val actionManager = ActionManager.getInstance()
-      return ACTIONS_TO_SKIP.mapNotNull { actionId -> actionManager.getAction(actionId) }
-    }
+    /**
+     * The list of actions that can always be invoked by shortcuts in the terminal.
+     */
+    @Language("devkit-action-id")
+    @NonNls
+    private val TERMINAL_ACTIONS = listOf(
+      // not exactly terminal actions, but we want these to always work anyway
+      "NextTab",
+      "PreviousTab",
+      "ShowContent",
+      // true terminal actions
+      "Terminal.Escape",
+      "Terminal.CopySelectedText",
+      "Terminal.Paste",
+      "Terminal.LineUp",
+      "Terminal.LineDown",
+      "Terminal.PageUp",
+      "Terminal.PageDown",
+      "Terminal.RenameSession",
+      "Terminal.NewTab",
+      "Terminal.CloseTab",
+      "Terminal.SplitVertically",
+      "Terminal.SplitHorizontally",
+      "Terminal.NextSplitter",
+      "Terminal.PrevSplitter",
+      "Terminal.MoveToolWindowTabLeft",
+      "Terminal.MoveToolWindowTabRight",
+      "Terminal.ClearBuffer",
+      "Terminal.Find",
+    )
   }
 }
 
 internal fun setupKeyEventDispatcher(
   editor: EditorEx,
+  settings: JBTerminalSystemSettingsProviderBase,
   eventsHandler: TerminalEventsHandler,
   disposable: Disposable,
 ) {
   // Key events forwarding from the editor to the shell
-  val eventDispatcher: TerminalEventDispatcher = object : TerminalEventDispatcher(editor, disposable) {
+  val eventDispatcher: TerminalEventDispatcher = object : TerminalEventDispatcher(editor, settings, disposable) {
     override fun handleKeyEvent(e: KeyEvent) {
       if (e.id == KeyEvent.KEY_TYPED) {
         eventsHandler.keyTyped(e)
@@ -197,8 +236,7 @@ internal fun setupKeyEventDispatcher(
 
   editor.addFocusListener(object : FocusChangeListener {
     override fun focusGained(editor: Editor) {
-      val actionsToSkip = TerminalEventDispatcher.getActionsToSkip()
-      eventDispatcher.register(actionsToSkip)
+      eventDispatcher.register()
     }
 
     override fun focusLost(editor: Editor) {
@@ -207,8 +245,7 @@ internal fun setupKeyEventDispatcher(
   }, disposable)
 
   if (editor.contentComponent.hasFocus()) {
-    val actionsToSkip = TerminalEventDispatcher.getActionsToSkip()
-    eventDispatcher.register(actionsToSkip)
+    eventDispatcher.register()
   }
 }
 

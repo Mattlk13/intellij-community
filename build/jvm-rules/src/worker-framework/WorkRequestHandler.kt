@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("ReplaceGetOrSet")
 
 package org.jetbrains.bazel.jvm
@@ -12,6 +12,7 @@ import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.exporter.logging.otlp.internal.traces.OtlpStdoutSpanExporter
 import io.opentelemetry.sdk.OpenTelemetrySdk
+import io.opentelemetry.sdk.common.export.MemoryMode
 import io.opentelemetry.sdk.resources.Resource
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor
@@ -31,15 +32,14 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.coroutineContext
 import kotlin.system.exitProcess
 
-fun interface WorkRequestExecutor {
-  suspend fun execute(request: WorkRequest, writer: Writer, baseDir: Path, tracingContext: Context, tracer: Tracer): Int
+fun interface WorkRequestExecutor<T : WorkRequest> {
+  suspend fun execute(request: T, writer: Writer, baseDir: Path, tracingContext: Context, tracer: Tracer): Int
 }
 
 fun configureOpenTelemetry(out: OutputStream, serviceName: String): OpenTelemetrySdk {
-  // Set up a tracer provider with the desired configuration
   val spanExporter = OtlpStdoutSpanExporter.builder()
     .setOutput(out)
-    //.setMemoryMode(MemoryMode.REUSABLE_DATA)
+    .setMemoryMode(MemoryMode.REUSABLE_DATA)
     .build()
 
   val batchSpanProcessor = BatchSpanProcessor.builder(spanExporter)
@@ -51,10 +51,9 @@ fun configureOpenTelemetry(out: OutputStream, serviceName: String): OpenTelemetr
   val tracerProvider = SdkTracerProvider.builder()
     .setResource(resource)
     .setSampler(Sampler.alwaysOn())
-    .addSpanProcessor(batchSpanProcessor) // For batch exporting (preferred in production)
+    .addSpanProcessor(batchSpanProcessor)
     .build()
 
-  // Build and set the OpenTelemetry SDK
   val openTelemetrySdk = OpenTelemetrySdk.builder()
     .setTracerProvider(tracerProvider)
     .build()
@@ -63,10 +62,11 @@ fun configureOpenTelemetry(out: OutputStream, serviceName: String): OpenTelemetr
 
 private val noopTracer = OpenTelemetry.noop().getTracer("noop")
 
-fun processRequests(
+fun <T : WorkRequest> processRequests(
   startupArgs: Array<String>,
-  executor: WorkRequestExecutor,
+  executor: WorkRequestExecutor<T>,
   serviceName: String?,
+  reader: WorkRequestReader<T>,
   setup: (Tracer, CoroutineScope) -> Unit = { _, _  -> },
 ) {
   if (!startupArgs.contains("--persistent_worker")) {
@@ -84,8 +84,8 @@ fun processRequests(
     runBlocking(Dispatchers.Default) {
       tracer.spanBuilder("process requests").use { span ->
         setup(tracer, this@runBlocking)
-        WorkRequestHandler(requestExecutor = executor, input = System.`in`, out = System.out, tracer = tracer)
-          .processRequests(Context.current().with(span))
+        WorkRequestHandler(requestExecutor = executor, out = System.out, tracer = tracer)
+          .processRequests(reader, Context.current().with(span))
       }
 
       exitProcess(0)
@@ -97,8 +97,8 @@ fun processRequests(
   }
 }
 
-private class RequestState(@JvmField val request: WorkRequest) {
-  @JvmField val state = AtomicReference<WorkRequestState>(NOT_STARTED)
+private class RequestState<T : WorkRequest>(@JvmField val request: T) {
+  @JvmField val state = AtomicReference(NOT_STARTED)
 }
 
 @VisibleForTesting
@@ -110,13 +110,12 @@ internal enum class WorkRequestState {
  * A helper class that handles [WorkRequests](https://bazel.build/docs/persistent-workers), including
  * [multiplex workers](https://bazel.build/docs/multiplex-worker).
  */
-internal class WorkRequestHandler internal constructor(
+internal class WorkRequestHandler<T : WorkRequest> internal constructor(
   /**
    * The function to be called after each [WorkRequest] is read.
    */
-  private val requestExecutor: WorkRequestExecutor,
+  private val requestExecutor: WorkRequestExecutor<T>,
 
-  private val input: InputStream,
   private val out: OutputStream,
 
   /**
@@ -130,11 +129,11 @@ internal class WorkRequestHandler internal constructor(
   /**
    * Requests that are currently being processed.
    */
-  private val activeRequests = ConcurrentHashMap<Int, RequestState>()
+  private val activeRequests = ConcurrentHashMap<Int, RequestState<T>>()
 
   @OptIn(DelicateCoroutinesApi::class)
-  internal suspend fun processRequests(tracingContext: Context) {
-    val requestChannel = Channel<RequestState>(Channel.UNLIMITED)
+  internal suspend fun processRequests(reader: WorkRequestReader<T>, tracingContext: Context) {
+    val requestChannel = Channel<RequestState<T>>(Channel.UNLIMITED)
     try {
       coroutineScope {
         tracer.spanBuilder("process requests").setParent(tracingContext).use { span ->
@@ -142,7 +141,7 @@ internal class WorkRequestHandler internal constructor(
         }
 
         tracer.spanBuilder("read requests").setParent(tracingContext).use { span ->
-          readRequests(requestChannel, span)
+          readRequests(requestChannel, reader, span)
         }
       }
     }
@@ -154,24 +153,24 @@ internal class WorkRequestHandler internal constructor(
 
         //logger?.log("Unprocessed requests: ${activeRequests.keys.joinToString(", ")}")
 
-        for (item in requestChannel) {
-          cancelRequestOnShutdown(item)
+        tracer.spanBuilder("cancelRequests on shutdown").setParent(tracingContext).use { span ->
+          for (item in requestChannel) {
+            cancelRequestOnShutdown(item, span)
+          }
+          for (item in activeRequests.values) {
+            cancelRequestOnShutdown(item, span)
+          }
+          activeRequests.clear()
         }
-        for (item in activeRequests.values) {
-          cancelRequestOnShutdown(item)
-        }
-        activeRequests.clear()
       }
     }
   }
 
-  private suspend fun readRequests(requestChannel: Channel<RequestState>, span: Span) {
-    val inputListToReuse = ArrayList<Input>()
-    val argListToReuse = ArrayList<String>()
+  private suspend fun readRequests(requestChannel: Channel<RequestState<T>>, reader: WorkRequestReader<T>, span: Span) {
     while (coroutineContext.isActive) {
       val request = try {
         runInterruptible(Dispatchers.IO) {
-          readWorkRequestFromStream(input, inputListToReuse, argListToReuse)
+          reader.readWorkRequestFromStream()
         }
       }
       catch (e: InterruptedIOException) {
@@ -224,7 +223,7 @@ internal class WorkRequestHandler internal constructor(
     }
   }
 
-  private fun CoroutineScope.startTaskProcessing(requestChannel: Channel<RequestState>, tracingContext: Context) {
+  private fun CoroutineScope.startTaskProcessing(requestChannel: Channel<RequestState<T>>, tracingContext: Context) {
     repeat(Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) {
       launch {
         for (item in requestChannel) {
@@ -236,9 +235,9 @@ internal class WorkRequestHandler internal constructor(
                 tracer.spanBuilder("execute request")
                   .setAllAttributes(Attributes.of(
                     AttributeKey.stringArrayKey("arguments"), request.arguments.toList(),
-                    AttributeKey.stringArrayKey("inputs"), request.inputs.map { it.path },
+                    //AttributeKey.stringArrayKey("inputs"), request.inputs.map { it.path },
                     AttributeKey.longKey("id"), request.requestId.toLong(),
-                    AttributeKey.stringKey("sandboxDir"), request.sandboxDir?.toString() ?: "",
+                    AttributeKey.stringKey("sandboxDir"), request.sandboxDir ?: "",
                   ))
                   .setParent(tracingContext)
                   .startSpan()
@@ -314,11 +313,14 @@ internal class WorkRequestHandler internal constructor(
     }
   }
 
-  private suspend fun cancelRequestOnShutdown(item: RequestState) {
+  private suspend fun cancelRequestOnShutdown(item: RequestState<T>, span: Span) {
     val stateRef = item.state
     val requestId = item.request.requestId
     if (stateRef.compareAndSet(NOT_STARTED, FINISHED) || stateRef.compareAndSet(STARTED, FINISHED)) {
-      //logger?.log("request(id=$requestId}) failed because it was not handled due to worker being forced to exit")
+      span.addEvent(
+        "request failed because it was not handled due to worker being forced to exit",
+        Attributes.of(AttributeKey.longKey("request"), requestId.toLong()),
+      )
       writeAndRemoveRequest(requestId = requestId, exitCode = 2)
     }
     else {
@@ -330,7 +332,7 @@ internal class WorkRequestHandler internal constructor(
   }
 
   internal suspend fun handleRequest(
-    request: WorkRequest,
+    request: T,
     requestState: AtomicReference<WorkRequestState>,
     tracingContext: Context?,
     parentSpan: Span?,

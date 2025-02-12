@@ -205,7 +205,7 @@
 
     <group id="Git.Branches.List">
       <reference ref="Git.Ongoing.Rebase.Actions"/>
-      <action class="git4idea.actions.branch.GitNewBranchAction"/>
+      <reference ref="Git.CreateNewBranch"/>
       <action class="git4idea.actions.branch.GitCheckoutFromInputAction"/>
     </group>
 
@@ -700,6 +700,10 @@
 
     <applicationService serviceImplementation="git4idea.index.ui.GitStageUiApplicationSettings"/>
 
+    <applicationService serviceInterface="git4idea.commit.signing.GpgAgentPathsLocatorFactory"
+                        serviceImplementation="git4idea.commit.signing.GpgAgentPathsLocatorFactoryImpl"
+                        testServiceImplementation="git4idea.commit.signing.GpgAgentPathsLocatorTestFactory"/>
+
     <recentProjectsBranchesProvider implementation="git4idea.repo.GitRecentProjectsBranchesProvider"/>
 
     <vcs.taskHandler implementation="git4idea.GitTaskHandler"/>
@@ -736,6 +740,7 @@
     <!--END Git exclude lang-->
 
     <backgroundPostStartupActivity implementation="git4idea.ignore.GitIgnoreInStoreDirGeneratorActivity"/>
+    <vcsSharedChecker implementation="git4idea.ignore.GitIgnoreInStoreDirSharedChecker"/>
     <backgroundPostStartupActivity implementation="git4idea.config.GitSetupProjectConfig"/>
     <backgroundPostStartupActivity implementation="git4idea.repo.GitShallowRepositoryCheck"/>
 
@@ -860,6 +865,7 @@
 
   <extensions defaultExtensionNs="Git4Idea">
     <gitRawAnnotationProvider implementation="git4idea.annotate.GitAnnotationProvider$DefaultGitAnnotationProvider"/>
+    <gitCommitModeProvider implementation="git4idea.commit.GitStagingAreaCommitModeProvider" order="first"/>
   </extensions>
 
   <extensionPoints>
@@ -880,6 +886,9 @@
                     qualifiedName="Git4Idea.gitPushNotificationCustomizer"
                     dynamic="true"
                     area="IDEA_PROJECT"/>
+    <extensionPoint interface="git4idea.commit.GitCommitModeProvider"
+                    qualifiedName="Git4Idea.gitCommitModeProvider"
+                    dynamic="true"/>
   </extensionPoints>
 
   <projectListeners>

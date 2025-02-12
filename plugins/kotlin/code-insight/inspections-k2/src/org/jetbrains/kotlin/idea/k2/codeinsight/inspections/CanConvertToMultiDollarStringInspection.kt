@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
@@ -38,8 +38,7 @@ class CanConvertToMultiDollarStringInspection :
         }
     }
 
-    context(KaSession)
-    override fun prepareContext(element: KtStringTemplateExpression): MultiDollarConversionInfo? {
+    override fun KaSession.prepareContext(element: KtStringTemplateExpression): MultiDollarConversionInfo? {
         if (!element.entries.any { it.isEscapedDollar() }) return null
         return prepareMultiDollarConversionInfo(element, useFallbackPrefix = false)
     }
@@ -55,11 +54,11 @@ class CanConvertToMultiDollarStringInspection :
         return element.findTextRangesInParentForEscapedDollars()
     }
 
-    override fun createQuickFix(
+    override fun createQuickFixes(
         element: KtStringTemplateExpression,
         context: MultiDollarConversionInfo,
-    ): KotlinModCommandQuickFix<KtStringTemplateExpression> {
-        return object : KotlinModCommandQuickFix<KtStringTemplateExpression>() {
+    ): Array<KotlinModCommandQuickFix<KtStringTemplateExpression>> {
+        return arrayOf(object : KotlinModCommandQuickFix<KtStringTemplateExpression>() {
             override fun getFamilyName(): @IntentionFamilyName String {
                 return KotlinBundle.message("add.interpolation.prefix")
             }
@@ -72,6 +71,6 @@ class CanConvertToMultiDollarStringInspection :
                 val multiDollarVersion = convertToMultiDollarString(element, context)
                 simplifyDollarEntries(multiDollarVersion)
             }
-        }
+        })
     }
 }

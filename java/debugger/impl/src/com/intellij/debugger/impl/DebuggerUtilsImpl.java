@@ -271,12 +271,42 @@ public final class DebuggerUtilsImpl extends DebuggerUtilsEx {
     if (type == null) {
       return false;
     }
-    if (superType.equals(type) || CommonClassNames.JAVA_LANG_OBJECT.equals(superType.name())) {
+    if (superType.equals(type) || (!(type instanceof InterfaceType) && CommonClassNames.JAVA_LANG_OBJECT.equals(superType.name()))) {
       return true;
     }
-    if (type instanceof ArrayType) {
-      String superName = superType.name();
-      return CommonClassNames.JAVA_LANG_CLONEABLE.equals(superName) || CommonClassNames.JAVA_IO_SERIALIZABLE.equals(superName);
+    if (type instanceof ArrayType arrayType) {
+      if (superType instanceof ArrayType superArrayType) {
+        try {
+          Type componentType = arrayType.componentType();
+          Type superComponentType = superArrayType.componentType();
+          if (componentType instanceof PrimitiveType) {
+            return componentType.equals(superComponentType);
+          }
+          else {
+            if (superComponentType instanceof PrimitiveType) {
+              return false;
+            }
+            return instanceOf((ReferenceType)componentType, (ReferenceType)superComponentType);
+          }
+        }
+        catch (ClassNotLoadedException e) {
+          LOG.info(e);
+          return false;
+        }
+      }
+      else {
+        String superName = superType.name();
+        return CommonClassNames.JAVA_LANG_CLONEABLE.equals(superName) || CommonClassNames.JAVA_IO_SERIALIZABLE.equals(superName);
+      }
+    }
+    if (superType instanceof ClassType) { // may check superclass only
+      if (type instanceof InterfaceType) {
+        return false;
+      }
+      if (type instanceof ClassType classType) {
+        ClassType superclass = classType.superclass();
+        return superclass != null && instanceOf(superclass, superType);
+      }
     }
     return supertypes(type).anyMatch(t -> instanceOf(t, superType));
   }
@@ -343,6 +373,15 @@ public final class DebuggerUtilsImpl extends DebuggerUtilsEx {
         }
       }
     }
+  }
+
+  @Override
+  protected Value internalInvokeInstanceMethod(@NotNull EvaluationContext evaluationContext,
+                                               @NotNull ObjectReference objRef,
+                                               @NotNull Method method,
+                                               @NotNull List<? extends Value> args) throws EvaluateException {
+    return ((EvaluationContextImpl)evaluationContext).getDebugProcess()
+      .invokeInstanceMethod(evaluationContext, objRef, method, args, 0, true);
   }
 
   // compilable version of array class for compiling evaluator

@@ -3,10 +3,10 @@ package com.intellij.xdebugger.impl.rpc
 
 import com.intellij.platform.rpc.RemoteApiProviderService
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
-import com.jetbrains.rhizomedb.EID
 import fleet.rpc.RemoteApi
 import fleet.rpc.Rpc
 import fleet.rpc.remoteApiDescriptor
+import fleet.util.UID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -27,7 +27,7 @@ interface XDebugSessionApi : RemoteApi<Unit> {
 
 @ApiStatus.Internal
 @Serializable
-data class XDebugSessionId(val id: EID)
+data class XDebugSessionId(val id: UID)
 
 @ApiStatus.Internal
 @Serializable

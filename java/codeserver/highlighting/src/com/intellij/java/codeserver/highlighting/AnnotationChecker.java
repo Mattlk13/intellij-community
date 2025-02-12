@@ -95,8 +95,7 @@ final class AnnotationChecker {
     PsiElement parent = expression.getParent();
     if (PsiUtil.isAnnotationMethod(parent) || parent instanceof PsiNameValuePair || parent instanceof PsiArrayInitializerMemberValue) {
       if (!PsiUtil.isConstantExpression(expression)) {
-        if (IncompleteModelUtil.isIncompleteModel(expression) &&
-            IncompleteModelUtil.mayHaveUnknownTypeDueToPendingReference(expression)) {
+        if (myVisitor.isIncompleteModel() && IncompleteModelUtil.mayHaveUnknownTypeDueToPendingReference(expression)) {
           return;
         }
         myVisitor.report(JavaErrorKinds.ANNOTATION_ATTRIBUTE_NON_CONSTANT.create(expression));
@@ -131,6 +130,14 @@ final class AnnotationChecker {
           }
         }
       }
+    }
+  }
+
+  void checkAnnotationMethodParameters(@NotNull PsiParameterList list) {
+    PsiElement parent = list.getParent();
+    if (PsiUtil.isAnnotationMethod(parent) &&
+        (!list.isEmpty() || PsiTreeUtil.getChildOfType(list, PsiReceiverParameter.class) != null)) {
+      myVisitor.report(JavaErrorKinds.ANNOTATION_MEMBER_MAY_NOT_HAVE_PARAMETERS.create(list));
     }
   }
 
@@ -363,13 +370,14 @@ final class AnnotationChecker {
       if (owner instanceof PsiModifierList list) {
         PsiElement parent = list.getParent();
         if (parent instanceof PsiClass psiClass) {
+          PsiClassType type = myVisitor.factory().createType(psiClass);
           switch (LambdaUtil.checkInterfaceFunctional(psiClass)) {
-            case NOT_INTERFACE -> myVisitor.report(JavaErrorKinds.LAMBDA_NOT_FUNCTIONAL_INTERFACE.create(annotation, psiClass));
-            case NO_ABSTRACT_METHOD -> myVisitor.report(JavaErrorKinds.LAMBDA_NO_TARGET_METHOD.create(annotation, psiClass));
-            case MULTIPLE_ABSTRACT_METHODS -> myVisitor.report(JavaErrorKinds.LAMBDA_MULTIPLE_TARGET_METHODS.create(annotation, psiClass));
+            case NOT_INTERFACE -> myVisitor.report(JavaErrorKinds.LAMBDA_NOT_FUNCTIONAL_INTERFACE.create(annotation, type));
+            case NO_ABSTRACT_METHOD -> myVisitor.report(JavaErrorKinds.LAMBDA_NO_TARGET_METHOD.create(annotation, type));
+            case MULTIPLE_ABSTRACT_METHODS -> myVisitor.report(JavaErrorKinds.LAMBDA_MULTIPLE_TARGET_METHODS.create(annotation, type));
           }
           if (psiClass.hasModifierProperty(PsiModifier.SEALED)) {
-            myVisitor.report(JavaErrorKinds.LAMBDA_FUNCTIONAL_INTERFACE_SEALED.create(annotation, psiClass));
+            myVisitor.report(JavaErrorKinds.FUNCTIONAL_INTERFACE_SEALED.create(annotation, psiClass));
           }
         }
       }
@@ -555,7 +563,7 @@ final class AnnotationChecker {
         }
       }
       else if (superMethod == null) {
-        if (IncompleteModelUtil.isIncompleteModel(psiClass)) {
+        if (myVisitor.isIncompleteModel()) {
           if (!IncompleteModelUtil.isHierarchyResolved(psiClass)) {
             return;
           }

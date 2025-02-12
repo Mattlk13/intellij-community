@@ -5,14 +5,13 @@ import com.intellij.application.options.CodeStyle;
 import com.intellij.codeInsight.*;
 import com.intellij.codeInsight.completion.scope.CompletionElement;
 import com.intellij.codeInsight.completion.scope.JavaCompletionProcessor;
-import com.intellij.codeInsight.daemon.impl.analysis.GenericsHighlightUtil;
 import com.intellij.codeInsight.daemon.impl.analysis.JavaModuleGraphUtil;
-import com.intellij.codeInsight.daemon.impl.analysis.LambdaHighlightingUtil;
 import com.intellij.codeInsight.daemon.impl.quickfix.BringVariableIntoScopeFix;
 import com.intellij.codeInsight.lookup.*;
 import com.intellij.featureStatistics.FeatureUsageTracker;
 import com.intellij.icons.AllIcons;
 import com.intellij.java.JavaBundle;
+import com.intellij.java.codeserver.core.JavaPsiModuleUtil;
 import com.intellij.lang.LangBundle;
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.lang.jvm.types.JvmPrimitiveTypeKind;
@@ -63,10 +62,7 @@ import com.intellij.psi.impl.source.tree.JavaElementType;
 import com.intellij.psi.scope.ElementClassFilter;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.ProjectScope;
-import com.intellij.psi.util.PsiTreeUtil;
-import com.intellij.psi.util.PsiUtil;
-import com.intellij.psi.util.PsiUtilCore;
-import com.intellij.psi.util.TypeConversionUtil;
+import com.intellij.psi.util.*;
 import com.intellij.ui.JBColor;
 import com.intellij.util.*;
 import com.intellij.util.containers.ContainerUtil;
@@ -264,7 +260,7 @@ public final class JavaCompletionContributor extends CompletionContributor imple
     }
 
     if (position.getParent() instanceof PsiReferenceExpression) {
-      PsiClass enumClass = GenericsHighlightUtil.getEnumClassForExpressionInInitializer((PsiReferenceExpression)position.getParent());
+      PsiClass enumClass = JavaPsiEnumUtil.getEnumClassForExpressionInInitializer((PsiReferenceExpression)position.getParent());
       if (enumClass != null) {
         return new EnumStaticFieldsFilter(enumClass);
       }
@@ -988,7 +984,7 @@ public final class JavaCompletionContributor extends CompletionContributor imple
     List<LookupElement> lookupElements = new SmartList<>();
     PsiJavaFile psiJavaFile = ObjectUtils.tryCast(referenceElement.getContainingFile(), PsiJavaFile.class);
     if (psiJavaFile == null) return lookupElements;
-    PsiJavaModule javaModule = JavaModuleGraphUtil.findDescriptorByElement(psiJavaFile.getOriginalElement());
+    PsiJavaModule javaModule = JavaPsiModuleUtil.findDescriptorByElement(psiJavaFile.getOriginalElement());
     if (javaModule == null) {
       String packageName = psiJavaFile.getPackageName();
       PsiPackage psiPackage = JavaPsiFacade.getInstance(psiJavaFile.getProject()).findPackage(packageName);
@@ -1006,7 +1002,7 @@ public final class JavaCompletionContributor extends CompletionContributor imple
 
   static boolean shouldInsertSemicolon(PsiElement position) {
     return position.getParent() instanceof PsiMethodReferenceExpression &&
-           LambdaHighlightingUtil.insertSemicolon(position.getParent().getParent());
+           JavaCompletionUtil.insertSemicolon(position.getParent().getParent());
   }
 
   private static @Unmodifiable List<LookupElement> processLabelReference(PsiLabelReference reference) {
@@ -1419,7 +1415,7 @@ public final class JavaCompletionContributor extends CompletionContributor imple
           return psiJavaModule.getName();
         };
         String currentJavaModuleName = getModuleName.apply(PsiTreeUtil.getParentOfType(statement, PsiJavaModule.class));
-        if (currentJavaModuleName == null) currentJavaModuleName = getModuleName.apply(JavaModuleGraphHelper.getInstance().findDescriptorByElement(originalFile));
+        if (currentJavaModuleName == null) currentJavaModuleName = getModuleName.apply(JavaPsiModuleUtil.findDescriptorByElement(originalFile));
         if (currentJavaModuleName == null) currentJavaModuleName = findModuleName(originalFile, position);
 
         if (currentJavaModuleName != null) {
@@ -1613,7 +1609,7 @@ public final class JavaCompletionContributor extends CompletionContributor imple
 
     @Override
     public boolean isAcceptable(Object element, @Nullable PsiElement context) {
-      return !(element instanceof PsiField) || !GenericsHighlightUtil.isRestrictedStaticEnumField((PsiField)element, myEnumClass);
+      return !(element instanceof PsiField) || !JavaPsiEnumUtil.isRestrictedStaticEnumField((PsiField)element, myEnumClass);
     }
 
     @Override

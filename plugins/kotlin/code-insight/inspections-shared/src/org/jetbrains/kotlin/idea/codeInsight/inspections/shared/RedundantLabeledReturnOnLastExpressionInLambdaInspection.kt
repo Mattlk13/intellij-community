@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.codeInsight.inspections.shared
 
 import com.intellij.codeInspection.ProblemsHolder
@@ -53,17 +53,16 @@ internal class RedundantLabeledReturnOnLastExpressionInLambdaInspection :
         return listOfNotNull(labelRange)
     }
 
-    context(KaSession)
-    override fun prepareContext(element: KtReturnExpression) {
+    override fun KaSession.prepareContext(element: KtReturnExpression) {
     }
 
-    override fun createQuickFix(
+    override fun createQuickFixes(
         element: KtReturnExpression,
         context: Unit,
-    ): KotlinModCommandQuickFix<KtReturnExpression> {
+    ): Array<KotlinModCommandQuickFix<KtReturnExpression>> {
         val smartPointer = element.createSmartPointer()
 
-        return object : KotlinModCommandQuickFix<KtReturnExpression>() {
+        return arrayOf(object : KotlinModCommandQuickFix<KtReturnExpression>() {
 
             override fun getFamilyName(): String =
                 KotlinBundle.message("remove.labeled.return.from.last.expression.in.a.lambda")
@@ -84,6 +83,6 @@ internal class RedundantLabeledReturnOnLastExpressionInLambdaInspection :
                     element.replace(returnedExpression)
                 }
             }
-        }
+        })
     }
 }

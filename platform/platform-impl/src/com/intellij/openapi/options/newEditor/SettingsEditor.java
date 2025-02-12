@@ -13,10 +13,7 @@ import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurableGroup;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.options.SearchableConfigurable;
-import com.intellij.openapi.options.ex.ConfigurableVisitor;
-import com.intellij.openapi.options.ex.ConfigurableWrapper;
-import com.intellij.openapi.options.ex.MutableConfigurableGroup;
-import com.intellij.openapi.options.ex.Settings;
+import com.intellij.openapi.options.ex.*;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.LoadingDecorator;
 import com.intellij.openapi.ui.Splitter;
@@ -24,11 +21,13 @@ import com.intellij.openapi.util.ActionCallback;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.impl.IdeFrameDecorator;
 import com.intellij.ui.IdeUICustomization;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.SearchTextField;
+import com.intellij.ui.UIBundle;
 import com.intellij.ui.components.panels.VerticalLayout;
 import com.intellij.ui.navigation.History;
 import com.intellij.ui.navigation.Place;
@@ -46,6 +45,7 @@ import org.jetbrains.concurrency.Promises;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
@@ -72,6 +72,14 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
 
   private final Map<Configurable, ConfigurableController> controllers = new HashMap<>();
   private ConfigurableController lastController;
+
+  private final AbstractAction myResetAllAction = new AbstractAction(UIBundle.message("settings.reset.all.action.name")) {
+    @Override
+    public void actionPerformed(ActionEvent event) {
+      reset();
+    }
+  };
+
 
   SettingsEditor(@NotNull Disposable parent,
                  @NotNull Project project,
@@ -126,7 +134,9 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
     };
 
     JPanel searchPanel = new JPanel(new VerticalLayout(0));
-    searchPanel.add(VerticalLayout.CENTER, search);
+    if (!SettingsDialog.useNonModalSettingsWindow()) {
+      searchPanel.add(VerticalLayout.CENTER, search);
+    }
     this.filter = new SettingsFilter(project, groups, search, coroutineScope) {
       @Override
       protected Configurable getConfigurable(SimpleNode node) {
@@ -252,6 +262,9 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
     JComponent left = new JPanel(new BorderLayout());
     left.add(BorderLayout.NORTH, searchPanel);
     left.add(BorderLayout.CENTER, treeView);
+    left.setMinimumSize(new Dimension(96, 0));
+    left.setPreferredSize(new Dimension(256, 1024));
+    left.setMaximumSize(new Dimension(300, 32767));
     JComponent right = new JPanel(new BorderLayout());
     right.add(BorderLayout.NORTH, withHistoryToolbar(myBanner));
     right.add(BorderLayout.CENTER, loadingDecorator.getComponent());
@@ -306,9 +319,21 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
     updateController(configurable);
   }
 
+  boolean isSidebarVisible() {
+    return mySplitter.getFirstComponent().isVisible();
+  }
+
+  void setSidebarVisible(boolean visible) {
+    mySplitter.getFirstComponent().setVisible(visible);
+  }
+
   @ApiStatus.Internal
   public @NotNull SettingsTreeView getTreeView() {
     return treeView;
+  }
+
+  SettingsSearch getSearch() {
+    return search;
   }
 
   private @NotNull MutableConfigurableGroup.Listener createReloadListener(List<? extends ConfigurableGroup> groups) {
@@ -365,6 +390,9 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
   }
 
   private JComponent withHistoryToolbar(JComponent component) {
+    if (SettingsDialog.useNonModalSettingsWindow())
+      return component;
+
     ActionGroup group = ActionUtil.getActionGroup("Back", "Forward");
     if (group == null) return component;
     JComponent toolbar = ActionUtil.createToolbarComponent(this, ActionPlaces.SETTINGS_HISTORY, group, true);
@@ -414,7 +442,15 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
 
   @Override
   protected Action getResetAction() {
-    return null;
+    return myResetAllAction;
+  }
+
+  private void reset() {
+    checkModified(filter.context.getCurrentConfigurable());
+    for (Configurable configurable : filter.context.getModified()) {
+      filter.context.fireReset(configurable);
+      configurable.reset();
+    }
   }
 
   @Override
@@ -465,7 +501,9 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
     filter.updateSpotlight(configurable == null);
     if (editor != null) {
       ConfigurationException exception = filter.context.getErrors().get(configurable);
-      editor.getApplyAction().setEnabled(!filter.context.getModified().isEmpty());
+      boolean isModified = isModified();
+      editor.getApplyAction().setEnabled(isModified);
+      myResetAllAction.setEnabled(isModified);
       editor.getResetAction().setEnabled(filter.context.isModified(configurable) || exception != null);
       editor.setError(exception);
       editor.revalidate();
@@ -477,6 +515,10 @@ public final class SettingsEditor extends AbstractEditor implements UiDataProvid
         }
       });
     }
+  }
+
+  public boolean isModified() {
+    return !filter.context.getModified().isEmpty();
   }
 
   private void updateController(@Nullable Configurable configurable) {

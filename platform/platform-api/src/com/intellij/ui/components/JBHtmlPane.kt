@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.colors.EditorColorsScheme
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.util.containers.addAllIfNotNull
 import com.intellij.util.ui.*
 import com.intellij.util.ui.ExtendableHTMLViewFactory.Extensions.icons
@@ -172,6 +173,8 @@ open class JBHtmlPane(
   }
 
   override fun setText(t: @Nls String?) {
+    if (t != null && t.length > 50000)
+      thisLogger().warn("HTML pane text is very long (${t.length}): ${StringUtil.shortenTextWithEllipsis(t, 1000, 250, "<TRUNCATED>")}")
     myText = t?.let { service.transpileHtmlPaneInput(it) } ?: ""
     try {
       super.setText(myText)
@@ -188,19 +191,23 @@ open class JBHtmlPane(
   val backgroundFlow: StateFlow<Color>
     get() = mutableBackgroundFlow
 
+  fun reloadCssStylesheets() {
+    updateDocumentationPaneDefaultCssRules(editorKit as HTMLEditorKit)
+  }
+
   private fun updateDocumentationPaneDefaultCssRules(editorKit: HTMLEditorKit) {
     val editorStyleSheet = editorKit.styleSheet
     myCurrentDefaultStyleSheet
       ?.let { editorStyleSheet.removeStyleSheet(it) }
     val newStyleSheet = StyleSheet()
       .also { myCurrentDefaultStyleSheet = it }
-    val background = background
     newStyleSheet.addStyleSheet(service.getDefaultStyleSheet(background, myStyleConfiguration))
     newStyleSheet.addStyleSheet(service.getEditorColorsSchemeStyleSheet(myStyleConfiguration.colorScheme))
     myPaneConfiguration.customStyleSheetProviders.forEach {
-      newStyleSheet.addStyleSheet(it(background))
+      newStyleSheet.addStyleSheet(it(this))
     }
     editorStyleSheet.addStyleSheet(newStyleSheet)
+    service.applyCssToView(this)
   }
 
   override fun processKeyEvent(e: KeyEvent) {
@@ -241,6 +248,7 @@ open class JBHtmlPane(
 
     fun createDefaultImageResolver(pane: JBHtmlPane): Dictionary<URL, Image>
 
+    fun applyCssToView(pane: JBHtmlPane)
   }
 
 }

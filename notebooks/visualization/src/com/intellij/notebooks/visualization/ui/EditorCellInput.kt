@@ -5,6 +5,7 @@ import com.intellij.notebooks.ui.visualization.NotebookUtil.notebookAppearance
 import com.intellij.notebooks.visualization.NotebookCellInlayController
 import com.intellij.notebooks.visualization.NotebookCellLines
 import com.intellij.notebooks.visualization.ui.cellsDnD.EditorCellDraggableBar
+import com.intellij.notebooks.visualization.ui.jupyterToolbars.EditorCellActionsToolbarManager
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.openapi.util.Disposer
@@ -31,7 +32,7 @@ class EditorCellInput(
       Disposer.register(this, it)
     }
 
-  val draggableBar: EditorCellDraggableBar = EditorCellDraggableBar(editor, this)
+  val draggableBar: EditorCellDraggableBar = EditorCellDraggableBar(editor, this, ::fold, ::unfold)
 
   val cellActionsToolbar: EditorCellActionsToolbarManager? =
     if (Registry.`is`("jupyter.per.cell.management.actions.toolbar") && editor.isOrdinaryNotebookEditor()) EditorCellActionsToolbarManager(editor, cell)
@@ -56,7 +57,7 @@ class EditorCellInput(
       editor.notebookAppearance.aboveFirstCellDelimiterHeight
     }
     else {
-      editor.notebookAppearance.cellBorderHeight / 2
+      editor.notebookAppearance.cellBorderHeight
     }
 
     val bounds = calculateBounds()
@@ -66,6 +67,16 @@ class EditorCellInput(
   private fun toggleFolding() = editor.updateManager.update { ctx ->
     folded = !folded
     (component as? InputComponent)?.updateFolding(ctx, folded)
+  }
+
+  private fun fold() = editor.updateManager.update { ctx ->
+    folded = true
+    (component as? InputComponent)?.updateFolding(ctx, true)
+  }
+
+  private fun unfold() = editor.updateManager.update { ctx ->
+    folded = false
+    (component as? InputComponent)?.updateFolding(ctx, false)
   }
 
   override fun dispose() {

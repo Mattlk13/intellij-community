@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.application.impl;
 
 import com.intellij.CommonBundle;
@@ -71,11 +71,13 @@ import java.util.function.Supplier;
 import static com.intellij.ide.ShutdownKt.cancelAndJoinBlocking;
 import static com.intellij.openapi.application.ModalityKt.asContextElement;
 import static com.intellij.openapi.application.RuntimeFlagsKt.getReportInvokeLaterWithoutModality;
+import static com.intellij.platform.util.coroutines.CoroutineScopeKt.childScope;
 import static com.intellij.util.concurrency.AppExecutorUtil.propagateContext;
 import static com.intellij.util.concurrency.Propagation.isContextAwareComputation;
 
 @ApiStatus.Internal
-public final class ApplicationImpl extends ClientAwareComponentManager implements ApplicationEx, ReadActionListener, WriteActionListener {
+public final class ApplicationImpl extends ClientAwareComponentManager
+  implements ApplicationEx, ReadActionListener, WriteActionListener, WriteIntentReadActionListener {
   private static @NotNull Logger getLogger() {
     return Logger.getInstance(ApplicationImpl.class);
   }
@@ -85,6 +87,11 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
   private final ModalityInvokator myInvokator = new ModalityInvokatorImpl();
 
   private final EventDispatcher<ApplicationListener> myDispatcher = EventDispatcher.create(ApplicationListener.class);
+
+  private final EventDispatcher<ReadActionListener> myReadActionListenerDispatcher = EventDispatcher.create(ReadActionListener.class);
+
+  private final EventDispatcher<WriteIntentReadActionListener> myWriteIntentReadActionListenerDispatcher =
+    EventDispatcher.create(WriteIntentReadActionListener.class);
 
   private final boolean myTestModeFlag;
   private final boolean myHeadlessMode;
@@ -120,8 +127,8 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
   });
 
   @TestOnly
-  public ApplicationImpl(boolean isHeadless) {
-    super(GlobalScope.INSTANCE);
+  public ApplicationImpl(@NotNull CoroutineContext testCoroutineContext, boolean isHeadless) {
+    super(childScope(GlobalScope.INSTANCE, "Test Application Scope", testCoroutineContext, true));
 
     Extensions.setRootArea(getExtensionArea());
 
@@ -1184,6 +1191,7 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
 
     getThreadingSupport().setReadActionListener(app);
     getThreadingSupport().setWriteActionListener(app);
+    getThreadingSupport().setWriteIntentReadActionListener(app);
 
     app.addApplicationListener(new ApplicationListener() {
       @Override
@@ -1205,6 +1213,7 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
   @Override
   public void readActionFinished(@NotNull Class<?> action) {
     myReadActionCacheImpl.clear();
+    myReadActionListenerDispatcher.getMulticaster().readActionFinished(action);
     otelMonitor.get().readActionExecuted();
   }
 
@@ -1220,6 +1229,56 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
   }
 
   @Override
+  public void addReadActionListener(@NotNull ReadActionListener listener, @NotNull Disposable parentDisposable) {
+    myReadActionListenerDispatcher.addListener(listener, parentDisposable);
+  }
+
+  @Override
+  public void readActionStarted(@NotNull Class<?> action) {
+    myReadActionListenerDispatcher.getMulticaster().readActionStarted(action);
+  }
+
+  @Override
+  public void beforeReadActionStart(@NotNull Class<?> action) {
+    myReadActionListenerDispatcher.getMulticaster().beforeReadActionStart(action);
+  }
+
+  @Override
+  public void afterReadActionFinished(@NotNull Class<?> action) {
+    myReadActionListenerDispatcher.getMulticaster().afterReadActionFinished(action);
+  }
+
+  @Override
+  public void addWriteIntentReadActionListener(@NotNull WriteIntentReadActionListener listener, @NotNull Disposable parentDisposable) {
+    myWriteIntentReadActionListenerDispatcher.addListener(listener, parentDisposable);
+  }
+
+  @Override
+  public boolean isTopmostReadAccessAllowed() {
+    return getThreadingSupport().isInTopmostReadAction();
+  }
+
+  @Override
+  public void writeIntentReadActionStarted(@NotNull Class<?> action) {
+    myWriteIntentReadActionListenerDispatcher.getMulticaster().writeIntentReadActionStarted(action);
+  }
+
+  @Override
+  public void writeIntentReadActionFinished(@NotNull Class<?> action) {
+    myWriteIntentReadActionListenerDispatcher.getMulticaster().writeIntentReadActionFinished(action);
+  }
+
+  @Override
+  public void beforeWriteIntentReadActionStart(@NotNull Class<?> action) {
+    myWriteIntentReadActionListenerDispatcher.getMulticaster().beforeWriteIntentReadActionStart(action);
+  }
+
+  @Override
+  public void afterWriteIntentReadActionFinished(@NotNull Class<?> action) {
+    myWriteIntentReadActionListenerDispatcher.getMulticaster().afterWriteIntentReadActionFinished(action);
+  }
+
+  @Override
   public void writeActionFinished(@NotNull Class<?> action) {
     fireWriteActionFinished(action);
   }
@@ -1231,8 +1290,8 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
   }
 
   @Override
-  public CoroutineContext getLockStateAsCoroutineContext(boolean shared) {
-    return getThreadingSupport().getPermitAsContextElement(shared);
+  public CoroutineContext getLockStateAsCoroutineContext(CoroutineContext baseContext, boolean shared) {
+    return getThreadingSupport().getPermitAsContextElement(baseContext, shared);
   }
 
   @Override

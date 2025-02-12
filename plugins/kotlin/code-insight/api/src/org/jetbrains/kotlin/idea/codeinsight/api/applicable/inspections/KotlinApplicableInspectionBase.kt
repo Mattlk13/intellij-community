@@ -1,8 +1,9 @@
-// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.codeinsight.api.applicable.inspections
 
 import com.intellij.codeInspection.*
 import com.intellij.codeInspection.util.InspectionMessage
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElementVisitor
 import org.jetbrains.kotlin.analysis.api.permissions.forbidAnalysis
@@ -11,6 +12,7 @@ import org.jetbrains.kotlin.idea.codeinsight.api.applicable.ContextProvider
 import org.jetbrains.kotlin.idea.codeinsight.api.applicable.getElementContext
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtVisitor
+import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
 
 abstract class KotlinApplicableInspectionBase<E : KtElement, C : Any> : LocalInspectionTool(),
                                                                   ApplicableRangesProvider<E>,
@@ -38,7 +40,14 @@ abstract class KotlinApplicableInspectionBase<E : KtElement, C : Any> : LocalIns
         }
         if (ranges.isEmpty()) return
 
-        val context = getElementContext(element) ?: return
+        val context = try {
+          getElementContext(element)
+        } catch (e: Exception) {
+            if (e is ControlFlowException) throw e
+            throw KotlinExceptionWithAttachments("Unable to get element context", e)
+                .withPsiAttachment("element.kt", element)
+                .withPsiAttachment("file.kt", element.containingFile)
+        } ?: return
         ranges.asSequence()
             .map { rangeInElement ->
                 holder.manager.createProblemDescriptor(
@@ -76,10 +85,10 @@ abstract class KotlinApplicableInspectionBase<E : KtElement, C : Any> : LocalIns
             context: C,
         ): ProblemHighlightType = ProblemHighlightType.GENERIC_ERROR_OR_WARNING
 
-        protected abstract fun createQuickFix(
+        protected abstract fun createQuickFixes(
             element: E,
             context: C,
-        ): KotlinModCommandQuickFix<E>
+        ): Array<KotlinModCommandQuickFix<E>>
 
         final override fun InspectionManager.createProblemDescriptor(
             element: E,
@@ -92,7 +101,39 @@ abstract class KotlinApplicableInspectionBase<E : KtElement, C : Any> : LocalIns
             /* descriptionTemplate = */ getProblemDescription(element, context),
             /* highlightType = */ getProblemHighlightType(element, context),
             /* onTheFly = */ onTheFly,
-            /* ...fixes = */ createQuickFix(element, context),
+            /* ...fixes = */ *createQuickFixes(element, context),
+        )
+    }
+
+    abstract class Multiple<E : KtElement, C : Any> : KotlinApplicableInspectionBase<E, C>() {
+
+        protected abstract fun getProblemDescription(
+            element: E,
+            context: C,
+        ): @InspectionMessage String
+
+        protected open fun getProblemHighlightType(
+            element: E,
+            context: C,
+        ): ProblemHighlightType = ProblemHighlightType.GENERIC_ERROR_OR_WARNING
+
+        protected abstract fun createQuickFixes(
+            element: E,
+            context: C,
+        ): Collection<KotlinModCommandQuickFix<E>>
+
+        final override fun InspectionManager.createProblemDescriptor(
+            element: E,
+            context: C,
+            rangeInElement: TextRange?,
+            onTheFly: Boolean
+        ): ProblemDescriptor = createProblemDescriptor(
+            /* psiElement = */ element,
+            /* rangeInElement = */ rangeInElement,
+            /* descriptionTemplate = */ getProblemDescription(element, context),
+            /* highlightType = */ getProblemHighlightType(element, context),
+            /* onTheFly = */ onTheFly,
+            /* ...fixes = */ *createQuickFixes(element, context).toTypedArray(),
         )
     }
 }

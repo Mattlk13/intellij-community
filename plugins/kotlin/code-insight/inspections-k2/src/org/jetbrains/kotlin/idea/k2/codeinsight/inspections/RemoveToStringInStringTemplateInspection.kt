@@ -1,4 +1,4 @@
-// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
 import com.intellij.codeInspection.CleanupLocalInspectionTool
@@ -52,18 +52,17 @@ internal class RemoveToStringInStringTemplateInspection : KotlinApplicableInspec
         return referenceExpression.getReferencedNameAsName() == OperatorNameConventions.TO_STRING && callExpression.valueArguments.isEmpty()
     }
 
-    context(KaSession)
-    override fun prepareContext(element: KtDotQualifiedExpression): Unit? {
+    override fun KaSession.prepareContext(element: KtDotQualifiedExpression): Unit? {
         val call = element.resolveToCall()?.successfulFunctionCallOrNull() ?: return null
         val allOverriddenSymbols = call.symbol.allOverriddenSymbolsWithSelf
         return allOverriddenSymbols.any { it.callableId == TO_STRING_CALLABLE_ID }
             .asUnit
     }
 
-    override fun createQuickFix(
+    override fun createQuickFixes(
         element: KtDotQualifiedExpression,
         context: Unit,
-    ) = object : KotlinModCommandQuickFix<KtDotQualifiedExpression>() {
+    ): Array<KotlinModCommandQuickFix<KtDotQualifiedExpression>> = arrayOf(object : KotlinModCommandQuickFix<KtDotQualifiedExpression>() {
 
         override fun getFamilyName(): String =
             KotlinBundle.message("remove.to.string.fix.text")
@@ -85,5 +84,5 @@ internal class RemoveToStringInStringTemplateInspection : KotlinApplicableInspec
                 element.replace(receiverExpression)
             }
         }
-    }
+    })
 }

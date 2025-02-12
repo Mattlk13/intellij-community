@@ -4,6 +4,7 @@ package git4idea.branch
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.dvcs.DvcsUtil
+import com.intellij.dvcs.isSyncOptionEnabled
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.editor.event.DocumentEvent
@@ -31,6 +32,7 @@ import com.intellij.util.textCompletion.TextFieldWithCompletion
 import git4idea.GitBranchesUsageCollector.branchDialogRepositoryManuallySelected
 import git4idea.branch.GitBranchOperationType.CHECKOUT
 import git4idea.branch.GitBranchOperationType.CREATE
+import git4idea.config.GitVcsSettings
 import git4idea.i18n.GitBundle
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
@@ -92,10 +94,6 @@ internal class GitNewBranchDialog @JvmOverloads constructor(private val project:
     title = dialogTitle
     setOKButtonText(operation.text)
     init()
-
-    if (branchName.isNotEmpty()) {
-      initValidation()
-    }
   }
 
   fun showAndGetOptions(): GitNewBranchOptions? {
@@ -123,7 +121,6 @@ internal class GitNewBranchDialog @JvmOverloads constructor(private val project:
         .validationRequestor(WHEN_STATE_CHANGED(repositoriesComboBox))
         .validationRequestor(WHEN_DOCUMENT_CHANGED)
         .validationOnApply(validateBranchName(true, overwriteCheckbox, repositoriesComboBox))
-        .validationOnInput(validateBranchName(false, overwriteCheckbox, repositoriesComboBox))
     }
     row(GitBundle.message("new.branch.dialog.branch.root.name")) {
       cell(repositoriesComboBox)
@@ -137,7 +134,7 @@ internal class GitNewBranchDialog @JvmOverloads constructor(private val project:
                   })
         .whenItemChangedFromUi { repository ->
           warningVisibilityProperty.set(
-            !GitRepositoryManager.getInstance(project).isSyncEnabled
+            GitVcsSettings.getInstance(project).isSyncOptionEnabled()
             && repository != ALL_REPOSITORIES
             && initialRepositories == allRepositories
           )

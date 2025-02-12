@@ -8,6 +8,7 @@ import com.intellij.openapi.roots.libraries.Library
 import com.intellij.openapi.roots.libraries.LibraryTable
 import com.intellij.openapi.roots.libraries.LibraryTablePresentation
 import com.intellij.openapi.util.Disposer
+import com.intellij.platform.workspace.jps.GlobalStorageEntitySource
 import com.intellij.platform.workspace.jps.entities.LibraryEntity
 import com.intellij.platform.workspace.jps.entities.LibraryId
 import com.intellij.platform.workspace.jps.entities.LibraryTableId
@@ -185,4 +186,4 @@ internal class CustomLibraryTableBridgeImpl(private val level: String, private v
 }
 
 @ApiStatus.Internal
-data class LegacyCustomLibraryEntitySource(private val levelId: String): EntitySource
+data class LegacyCustomLibraryEntitySource(private val levelId: String): GlobalStorageEntitySource

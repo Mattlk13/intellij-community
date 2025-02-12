@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.concurrency.JobLauncher;
@@ -9,7 +9,6 @@ import com.intellij.openapi.options.advanced.AdvancedSettings;
 import com.intellij.openapi.progress.EmptyProgressIndicator;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressIndicatorProvider;
-import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.psi.*;
@@ -54,11 +53,9 @@ final class JavaTelescope {
     AtomicInteger totalUsageCount = new AtomicInteger();
 
     if (Registry.is("java.telescope.usages.single.threaded", true)) {
-      ProgressManager.getInstance().runProcess(() -> {
-        for (PsiMember member : members) {
-          if (!countUsagesForMember(file, scope, member, project, totalUsageCount)) break;
-        }
-      }, progress);
+      for (PsiMember member : members) {
+        if (!countUsagesForMember(file, scope, member, project, totalUsageCount)) break;
+      }
     } else {
       JobLauncher.getInstance().invokeConcurrentlyUnderProgress(members, progress, member -> {
         return countUsagesForMember(file, scope, member, project, totalUsageCount);
@@ -124,6 +121,7 @@ final class JavaTelescope {
 
     AtomicInteger count = new AtomicInteger();
     ClassInheritorsSearch.INSTANCE.createQuery(new ClassInheritorsSearch.SearchParameters(aClass, aClass.getUseScope(), true, true, true))
+      .asIterable()
       .forEach((Consumer<? super PsiClass>)__ -> count.incrementAndGet());
 
     return count.get();
@@ -131,7 +129,7 @@ final class JavaTelescope {
 
   static int collectOverridingMethods(@NotNull PsiMethod method) {
     AtomicInteger count = new AtomicInteger();
-    OverridingMethodsSearch.search(method).forEach((Consumer<? super PsiMethod>)__ -> count.incrementAndGet());
+    OverridingMethodsSearch.search(method).asIterable().forEach((Consumer<? super PsiMethod>)__ -> count.incrementAndGet());
 
     return count.get();
   }

@@ -292,7 +292,7 @@ f:com.intellij.execution.util.ExecutionErrorDialog
 com.intellij.featureStatistics.ApplicabilityFilter
 - a:getPrefix():java.lang.String
 - a:isApplicable(java.lang.String,com.intellij.openapi.project.Project):Z
-c:com.intellij.featureStatistics.FeatureDescriptor
+f:com.intellij.featureStatistics.FeatureDescriptor
 - <init>(java.lang.String,java.lang.String,java.lang.String,java.lang.String,I,I,java.util.Set,I,I,com.intellij.featureStatistics.ProductivityFeaturesProvider):V
 - <init>(java.lang.String,java.lang.String,java.lang.String,java.lang.String,I,I,java.util.Set,I,com.intellij.featureStatistics.ProductivityFeaturesProvider):V
 - adjustUsageInfo(I,J):V
@@ -710,7 +710,6 @@ a:com.intellij.ide.actions.QuickSwitchSchemeAction
 - com.intellij.openapi.actionSystem.AnAction
 - com.intellij.openapi.project.DumbAware
 - p:myActionPlace:java.lang.String
-- psf:ourNotCurrentAction:javax.swing.Icon
 - p:<init>():V
 - p:<init>(Z):V
 - actionPerformed(com.intellij.openapi.actionSystem.AnActionEvent):V
@@ -1217,6 +1216,8 @@ f:com.intellij.ide.util.treeView.TreeState
 - s:createOn(javax.swing.JTree,javax.swing.tree.DefaultMutableTreeNode):com.intellij.ide.util.treeView.TreeState
 - s:createOn(javax.swing.JTree,javax.swing.tree.TreePath):com.intellij.ide.util.treeView.TreeState
 - s:createOn(javax.swing.JTree,Z,Z):com.intellij.ide.util.treeView.TreeState
+- s:defaultPathElementId(java.lang.Object):java.lang.String
+- s:defaultPathElementType(java.lang.Object):java.lang.String
 - s:expand(javax.swing.JTree,java.util.function.Consumer):V
 - isEmpty():Z
 - readExternal(org.jdom.Element):V
@@ -1926,9 +1927,11 @@ a:com.intellij.openapi.diagnostic.ErrorReportSubmitter
 c:com.intellij.openapi.diagnostic.IdeaLoggingEvent
 - <init>(java.lang.String,java.lang.Throwable):V
 - <init>(java.lang.String,java.lang.Throwable,java.lang.Object):V
+- <init>(java.lang.String,java.lang.Throwable,java.util.List,com.intellij.ide.plugins.IdeaPluginDescriptor,java.lang.Object):V
+- getAttachments():java.util.List
 - getData():java.lang.Object
-- getIncludedAttachments():java.util.List
 - getMessage():java.lang.String
+- getPlugin():com.intellij.ide.plugins.IdeaPluginDescriptor
 - getThrowable():java.lang.Throwable
 - getThrowableText():java.lang.String
 c:com.intellij.openapi.diagnostic.SubmittedReportInfo
@@ -2378,7 +2381,14 @@ com.intellij.openapi.keymap.Keymap
 com.intellij.openapi.keymap.KeymapExtension
 - sf:EXTENSION_POINT_NAME:com.intellij.openapi.extensions.ExtensionPointName
 - a:createGroup(com.intellij.openapi.util.Condition,com.intellij.openapi.project.Project):com.intellij.openapi.keymap.KeymapGroup
+- getGroupLocation():com.intellij.openapi.keymap.KeymapExtension$KeymapLocation
 - skipPluginGroup(com.intellij.openapi.extensions.PluginId):Z
+e:com.intellij.openapi.keymap.KeymapExtension$KeymapLocation
+- java.lang.Enum
+- sf:OTHER:com.intellij.openapi.keymap.KeymapExtension$KeymapLocation
+- sf:TOP_LEVEL:com.intellij.openapi.keymap.KeymapExtension$KeymapLocation
+- s:valueOf(java.lang.String):com.intellij.openapi.keymap.KeymapExtension$KeymapLocation
+- s:values():com.intellij.openapi.keymap.KeymapExtension$KeymapLocation[]
 com.intellij.openapi.keymap.KeymapGroup
 - a:addActionId(java.lang.String):V
 - a:addGroup(com.intellij.openapi.keymap.KeymapGroup):V
@@ -3388,6 +3398,7 @@ a:com.intellij.openapi.ui.DialogWrapper
 - p:<init>(com.intellij.openapi.project.Project):V
 - p:<init>(com.intellij.openapi.project.Project,java.awt.Component,Z,com.intellij.openapi.ui.DialogWrapper$IdeModalityType):V
 - p:<init>(com.intellij.openapi.project.Project,java.awt.Component,Z,com.intellij.openapi.ui.DialogWrapper$IdeModalityType,Z):V
+- p:<init>(com.intellij.openapi.project.Project,java.awt.Component,Z,com.intellij.openapi.ui.DialogWrapper$IdeModalityType,Z,Z):V
 - p:<init>(com.intellij.openapi.project.Project,Z):V
 - p:<init>(com.intellij.openapi.project.Project,Z,com.intellij.openapi.ui.DialogWrapper$IdeModalityType):V
 - p:<init>(com.intellij.openapi.project.Project,Z,Z):V
@@ -5032,6 +5043,7 @@ a:com.intellij.openapi.wm.BannerStartPagePromoter
 - pa:getHeaderLabel():java.lang.String
 - pa:getPromoImage():javax.swing.Icon
 - getPromotion(Z):javax.swing.JComponent
+- p:onBannerHide():V
 - p:onBannerShown():V
 - pa:runAction():V
 com.intellij.openapi.wm.CustomStatusBarWidget
@@ -5582,6 +5594,7 @@ c:com.intellij.ui.CheckboxTreeBase
 - setNodeState(com.intellij.ui.CheckedTreeNode,Z):V
 c:com.intellij.ui.CheckboxTreeBase$CheckPolicy
 - <init>(Z,Z,Z,Z):V
+- <init>(Z,Z,Z,Z,Z):V
 c:com.intellij.ui.CheckboxTreeBase$CheckboxTreeCellRendererBase
 - javax.swing.JPanel
 - javax.swing.tree.TreeCellRenderer
@@ -6817,9 +6830,6 @@ a:com.intellij.ui.ScrollingUtil$ListScrollAction
 - com.intellij.openapi.project.DumbAwareAction
 - com.intellij.ui.ScrollingUtil$ScrollingAction
 - p:<init>(com.intellij.openapi.actionSystem.ShortcutSet,javax.swing.JComponent):V
-- getActionUpdateThread():com.intellij.openapi.actionSystem.ActionUpdateThread
-- p:isEnabled():Z
-- update(com.intellij.openapi.actionSystem.AnActionEvent):V
 com.intellij.ui.ScrollingUtil$ScrollingAction
 - com.intellij.openapi.project.DumbAware
 c:com.intellij.ui.SearchTextField
@@ -11141,9 +11151,9 @@ a:com.intellij.util.ui.StatusText
 - f:setShowAboveCenter(Z):com.intellij.util.ui.StatusText
 - setText(java.lang.String):com.intellij.util.ui.StatusText
 - setText(java.lang.String,com.intellij.ui.SimpleTextAttributes):com.intellij.util.ui.StatusText
+- withUnscaledGapAfter(I):com.intellij.util.ui.StatusText
 pf:com.intellij.util.ui.StatusText$Column
 pf:com.intellij.util.ui.StatusText$Fragment
-- <init>(com.intellij.util.ui.StatusText):V
 a:com.intellij.util.ui.TableViewModel
 - javax.swing.table.AbstractTableModel
 - com.intellij.util.ui.SortableColumnModel

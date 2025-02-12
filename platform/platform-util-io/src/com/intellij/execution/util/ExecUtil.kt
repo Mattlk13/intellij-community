@@ -26,7 +26,6 @@ import java.io.*
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.pathString
 
 object ExecUtil {
   private val hasGnomeTerminal = PathExecLazyValue.create("gnome-terminal")
@@ -266,7 +265,7 @@ object ExecUtil {
   @JvmStatic
   fun EelExecApi.startProcessBlockingUsingEel(builder: ProcessBuilder, pty: LocalPtyOptions?): Process {
     val args = builder.command()
-    val exe = args.first()
+    val exe = args.first().let { exe -> runCatching { Path.of(exe).asEelPath().toString() }.getOrNull() ?: exe }
     val rest = args.subList(1, args.size)
     val env = builder.environment()
     val workingDir = builder.directory()?.toPath()?.asEelPath()
