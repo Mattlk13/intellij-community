@@ -16,7 +16,7 @@ import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.jediterm.terminal.TextStyle
 import kotlinx.coroutines.cancel
 import org.jetbrains.plugins.terminal.block.TerminalFocusModel
-import org.jetbrains.plugins.terminal.block.hyperlinks.TerminalHyperlinkHighlighter
+import org.jetbrains.plugins.terminal.block.hyperlinks.Gen1TerminalHyperlinkHighlighter
 import org.jetbrains.plugins.terminal.block.output.highlighting.CompositeTerminalTextHighlighter
 import org.jetbrains.plugins.terminal.block.prompt.TerminalPromptRenderingInfo
 import org.jetbrains.plugins.terminal.block.session.*
@@ -55,7 +55,7 @@ internal class TerminalOutputController(
   @Volatile
   private var runningCommandInteractivity: RunningCommandInteractivity? = null
 
-  private val hyperlinkHighlighter: TerminalHyperlinkHighlighter = TerminalHyperlinkHighlighter(project, outputModel, session)
+  private val hyperlinkHighlighter: Gen1TerminalHyperlinkHighlighter = Gen1TerminalHyperlinkHighlighter(project, outputModel, session)
 
   private val nextBlockCanBeStartedQueue: Queue<() -> Unit> = LinkedList()
 
@@ -145,7 +145,7 @@ internal class TerminalOutputController(
 
   private fun scheduleLastOutputUpdate() {
     val contentUpdatesScheduler = runningCommandInteractivity?.contentUpdatesScheduler
-    val lastOutput: PartialCommandOutput? = if (contentUpdatesScheduler?.finished == false) {
+    val lastOutput: List<PartialCommandOutput> = if (contentUpdatesScheduler?.finished == false) {
       contentUpdatesScheduler.finishUpdating()
     }
     else {
@@ -155,18 +155,19 @@ internal class TerminalOutputController(
       val (output, terminalWidth) = session.model.withContentLock {
         ShellCommandOutputScraperImpl.scrapeOutput(session) to session.model.width
       }
-      PartialCommandOutput(
+      listOf(PartialCommandOutput(
         output.text,
         output.styleRanges,
         logicalLineIndex = 0,
         terminalWidth,
         isChangesDiscarded = false,
-      )
+      ))
     }
-
-    if (lastOutput != null) {
+    if (lastOutput.isNotEmpty()) {
       invokeLater(editor.getDisposed(), ModalityState.any()) {
-        updateCommandOutput(lastOutput)
+        for (output in lastOutput) {
+          updateCommandOutput(output)
+        }
       }
     }
   }
@@ -385,7 +386,12 @@ internal class TerminalOutputController(
       val eventsHandler = BlockTerminalEventsHandler(session, settings, this@TerminalOutputController)
       setupKeyEventDispatcher(editor, eventsHandler, disposable)
       setupMouseListener(editor, settings, session.model, eventsHandler, disposable)
-      TerminalOutputEditorInputMethodSupport(editor, session, caretModel).install(disposable)
+      TerminalOutputEditorInputMethodSupport(
+        editor,
+        sendInputString = { text -> session.terminalOutputStream.sendString(text, true) },
+        getCaretPosition = { caretModel.getCaretPosition() }
+      ).install(disposable)
+
       contentUpdatesScheduler = setupContentUpdating()
     }
 

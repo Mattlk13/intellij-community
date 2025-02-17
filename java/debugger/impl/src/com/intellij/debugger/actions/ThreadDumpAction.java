@@ -15,12 +15,15 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.diagnostic.ControlFlowException;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.threadDumpParser.ThreadDumpParser;
 import com.intellij.threadDumpParser.ThreadState;
 import com.intellij.util.SmartList;
 import com.intellij.xdebugger.XDebugSession;
+import com.jetbrains.jdi.ThreadReferenceImpl;
 import com.sun.jdi.*;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -29,6 +32,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 
 public final class ThreadDumpAction extends DumbAwareAction {
   @Override
@@ -41,27 +46,49 @@ public final class ThreadDumpAction extends DumbAwareAction {
 
     final DebuggerSession session = context.getDebuggerSession();
     if (session != null && session.isAttached()) {
-      final DebugProcessImpl process = context.getDebugProcess();
-      Objects.requireNonNull(context.getManagerThread()).schedule(new DebuggerCommandImpl() {
-        @Override
-        protected void action() {
-          final VirtualMachineProxyImpl vm = process.getVirtualMachineProxy();
-          vm.suspend();
-          try {
-            final List<ThreadState> threads = buildThreadStates(vm);
-            ApplicationManager.getApplication().invokeLater(() -> {
-              XDebugSession xSession = session.getXDebugSession();
-              if (xSession != null) {
-                DebuggerUtilsEx.addThreadDump(project, threads, xSession.getUI(), session.getSearchScope());
-              }
-            }, ModalityState.nonModal());
-          }
-          finally {
-            vm.resume();
-          }
-        }
-      });
+      buildThreadStatesAsync(context)
+        .thenAccept(threads -> {
+          ApplicationManager.getApplication().invokeLater(() -> {
+            XDebugSession xSession = session.getXDebugSession();
+            if (xSession != null) {
+              DebuggerUtilsEx.addThreadDump(project, threads, xSession.getUI(), session.getSearchScope());
+            }
+          }, ModalityState.nonModal());
+        }).exceptionally(ex -> {
+          if (ex instanceof ControlFlowException || ex instanceof CancellationException) return null;
+          Logger.getInstance(ThreadDumpAction.class).error(ex);
+          return null;
+        });
     }
+  }
+
+  public static CompletableFuture<List<ThreadState>> buildThreadStatesAsync(@NotNull DebuggerContextImpl context) {
+    CompletableFuture<List<ThreadState>> future = new CompletableFuture<>();
+    final DebugProcessImpl process = context.getDebugProcess();
+    Objects.requireNonNull(context.getManagerThread()).schedule(new DebuggerCommandImpl() {
+      @Override
+      protected void commandCancelled() {
+        future.cancel(false);
+      }
+
+      @Override
+      protected void action() {
+        final VirtualMachineProxyImpl vm = process.getVirtualMachineProxy();
+        vm.suspend();
+        try {
+          final List<ThreadState> threads = buildThreadStates(vm);
+          future.complete(threads);
+        }
+        catch (Exception e) {
+          future.completeExceptionally(e);
+          throw e;
+        }
+        finally {
+          vm.resume();
+        }
+      }
+    });
+    return future;
   }
 
   private static @Nullable Value getThreadField(@NotNull String fieldName,
@@ -135,6 +162,13 @@ public final class ThreadDumpAction extends DumbAwareAction {
           buffer.append(" nid=NA");
         }
       }
+
+      // Virtual threads might be included in the list of all threads (i.e., see JDWP's option includevirtualthreads).
+      if (threadReference instanceof ThreadReferenceImpl impl && impl.isVirtual()) {
+        buffer.append(" virtual");
+        threadState.setVirtual(true);
+      }
+
       //ThreadGroupReference groupReference = threadReference.threadGroup();
       //if (groupReference != null) {
       //  buffer.append(", ").append(JavaDebuggerBundle.message("threads.export.attribute.label.group", groupReference.name()));

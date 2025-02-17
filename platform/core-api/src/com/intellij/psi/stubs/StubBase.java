@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.psi.stubs;
 
 import com.intellij.openapi.project.Project;
@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 public abstract class StubBase<T extends PsiElement> extends ObjectStubBase<StubElement<?>> implements StubElement<T> {
-  StubList myStubList;
+  private StubList myStubList;
   private volatile T myPsi;
 
   private static final AtomicReferenceFieldUpdater<StubBase, PsiElement> myPsiUpdater =
@@ -25,6 +25,16 @@ public abstract class StubBase<T extends PsiElement> extends ObjectStubBase<Stub
 
   protected StubBase(@Nullable StubElement parent, IStubElementType<?, ?> elementType) {
     this(parent, (IElementType)elementType);
+  }
+
+  @ApiStatus.Internal
+  public StubList getStubList() {
+    return myStubList;
+  }
+
+  @ApiStatus.Internal
+  public void setStubList(StubList stubList) {
+    myStubList = stubList;
   }
 
   @ApiStatus.Experimental
@@ -75,7 +85,8 @@ public abstract class StubBase<T extends PsiElement> extends ObjectStubBase<Stub
     myPsi = psi;
   }
 
-  final @Nullable T getCachedPsi() {
+  @ApiStatus.Internal
+  public final @Nullable T getCachedPsi() {
     return myPsi;
   }
 

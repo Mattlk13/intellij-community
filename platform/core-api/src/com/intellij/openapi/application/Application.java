@@ -687,7 +687,7 @@ public interface Application extends ComponentManager {
 
   @ApiStatus.Experimental
   @ApiStatus.Internal
-  default CoroutineContext getLockStateAsCoroutineContext(boolean shared) {
+  default CoroutineContext getLockStateAsCoroutineContext(CoroutineContext context, boolean shared) {
     return EmptyCoroutineContext.INSTANCE;
   }
 
@@ -700,5 +700,14 @@ public interface Application extends ComponentManager {
   @ApiStatus.Internal
   default boolean hasLockStateInContext(CoroutineContext context) {
     return false;
+  }
+
+  /**
+   * TODO: IJPL-177760 We need to revoke read access from a runnable properly
+   */
+  @ApiStatus.Internal
+  @ApiStatus.Obsolete
+  default boolean isTopmostReadAccessAllowed() {
+    return isReadAccessAllowed();
   }
 }

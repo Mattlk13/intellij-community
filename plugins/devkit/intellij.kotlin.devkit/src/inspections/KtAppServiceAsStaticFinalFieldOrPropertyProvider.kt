@@ -1,11 +1,11 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.idea.devkit.kotlin.inspections
 
+import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInspection.IntentionWrapper
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.lang.refactoring.InlineActionHandler
-import com.intellij.lang.refactoring.InlineHandlers
 import com.intellij.openapi.application.CachedSingletonsRegistry
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
@@ -17,13 +17,13 @@ import org.jetbrains.idea.devkit.inspections.LevelType
 import org.jetbrains.idea.devkit.inspections.getLevelType
 import org.jetbrains.idea.devkit.inspections.quickfix.WrapInSupplierQuickFix
 import org.jetbrains.idea.devkit.kotlin.DevKitKotlinBundle
+import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.permissions.KaAllowAnalysisFromWriteAction
 import org.jetbrains.kotlin.analysis.api.permissions.KaAllowAnalysisOnEdt
-import org.jetbrains.kotlin.analysis.api.analyze
-import org.jetbrains.kotlin.analysis.api.resolution.singleFunctionCallOrNull
-import org.jetbrains.kotlin.analysis.api.resolution.symbol
 import org.jetbrains.kotlin.analysis.api.permissions.allowAnalysisFromWriteAction
 import org.jetbrains.kotlin.analysis.api.permissions.allowAnalysisOnEdt
+import org.jetbrains.kotlin.analysis.api.resolution.singleFunctionCallOrNull
+import org.jetbrains.kotlin.analysis.api.resolution.symbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSamConstructorSymbol
@@ -33,9 +33,7 @@ import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameSuggester
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameSuggestionProvider
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameValidatorProvider
 import org.jetbrains.kotlin.idea.base.codeInsight.ShortenReferencesFacility
-import org.jetbrains.kotlin.idea.intentions.ConvertPropertyToFunctionIntention
 import org.jetbrains.kotlin.idea.refactoring.inline.AbstractKotlinInlinePropertyHandler
-import org.jetbrains.kotlin.idea.refactoring.inline.KotlinInlinePropertyProcessor
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClass
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
@@ -44,7 +42,9 @@ import org.jetbrains.uast.toUElementOfType
 import java.util.function.Supplier
 
 
-internal class KtAppServiceAsStaticFinalFieldOrPropertyVisitorProvider : AppServiceAsStaticFinalFieldOrPropertyVisitorProvider {
+abstract class KtAppServiceAsStaticFinalFieldOrPropertyVisitorProvider : AppServiceAsStaticFinalFieldOrPropertyVisitorProvider {
+
+  abstract fun getConvertPropertyToFunctionIntention(): IntentionAction
 
   override fun getVisitor(holder: ProblemsHolder): PsiElementVisitor {
     return object : KtVisitorVoid() {
@@ -80,7 +80,7 @@ internal class KtAppServiceAsStaticFinalFieldOrPropertyVisitorProvider : AppServ
             anchor,
             DevKitKotlinBundle.message("inspections.an.explicit.method.should.be.used.to.retrieve.an.application.service.message"),
             ProblemHighlightType.WARNING,
-            IntentionWrapper(ConvertPropertyToFunctionIntention()),
+            IntentionWrapper(getConvertPropertyToFunctionIntention()),
             KtWrapInSupplierQuickFix(property),
           )
           return
@@ -90,7 +90,7 @@ internal class KtAppServiceAsStaticFinalFieldOrPropertyVisitorProvider : AppServ
           anchor,
           DevKitKotlinBundle.message("inspections.application.service.as.static.immutable.property.with.backing.field.message"),
           ProblemHighlightType.WARNING,
-          IntentionWrapper(ConvertPropertyToFunctionIntention()),
+          IntentionWrapper(getConvertPropertyToFunctionIntention()),
           KtWrapInSupplierQuickFix(property),
         )
       }

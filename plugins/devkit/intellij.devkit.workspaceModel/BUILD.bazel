@@ -4,7 +4,6 @@ load("@rules_jvm//:jvm.bzl", "jvm_library", "jvm_resources")
 
 create_kotlinc_options(
   name = "custom",
-  jvm_target = 17,
   opt_in = [
     "org.jetbrains.kotlin.utils.addToStdlib.UnsafeCastFunction",
     "org.jetbrains.kotlin.analysis.api.KaIdeApi",
@@ -27,7 +26,7 @@ jvm_library(
   kotlinc_opts = ":custom",
   deps = [
     "//platform/ide-core",
-    "//platform/editor-ui-api:editor",
+    "//platform/editor-ui-api:editor-ui",
     "//platform/util",
     "//platform/projectModel-api:projectModel",
     "@lib//:kotlin-stdlib",
@@ -54,6 +53,11 @@ jvm_library(
     "//plugins/kotlin/base/facet:kotlin-base-facet",
     "@lib//:kotlinc-kotlin-jps-common-provided",
     "//plugins/kotlin/formatter/minimal:kotlin-formatter-minimal",
+    "@lib//:kotlinx-serialization-core",
+    "@lib//:kotlinx-serialization-json",
+    "@lib//:kotlin-reflect",
+    "//platform/backend/workspace",
+    "//platform/util/progress",
   ],
   runtime_deps = [":workspaceModel_resources"]
 )

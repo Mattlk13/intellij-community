@@ -15,11 +15,24 @@ import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
 object K2DirectiveBasedActionUtils {
-    const val DISABLE_K2_ERRORS_DIRECTIVE: String = "// DISABLE-K2-ERRORS"
-    const val DISABLE_K2_WARNINGS_DIRECTIVE: String = "// DISABLE-K2-WARNINGS"
+    const val DISABLE_K2_ERRORS_DIRECTIVE: String = "// DISABLE_K2_ERRORS"
+    const val DISABLE_K2_WARNINGS_DIRECTIVE: String = "// DISABLE_K2_WARNINGS"
 
     const val K2_ERROR_DIRECTIVE: String = "// K2_ERROR:"
     const val K2_AFTER_ERROR_DIRECTIVE: String = "// K2_AFTER_ERROR:"
+
+    fun checkForUnexpectedErrors(
+        mainFile: File,
+        ktFile: KtFile,
+        fileText: String,
+        vararg directives: String = arrayOf(K2_ERROR_DIRECTIVE, ERROR_DIRECTIVE)
+    ) {
+        if (InTextDirectivesUtils.findLinesWithPrefixesRemoved(fileText, DISABLE_K2_ERRORS_DIRECTIVE).isNotEmpty()) {
+            return
+        }
+
+        checkForUnexpected(mainFile, ktFile, fileText, "errors", KaSeverity.ERROR, *directives)
+    }
 
     fun checkForErrorsBefore(mainFile: File, ktFile: KtFile, fileText: String) {
         checkForUnexpected(mainFile, ktFile, fileText, "errors", KaSeverity.ERROR, K2_ERROR_DIRECTIVE, ERROR_DIRECTIVE)
@@ -52,7 +65,10 @@ object K2DirectiveBasedActionUtils {
         val actual =
             allowAnalysisOnEdt {
                 analyze(file) {
-                    val diagnostics = file.collectDiagnostics(KaDiagnosticCheckerFilter.ONLY_COMMON_CHECKERS)
+                    val diagnostics =
+                        // filter level has to be consistent with
+                        // [org.jetbrains.kotlin.idea.highlighting.visitor.KotlinDiagnosticHighlightVisitor#analyzeFile]
+                        file.collectDiagnostics(KaDiagnosticCheckerFilter.ONLY_COMMON_CHECKERS)
                     diagnostics
                         .filter { it.severity == severity }
                         .map { "$directive ${it.defaultMessage.replace("\n", "<br>")}" }
@@ -76,7 +92,9 @@ object K2DirectiveBasedActionUtils {
 
         throw FileComparisonFailedError(
             "All actual $name should be mentioned in test data with '$directive' directive. " +
-                    "But no unnecessary $name should be mentioned, file:\n$fileText",
+                    "But no unnecessary $name should be mentioned\n" +
+                    "actual errors:\n$actualString\n" +
+                    "file:\n$fileText",
             expected = fileText,
             actual = actualString,
             expectedFilePath = mainFile.absolutePath,

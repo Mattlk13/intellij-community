@@ -1,6 +1,9 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.vcs.changes.ui
 
+import com.intellij.ide.util.treeView.PathElementIdProvider
+import com.intellij.ide.util.treeView.SerializablePathElement
+import com.intellij.ide.util.treeView.TreeState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.util.SystemInfo
@@ -18,8 +21,9 @@ import org.jetbrains.annotations.Nls
 import java.awt.Color
 
 
-abstract class AbstractChangesBrowserFilePathNode<U>(userObject: U, val status: FileStatus?) : ChangesBrowserNode<U>(userObject) {
+abstract class AbstractChangesBrowserFilePathNode<U>(userObject: U, val status: FileStatus?) : ChangesBrowserNode<U>(userObject), PathElementIdProvider {
   private val filePath: FilePath get() = filePath(getUserObject())
+  private val flattenedParents = mutableListOf<SerializablePathElement>()
   private val originInfo: OriginInfo? by lazy(LazyThreadSafetyMode.NONE) { buildOriginInfo() }
 
   protected abstract fun filePath(userObject: U): FilePath
@@ -73,6 +77,22 @@ abstract class AbstractChangesBrowserFilePathNode<U>(userObject: U, val status: 
     else {
       return path.path
     }
+  }
+
+  internal fun appendFlattenedParent(parentNode: ChangesBrowserNode<*>) {
+    val parentUserObject = parentNode.userObject
+    if (parentUserObject !is FilePath) return
+    flattenedParents.add(SerializablePathElement(
+      parentUserObject.name,
+      TreeState.defaultPathElementType(parentNode)
+    ))
+  }
+
+  override fun getPathElementId(): String = filePath.name
+
+  override fun getFlattenedElements(): List<SerializablePathElement?>? {
+    if (flattenedParents.isEmpty()) return null
+    return flattenedParents + SerializablePathElement(getPathElementId(), TreeState.defaultPathElementType(this))
   }
 
   private fun appendOriginText(renderer: ChangesBrowserNodeRenderer) {

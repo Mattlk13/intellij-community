@@ -9,10 +9,12 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.plugins.terminal.block.output.HighlightingInfo
 import org.jetbrains.plugins.terminal.block.output.TerminalOutputHighlightingsSnapshot
 import org.jetbrains.plugins.terminal.block.output.TextStyleAdapter
+import org.jetbrains.plugins.terminal.block.reworked.TerminalOutputModelListener
 import org.jetbrains.plugins.terminal.block.session.StyleRange
 import org.jetbrains.plugins.terminal.block.ui.BlockTerminalColorPalette
 import org.jetbrains.plugins.terminal.reworked.util.TerminalSessionTestUtil
 import org.jetbrains.plugins.terminal.reworked.util.TerminalSessionTestUtil.update
+import org.jetbrains.plugins.terminal.reworked.util.TerminalSessionTestUtil.updateCursor
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -23,7 +25,7 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
 
   @Test
   fun `update editor content`() = runBlocking(Dispatchers.EDT) {
-    val model = TerminalSessionTestUtil.createOutputModel(project, testRootDisposable)
+    val model = TerminalSessionTestUtil.createOutputModel()
 
     val text = """
       123 sdfsdf sdfsdf
@@ -36,12 +38,12 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
 
     model.update(0, text, emptyList())
 
-    assertEquals(text, model.editor.document.text)
+    assertEquals(text, model.document.text)
   }
 
   @Test
   fun `update editor content incrementally with styles`() = runBlocking(Dispatchers.EDT) {
-    val model = TerminalSessionTestUtil.createOutputModel(project, testRootDisposable)
+    val model = TerminalSessionTestUtil.createOutputModel()
 
     val text1 = """
       first line
@@ -64,15 +66,15 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
       third line
     """.trimIndent()
     val expectedHighlightings = listOf(highlighting(0, 5), highlighting(11, 19), highlighting(20, 26), highlighting(32, 37))
-    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.editor.document, expectedHighlightings)
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
 
-    assertEquals(expectedText, model.editor.document.text)
-    assertEquals(expectedHighlightingsSnapshot, model.highlightingsModel.getHighlightingsSnapshot())
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
   }
 
   @Test
   fun `update editor content incrementally with overflow`() = runBlocking(Dispatchers.EDT) {
-    val model = TerminalSessionTestUtil.createOutputModel(project, testRootDisposable, maxLength = 16)
+    val model = TerminalSessionTestUtil.createOutputModel(maxLength = 16)
 
     val text1 = """
       foofoo
@@ -95,15 +97,15 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
       badbad
     """.trimIndent()
     val expectedHighlightings = listOf(highlighting(3, 9), highlighting(10, 16))
-    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.editor.document, expectedHighlightings)
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
 
-    assertEquals(expectedText, model.editor.document.text)
-    assertEquals(expectedHighlightingsSnapshot, model.highlightingsModel.getHighlightingsSnapshot())
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
   }
 
   @Test
   fun `update editor content after overflow`() = runBlocking(Dispatchers.EDT) {
-    val model = TerminalSessionTestUtil.createOutputModel(project, testRootDisposable, maxLength = 16)
+    val model = TerminalSessionTestUtil.createOutputModel(maxLength = 16)
 
     val text1 = """
       foofoo
@@ -133,15 +135,47 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
       kadkad
     """.trimIndent()
     val expectedHighlightings = listOf(highlighting(3, 9), highlighting(10, 16))
-    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.editor.document, expectedHighlightings)
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
 
-    assertEquals(expectedText, model.editor.document.text)
-    assertEquals(expectedHighlightingsSnapshot, model.highlightingsModel.getHighlightingsSnapshot())
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
+  }
+
+  @Test
+  fun `update exceeds maxCapacity`() = runBlocking(Dispatchers.EDT) {
+    val model = TerminalSessionTestUtil.createOutputModel(maxLength = 10)
+    val startOffsets = mutableListOf<Int>()
+    model.addListener(testRootDisposable, object: TerminalOutputModelListener {
+      override fun afterContentChanged(startOffset: Int) {
+        startOffsets.add(startOffset)
+      }
+    })
+
+    model.update(0, """
+      abcdef
+      ghijkl
+    """.trimIndent(), emptyList())
+
+    assertEquals("""
+      def
+      ghijkl
+    """.trimIndent(), model.document.text)
+
+    model.update(1, """
+      mnopqrs
+      tuvwxyz
+    """.trimIndent(), emptyList())
+
+    assertEquals("""
+      rs
+      tuvwxyz
+    """.trimIndent(), model.document.text)
+    assertEquals(listOf(0, 0), startOffsets)
   }
 
   @Test
   fun `update editor content from the start when some lines were trimmed already (clear)`() = runBlocking(Dispatchers.EDT) {
-    val model = TerminalSessionTestUtil.createOutputModel(project, testRootDisposable, maxLength = 10)
+    val model = TerminalSessionTestUtil.createOutputModel(maxLength = 10)
 
     // Prepare
     val fillerText = "12345"
@@ -154,10 +188,48 @@ internal class TerminalOutputModelTest : BasePlatformTestCase() {
 
     val expectedText = "abcde"
     val expectedHighlightings = listOf(highlighting(0, 3), highlighting(3, 5))
-    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.editor.document, expectedHighlightings)
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
 
-    assertEquals(expectedText, model.editor.document.text)
-    assertEquals(expectedHighlightingsSnapshot, model.highlightingsModel.getHighlightingsSnapshot())
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
+  }
+
+  @Test
+  fun `check that spaces are added if cursor is out of line bounds (last line)`() = runBlocking(Dispatchers.EDT) {
+    val model = TerminalSessionTestUtil.createOutputModel()
+
+    // Prepare
+    model.update(0, "abcde", listOf(styleRange(0, 3), styleRange(3, 5)))
+
+    // Test
+    model.updateCursor(0, 8)
+
+    val expectedText = "abcde   "
+    val expectedHighlightings = listOf(highlighting(0, 3), highlighting(3, 5))
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
+
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
+  }
+
+  @Test
+  fun `check that spaces are added if cursor is out of line bounds (middle line)`() = runBlocking(Dispatchers.EDT) {
+    val model = TerminalSessionTestUtil.createOutputModel()
+
+    // Prepare
+    model.update(0, "12345", listOf(styleRange(0, 5)))
+    model.update(1, "abcde", listOf(styleRange(0, 3), styleRange(3, 5)))
+    model.update(2, "67890", listOf(styleRange(0, 2), styleRange(2, 5)))
+
+    // Test
+    model.updateCursor(1, 8)
+
+    val expectedText = "12345\nabcde   \n67890"
+    val expectedHighlightings = listOf(highlighting(0, 5), highlighting(6, 9), highlighting(9, 11), highlighting(15, 17), highlighting(17, 20))
+    val expectedHighlightingsSnapshot = TerminalOutputHighlightingsSnapshot(model.document, expectedHighlightings)
+
+    assertEquals(expectedText, model.document.text)
+    assertEquals(expectedHighlightingsSnapshot, model.getHighlightings())
   }
 
   private fun styleRange(start: Int, end: Int): StyleRange {

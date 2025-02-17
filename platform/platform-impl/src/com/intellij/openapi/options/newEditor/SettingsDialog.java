@@ -8,21 +8,19 @@ import com.intellij.ide.plugins.newui.EventHandler;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.idea.ActionsBundle;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.actionSystem.DataSink;
-import com.intellij.openapi.actionSystem.ShortcutSet;
-import com.intellij.openapi.actionSystem.UiCompatibleDataProvider;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurableGroup;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.DialogPanel;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.options.advanced.AdvancedSettings;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.IdeUICustomization;
 import com.intellij.ui.SearchTextField.FindAction;
 import com.intellij.ui.components.panels.NonOpaquePanel;
-import com.intellij.util.ui.JBDimension;
-import com.intellij.util.ui.JBUI;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.util.ui.*;
 import kotlin.Unit;
 import kotlin.jvm.functions.Function1;
 import org.jetbrains.annotations.ApiStatus;
@@ -39,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.intellij.openapi.actionSystem.IdeActions.ACTION_FIND;
+import static com.intellij.openapi.options.newEditor.SettingsDialogExtensionsKt.createEditorToolbar;
 
 public class SettingsDialog extends DialogWrapper implements UiCompatibleDataProvider {
   public static final String DIMENSION_KEY = "SettingsEditor";
@@ -67,13 +66,11 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
     init(configurable, null);
   }
 
-  public SettingsDialog(@NotNull Project project, @NotNull List<? extends ConfigurableGroup> groups, @Nullable Configurable configurable, @Nullable String filter) {
-    super(project, true);
-    dimensionServiceKey = DIMENSION_KEY;
-    editor = new SettingsEditor(myDisposable, project, groups, configurable, filter, this::treeViewFactory, this::spotlightPainterFactory);
-    isApplyButtonNeeded = true;
-    isResetButtonNeeded = false;
-    init(null, project);
+  public SettingsDialog(@NotNull Project project,
+                        @NotNull List<? extends ConfigurableGroup> groups,
+                        @Nullable Configurable configurable,
+                        @Nullable String filter) {
+    this(project, null, groups, configurable, filter);
   }
 
   public SettingsDialog(@NotNull Project project,
@@ -81,7 +78,7 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
                         @NotNull List<? extends ConfigurableGroup> groups,
                         @Nullable Configurable configurable,
                         @Nullable String filter) {
-    super(project, parentComponent, true, IdeModalityType.IDE);
+    super(project, parentComponent, true, IdeModalityType.IDE, true, false);
     dimensionServiceKey = DIMENSION_KEY;
     editor = new SettingsEditor(myDisposable, project, groups, configurable, filter, this::treeViewFactory, this::spotlightPainterFactory);
     isApplyButtonNeeded = true;
@@ -107,11 +104,29 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
     return new SpotlightPainter(target, updater);
   }
 
+
+  @Override
+  protected @Nullable JComponent createTitlePane() {
+    if (!shouldBeNonModal())
+      return null;
+    ApplyActionWrapper applyActionWrapper = new ApplyActionWrapper(editor.getApplyAction());
+    applyActionWrapper.putValue(DEFAULT_ACTION, Boolean.toString(true));
+    applyActionWrapper.putValue(Action.NAME, ActionsBundle.message("action.SettingsEditor.SaveChanges.text"));
+    Action resetAction = editor.getResetAction();
+
+    List<Action> actions = List.of(resetAction, applyActionWrapper);
+    DialogPanel toolbar = createEditorToolbar(this, actions);
+    return toolbar;
+  }
+
   private void init(@Nullable Configurable configurable, @Nullable Project project) {
     String name = configurable == null ? null : configurable.getDisplayName();
     String hint = project != null && project.isDefault() ? IdeUICustomization.getInstance().projectMessage("template.settings.hint") : null;
     myHintLabel.setText(hint);
     setTitle(name == null ? CommonBundle.settingsTitle() : name.replace('\n', ' '));
+    if (shouldBeNonModal()) {
+      setUndecorated(true);
+    }
 
     ShortcutSet set = getFindActionShortcutSet();
     if (set != null) {
@@ -119,7 +134,8 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
     }
 
     init();
-    if (configurable == null) {
+
+    if (configurable == null && !shouldBeNonModal()) {
       JRootPane rootPane = getPeer().getRootPane();
       if (rootPane != null) {
         rootPane.setMinimumSize(new JBDimension(900, 700));
@@ -198,6 +214,14 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
   }
 
   @Override
+  protected JComponent createSouthPanel() {
+    if (shouldBeNonModal())
+      return null;
+    else
+      return super.createSouthPanel();
+  }
+
+  @Override
   protected @Nullable String getHelpId() {
     return editor.getHelpTopic();
   }
@@ -236,6 +260,18 @@ public class SettingsDialog extends DialogWrapper implements UiCompatibleDataPro
 
   static @Nullable ShortcutSet getFindActionShortcutSet() {
     return EventHandler.getShortcuts(ACTION_FIND);
+  }
+
+  @ApiStatus.Internal
+  static public boolean useNonModalSettingsWindow() {
+    if (System.getProperty("ide.ui.non.modal.settings.window") != null) {
+      return Boolean.parseBoolean(System.getProperty("ide.ui.non.modal.settings.window"));
+    }
+    return AdvancedSettings.getBoolean("ide.ui.non.modal.settings.window");
+  }
+
+  private boolean shouldBeNonModal() {
+    return useNonModalSettingsWindow() && editor instanceof SettingsEditor;
   }
 
   private final class ApplyActionWrapper extends AbstractAction {

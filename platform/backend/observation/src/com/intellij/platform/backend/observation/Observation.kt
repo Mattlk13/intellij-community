@@ -6,7 +6,6 @@ import com.intellij.platform.backend.observation.Observation.awaitConfiguration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
-import org.jetbrains.annotations.ApiStatus
 
 object Observation {
 
@@ -64,7 +63,6 @@ object Observation {
    * Returns stacktraces of the computations that are currently awaited by [awaitConfiguration]
    * This method affects only those computations that use [ActivityKey], whereas [ActivityTracker] is out of reach for the platform.
    */
-  @ApiStatus.Internal
   fun dumpAwaitedActivitiesToString(): String {
     return dumpObservedComputationsToString()
   }

@@ -43,8 +43,10 @@ class InlineCompletionLifecycleTestDSL(val fixture: CodeInsightTestFixture) {
   // Requests
   @ICRequest
   suspend fun createLookup(type: CompletionType = CompletionType.BASIC) {
-    coroutineToIndicator {
-      fixture.complete(type)
+    withContext(Dispatchers.EDT) {
+      coroutineToIndicator {
+        fixture.complete(type)
+      }
     }
   }
 
@@ -87,8 +89,10 @@ class InlineCompletionLifecycleTestDSL(val fixture: CodeInsightTestFixture) {
 
   @ICRequest
   suspend fun typeChar(char: Char = '\n') {
-    coroutineToIndicator {
-      fixture.type(char)
+    withContext(Dispatchers.EDT) {
+      coroutineToIndicator {
+        fixture.type(char)
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.move.moveFilesOrDirectories;
 
 import com.intellij.ide.util.EditorHelper;
@@ -92,7 +92,7 @@ public class MoveFilesOrDirectoriesProcessor extends BaseRefactoringProcessor {
     List<UsageInfo> result = new ArrayList<>();
     for (PsiElement element : myElementsToMove) {
       if (mySearchForReferences) {
-        for (PsiReference reference : ReferencesSearch.search(element, GlobalSearchScope.projectScope(myProject))) {
+        for (PsiReference reference : ReferencesSearch.search(element, GlobalSearchScope.projectScope(myProject)).asIterable()) {
           result.add(new MovedFileOrDirectoryUsageInfo(reference, element));
         }
       }

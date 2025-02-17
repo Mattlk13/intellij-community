@@ -51,7 +51,6 @@ function updateBackgrounds(e, elementClasses, bgClass) {
   addClassForElements(selected, bgClass, true)
 }
 
-document.getElementById("wrong-filters").onchange = (e) => updateBackgrounds(e,  ["raw-filter", "analyzed-filter"], "bg-filters-skipped")
 document.getElementById("model-skipped").onchange = (e) => updateBackgrounds(e, ["trigger-skipped", "filter-skipped"], "bg-model-skipped")
 
 function removeClassForElements(elementsClassName, classToAdd) {
@@ -230,13 +229,13 @@ function addCommonFeatures(sessionDiv, popup, lookup) {
 
   addRelevanceModelBlock(popup, lookup, "trigger")
   addRelevanceModelBlock(popup, lookup, "filter")
+  addAiaDiagnosticsBlock("Failed file validations:", "aia_failed_file_validations", popup, lookup)
   addAiaDiagnosticsBlock("Response", "aia_response", popup, lookup)
   addAiaDiagnosticsBlock("Context", "aia_context", popup, lookup)
   addAiaDiagnosticsBlock("Code snippets from response", "extracted_code_snippets", popup, lookup)
   addAiaDiagnosticsBlock("Internal api calls from original code snippet", "ground_truth_internal_api_calls", popup, lookup)
   addAiaDiagnosticsBlock("Extracted api calls from generated code snippet", "predicted_api_calls", popup, lookup)
   // TODO better to add a separate popup view?
-  addAiaDiagnosticsBlock("Failed file validations:", "aia_failed_file_validations", popup, lookup)
   addAiaDiagnosticsBlock("Appeared highlights", "appeared_highlights", popup, lookup)
   addAiaDiagnosticsBlock("Erased APIs", "erased_apis", popup, lookup)
   addDiagnosticsBlock("RAW SUGGESTIONS", "raw_proposals", popup, lookup)

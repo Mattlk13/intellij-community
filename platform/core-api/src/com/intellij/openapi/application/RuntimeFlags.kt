@@ -11,11 +11,21 @@ import org.jetbrains.annotations.ApiStatus
 val isMessageBusThrowsWhenDisposed: Boolean = System.getProperty("ijpl.message.bus.throws.when.disposed", "true").toBoolean()
 
 /**
- * - `false` means no implicit write-intent lock for activities and coroutines
- * - `true` means `IdeEventQueue` will wrap activities with the write-intent lock
+ * - `false` means no implicit write-intent lock for coroutines
+ * - `true` means `IdeEventQueue` will wrap coroutines with the write-intent lock
  */
 @get:ApiStatus.Internal
 val isCoroutineWILEnabled: Boolean = System.getProperty("ide.coroutine.write.intent.lock", "true").toBoolean()
+
+/**
+ * - `false` means no implicit write-intent lock for runnables scheduled by Swing facilities.
+ * As for now, this _includes_ coroutines from Dispatchers.EDT.
+ * - `true` means `IdeEventQueue` will wrap activities with the write-intent lock
+ *
+ * If this flag gets no usages, then it should be dropped in 2025.2 (approx. June)
+ */
+@get:ApiStatus.Internal
+val isPureSwingEventWilEnabled: Boolean = System.getProperty("ide.pure.swing.events.write.intent.lock", "false").toBoolean()
 
 /**
  * - `false` means exceptions from [com.intellij.util.messages.Topic] subscribers are being logged
@@ -65,3 +75,13 @@ val reportInvokeLaterWithoutModality: Boolean = System.getProperty("ijpl.report.
  */
 @get:ApiStatus.Internal
 val setUserInteractiveQosForEdt: Boolean = System.getProperty("ide.set.qos.for.edt", "true").toBoolean()
+
+/**
+ * Experimental mode for EditorImpl over Rhizome and Andel.
+ * See <a href="https://youtrack.jetbrains.com/issue/IJPL-54">IJPL-54</a>
+ *
+ * - `false` means old reliable behavior
+ * - `true` means new experimental behavior
+ */
+@get:ApiStatus.Internal
+val isRhizomeAdEnabled: Boolean = System.getProperty("ijpl.rhizome.ad.enabled", "false").toBoolean()

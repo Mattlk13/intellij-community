@@ -20,6 +20,7 @@ import com.intellij.ui.LayeredIcon;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.popup.AbstractPopup;
+import com.intellij.ui.popup.ActionGroupPopupActivity;
 import com.intellij.ui.popup.PopupFactoryImpl;
 import com.intellij.ui.popup.list.ListPopupImpl;
 import com.intellij.util.ArrayUtil;
@@ -225,17 +226,24 @@ public class NewElementAction extends DumbAwareAction implements PopupAction {
       if (popup instanceof PopupFactoryImpl.ActionGroupPopup listPopup && listPopup.getList() instanceof JBList<?> list) {
         var emptyText = list.getEmptyText();
         emptyText.clear();
-        emptyText.appendLine(IdeBundle.message("popup.new.element.empty.text.1"));
+        emptyText.withUnscaledGapAfter(5).appendLine(IdeBundle.message("popup.new.element.empty.text.1"));
         ActionListener emptyTextAction = linkActionEvent -> {
+          var actionManager = ActionManager.getInstance();
+          var action = actionManager.getAction("NewFile");
+          var fusActivity = ActionGroupPopupActivity.getCurrentActivity(listPopup);
+          if (fusActivity != null) {
+            fusActivity.itemSelected(action, EMPTY_TEXT_LINK_PLACE);
+          }
+          listPopup.setOk(true);
           Disposer.dispose(popup);
           var component = event.getData(PlatformCoreDataKeys.CONTEXT_COMPONENT);
           if (component != null) {
             var inputEvent = linkActionEvent.getSource() instanceof InputEvent linkInputEvent ? linkInputEvent : null;
-            var actionManager = ActionManager.getInstance();
-            actionManager.tryToExecute(actionManager.getAction("NewFile"), inputEvent, component, EMPTY_TEXT_LINK_PLACE, true);
+            actionManager.tryToExecute(action, inputEvent, component, EMPTY_TEXT_LINK_PLACE, true);
           }
         };
-        emptyText.appendLine(IdeBundle.message("popup.new.element.empty.text.2"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, emptyTextAction);
+        emptyText.withUnscaledGapAfter(0)
+          .appendLine(IdeBundle.message("popup.new.element.empty.text.2"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, emptyTextAction);
         // The capitalization is wrong here because this line continues the previous one.
         //noinspection DialogTitleCapitalization
         emptyText.appendLine(IdeBundle.message("popup.new.element.empty.text.3"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, emptyTextAction);

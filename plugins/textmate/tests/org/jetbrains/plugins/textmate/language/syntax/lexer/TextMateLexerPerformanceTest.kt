@@ -4,6 +4,7 @@ import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.UsefulTestCase
+import com.intellij.textmate.joni.JoniRegexFactory
 import com.intellij.tools.ide.metrics.benchmark.Benchmark
 import org.jetbrains.plugins.textmate.TestUtil
 import org.jetbrains.plugins.textmate.findScopeByFileName
@@ -14,7 +15,7 @@ import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorC
 import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorWeigherImpl
 import org.jetbrains.plugins.textmate.loadBundle
 import org.jetbrains.plugins.textmate.regex.CachingRegexFactory
-import org.jetbrains.plugins.textmate.regex.joni.JoniRegexFactory
+import org.jetbrains.plugins.textmate.regex.RememberingLastMatchRegexFactory
 import java.io.File
 import java.nio.charset.StandardCharsets
 
@@ -29,7 +30,7 @@ class TextMateLexerPerformanceTest : UsefulTestCase() {
     val text = StringUtil.convertLineSeparators(FileUtil.loadFile(myFile, StandardCharsets.UTF_8))
 
     Benchmark.newBenchmark("bench") {
-      val regexFactory = CachingRegexFactory(JoniRegexFactory())
+      val regexFactory = CachingRegexFactory(RememberingLastMatchRegexFactory(JoniRegexFactory ()))
       val weigher = TextMateSelectorCachingWeigher(TextMateSelectorWeigherImpl())
       val syntaxMatcher = TextMateCachingSyntaxMatcher(TextMateSyntaxMatcherImpl(regexFactory, weigher))
       val lexer = TextMateHighlightingLexer(TextMateLanguageDescriptor(scopeName, syntaxTable.getSyntax(scopeName)),

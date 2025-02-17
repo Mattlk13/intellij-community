@@ -4,11 +4,10 @@ package org.jetbrains.plugins.terminal.action
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.remoting.ActionRemoteBehaviorSpecification
 import com.intellij.openapi.project.DumbAwareAction
-import org.jetbrains.annotations.Unmodifiable
+import com.intellij.openapi.util.Key
 import org.jetbrains.plugins.terminal.TerminalBundle
 import org.jetbrains.plugins.terminal.block.reworked.TerminalEventDispatcher
 import java.awt.event.KeyEvent
-import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JComponent
 import javax.swing.KeyStroke
 
@@ -24,26 +23,29 @@ import javax.swing.KeyStroke
  * but it only enables itself if none of the allowed actions are enabled.
  * It is also promoted, so it's considered before other platform actions.
  */
-internal class SendShortcutToTerminalAction : DumbAwareAction(), ActionPromoter, ActionRemoteBehaviorSpecification.Frontend {
+internal class SendShortcutToTerminalAction(
+  private val dispatcher: TerminalEventDispatcher,
+) : DumbAwareAction(), ActionRemoteBehaviorSpecification.Frontend {
 
-  private val terminalShortcuts = CustomShortcutSet(
-    *TerminalEventDispatcher.getActionsToSkip()
-      .flatMap { it.shortcutSet.shortcuts.toList() }
-      .toTypedArray()
-  )
+  private var actions: List<AnAction> = emptyList()
 
-  private val registeredDispatchers = ConcurrentHashMap<JComponent, TerminalEventDispatcher>()
+  init {
+    templatePresentation.putClientProperty(KEY, Unit)
+  }
 
-  override fun promote(actions: @Unmodifiable List<AnAction?>, context: DataContext): @Unmodifiable List<AnAction?>? = listOf(this)
-
-  internal fun register(component: JComponent, dispatcher: TerminalEventDispatcher) {
+  internal fun register(component: JComponent, actions: List<AnAction>) {
+    val terminalShortcuts = CustomShortcutSet(
+      *actions
+        .flatMap { it.shortcutSet.shortcuts.toList() }
+        .toTypedArray()
+    )
     registerCustomShortcutSet(terminalShortcuts, component)
-    registeredDispatchers[component] = dispatcher
+    this.actions = actions
   }
 
   internal fun unregister(component: JComponent) {
     unregisterCustomShortcutSet(component)
-    registeredDispatchers.remove(component)
+    this.actions = emptyList()
   }
 
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -54,14 +56,9 @@ internal class SendShortcutToTerminalAction : DumbAwareAction(), ActionPromoter,
       e.presentation.isEnabledAndVisible = false
       return
     }
-    val dispatcher = getDispatcher(e)
-    if (dispatcher == null) {
-      e.presentation.isEnabledAndVisible = false
-      return
-    }
-    for (action in TerminalEventDispatcher.getActionsToSkip()) {
+    for (action in actions) {
       if (action.shortcutSet.shortcuts.contains(shortcut)) {
-        if (isEnabled(action, e)) {
+        if (e.updateSession.presentation(action).isEnabled) {
           e.presentation.isEnabledAndVisible = false
           return
         }
@@ -71,36 +68,21 @@ internal class SendShortcutToTerminalAction : DumbAwareAction(), ActionPromoter,
     e.presentation.isEnabledAndVisible = true
   }
 
-  private fun getDispatcher(e: AnActionEvent): TerminalEventDispatcher? {
-    val component = e.dataContext.getData(PlatformDataKeys.CONTEXT_COMPONENT) ?: return null
-    return registeredDispatchers[component]
-  }
-
   override fun actionPerformed(e: AnActionEvent) {
-    val dispatcher = getDispatcher(e) ?: return
     val event = e.inputEvent as? KeyEvent ?: return
     dispatcher.handleKeyEvent(event)
   }
 }
 
-private fun isEnabled(action: AnAction, event: AnActionEvent): Boolean {
-  val fakeEvent = AnActionEvent.createEvent(
-    action,
-    event.dataContext,
-    null,
-    ActionPlaces.KEYBOARD_SHORTCUT,
-    ActionUiKind.NONE,
-    event.inputEvent
-  )
-  if (action.actionUpdateThread == ActionUpdateThread.BGT) {
-    action.update(fakeEvent)
+private val KEY = Key.create<Unit>("SendShortcutToTerminalAction")
+
+internal class SendShortcutToTerminalActionPromoter : ActionPromoter {
+  override fun promote(actions: List<AnAction>, context: DataContext): List<AnAction> {
+    // Promoters often use instanceof checks, but they're prone to break with action delegates / wrappers,
+    // so we use a client property instead.
+    val action = actions.find { it.templatePresentation.getClientProperty(KEY) != null }
+    return if (action != null) listOf(action) else emptyList()
   }
-  else {
-    event.updateSession.compute(action, "isEnabled", ActionUpdateThread.EDT) {
-      action.update(fakeEvent)
-    }
-  }
-  return fakeEvent.presentation.isEnabled
 }
 
 private val AnActionEvent.shortcut: Shortcut?

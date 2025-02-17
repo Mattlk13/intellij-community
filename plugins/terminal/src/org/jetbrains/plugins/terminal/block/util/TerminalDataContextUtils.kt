@@ -15,6 +15,8 @@ import org.jetbrains.plugins.terminal.block.output.TerminalOutputModel
 import org.jetbrains.plugins.terminal.block.output.TerminalSelectionController
 import org.jetbrains.plugins.terminal.block.prompt.TerminalPromptController
 import org.jetbrains.plugins.terminal.block.prompt.TerminalPromptModel
+import org.jetbrains.plugins.terminal.block.reworked.TerminalSearchController
+import org.jetbrains.plugins.terminal.block.reworked.session.TerminalInput
 import org.jetbrains.plugins.terminal.block.session.BlockTerminalSession
 
 @ApiStatus.Experimental
@@ -37,6 +39,8 @@ object TerminalDataContextUtils {
     get() = getUserData(IS_OUTPUT_MODEL_EDITOR_KEY) == true
   val Editor.isAlternateBufferModelEditor: Boolean
     get() = getUserData(IS_ALTERNATE_BUFFER_MODEL_EDITOR_KEY) == true
+  val Editor.isReworkedTerminalEditor: Boolean
+    get() = isOutputModelEditor || isAlternateBufferModelEditor
   val Editor.terminalPromptModel: TerminalPromptModel?
     get() = getUserData(TerminalPromptModel.KEY)
 
@@ -56,6 +60,8 @@ object TerminalDataContextUtils {
     get() = getData(TerminalFocusModel.KEY)
   internal val DataContext.terminalSession: BlockTerminalSession?
     get() = getData(BlockTerminalSession.DATA_KEY)
+  internal val DataContext.terminalSearchController: TerminalSearchController?
+    get() = getData(TerminalSearchController.KEY)
 
   val AnActionEvent.editor: Editor?
     get() = getData(CommonDataKeys.EDITOR)
@@ -75,4 +81,7 @@ object TerminalDataContextUtils {
     get() = getData(TerminalFocusModel.KEY)
   internal val AnActionEvent.terminalSession: BlockTerminalSession?
     get() = getData(BlockTerminalSession.DATA_KEY)
+
+  internal val AnActionEvent.terminalInput: TerminalInput?
+    get() = getData(TerminalInput.KEY)
 }

@@ -13,9 +13,12 @@ import java.awt.Color
 import java.awt.Image
 import java.net.URL
 import java.util.*
+import javax.swing.text.LabelView
+import javax.swing.text.View
+import javax.swing.text.html.BlockView
 import javax.swing.text.html.StyleSheet
 
-internal class JBHtmlPaneImplService: JBHtmlPane.ImplService {
+internal class JBHtmlPaneImplService : JBHtmlPane.ImplService {
 
   override fun transpileHtmlPaneInput(@Nls text: String): @Nls String =
     JBHtmlPaneInputTranspiler.transpileHtmlPaneInput(text)
@@ -23,13 +26,44 @@ internal class JBHtmlPaneImplService: JBHtmlPane.ImplService {
   override fun defaultEditorCssFontResolver(): CSSFontResolver =
     EditorCssFontResolver.getGlobalInstance()
 
-  override fun getDefaultStyleSheet(paneBackgroundColor: Color, configuration: JBHtmlPaneStyleConfiguration): StyleSheet =
-    ApplicationManager.getApplication().service<JBHtmlPaneStyleSheetRulesProvider>().getStyleSheet(paneBackgroundColor, configuration)
+  override fun getDefaultStyleSheet(paneBackgroundColor: Color, scaleFactor: Float, baseFontSize: Int, configuration: JBHtmlPaneStyleConfiguration): StyleSheet =
+    ApplicationManager.getApplication().service<JBHtmlPaneStyleSheetRulesProvider>().getStyleSheet(paneBackgroundColor, scaleFactor, baseFontSize, configuration)
 
   override fun getEditorColorsSchemeStyleSheet(editorColorsScheme: EditorColorsScheme): StyleSheet =
     EditorColorsSchemeStyleSheet(editorColorsScheme)
 
   override fun createDefaultImageResolver(pane: JBHtmlPane): Dictionary<URL, Image> =
     JBHtmlPaneImageResolver(pane, null)
+
+  override fun applyCssToView(pane: JBHtmlPane) {
+    applyCssToView(pane.ui.getRootView(pane))
+  }
+
+  private fun applyCssToView(view: View) {
+    val childCount = view.viewCount
+    for (i in 0..<childCount) {
+      val childView = view.getView(i)
+      if (childView != null) {
+        applyCssToView(childView)
+        if (childView is BlockView) {
+          blockViewSetPropertiesFromAttributesMethod.invoke(childView)
+        } else if (childView is LabelView) {
+          labelViewSetPropertiesFromAttributesMethod.invoke(childView)
+        }
+      }
+    }
+  }
+
+  private val blockViewSetPropertiesFromAttributesMethod by lazy {
+    BlockView::class.java.getDeclaredMethod("setPropertiesFromAttributes").also {
+      it.isAccessible = true
+    }
+  }
+
+  private val labelViewSetPropertiesFromAttributesMethod by lazy {
+    LabelView::class.java.getDeclaredMethod("setPropertiesFromAttributes").also {
+      it.isAccessible = true
+    }
+  }
 
 }

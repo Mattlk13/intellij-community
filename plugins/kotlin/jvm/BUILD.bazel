@@ -4,7 +4,6 @@ load("@rules_jvm//:jvm.bzl", "jvm_library", "jvm_resources")
 
 create_kotlinc_options(
   name = "custom",
-  jvm_target = 17,
   opt_in = [
     "org.jetbrains.kotlin.idea.base.util.K1ModeProjectStructureApi",
     "org.jetbrains.kotlin.analysis.api.KaNonPublicApi",
@@ -82,6 +81,8 @@ jvm_library(
     "//plugins/kotlin/code-insight/api:kotlin-code-insight-api",
     "//plugins/kotlin/kotlin.ide:ide",
     "//plugins/kotlin/jsr223",
+    "//platform/util/coroutines",
+    "//platform/core-api:core",
   ],
   runtime_deps = [":jvm_resources"]
 )

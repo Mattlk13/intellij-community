@@ -259,7 +259,7 @@ open class ConsoleViewImpl protected constructor(
   override fun clear() {
     synchronized(LOCK) {
       if (editor == null) return
-      // real document content will be cleared on next flush;
+      // real document content will be cleared on the next flush;
       myDeferredBuffer.clear()
     }
     if (!flushAlarm.isDisposed) {
@@ -387,7 +387,7 @@ open class ConsoleViewImpl protected constructor(
 
   /**
    * Adds transparent (actually, non-opaque) component over console.
-   * It will be as big as console. Use it to draw on console because it does not prevent user from console usage.
+   * It will be as big as a console. Use it to draw on console because it does not prevent user from console usage.
    *
    * @param component component to add
    */
@@ -487,7 +487,7 @@ open class ConsoleViewImpl protected constructor(
           flushUserInputAlarm.waitForAllExecuted(10, TimeUnit.SECONDS)
           return@executeOnPooledThread
         }
-        catch (e: CancellationException) {
+        catch (_: CancellationException) {
           //try again
         }
         catch (e: TimeoutException) {
@@ -501,7 +501,7 @@ open class ConsoleViewImpl protected constructor(
           future[10, TimeUnit.MILLISECONDS]
           break
         }
-        catch (ignored: TimeoutException) {
+        catch (_: TimeoutException) {
         }
         EDT.dispatchAllInvocationEvents()
       }
@@ -516,9 +516,11 @@ open class ConsoleViewImpl protected constructor(
 
   protected open fun disposeEditor() {
     UIUtil.invokeAndWaitIfNeeded {
-      val editor = editor
-      if (!editor!!.isDisposed) {
-        EditorFactory.getInstance().releaseEditor(editor)
+      ApplicationManager.getApplication().runWriteIntentReadAction<Unit, Exception> {
+        val editor = editor
+        if (!editor!!.isDisposed) {
+          EditorFactory.getInstance().releaseEditor(editor)
+        }
       }
     }
   }
@@ -566,7 +568,7 @@ open class ConsoleViewImpl protected constructor(
                                              // this may block forever, see IDEA-54340
                                              state.sendUserInput(textToSend.toString())
                                            }
-                                           catch (ignored: IOException) {
+                                           catch (_: IOException) {
                                            }
                                          }
                                        }, 0)
@@ -587,7 +589,7 @@ open class ConsoleViewImpl protected constructor(
    * Holds number of symbols managed by the current console.
    *
    *
-   * Total number is assembled as a sum of symbols that are already pushed to the document and number of deferred symbols that
+   * The Total number is assembled as a sum of symbols that are already pushed to the document and number of deferred symbols that
    * are awaiting to be pushed to the document.
    */
   override fun getContentSize(): Int {
@@ -597,7 +599,7 @@ open class ConsoleViewImpl protected constructor(
       length = myDeferredBuffer.length()
       editor = this.editor
     }
-    return (if (editor == null || CLEAR.hasRequested()) 0 else editor!!.document.textLength) + length
+    return (if (editor == null || CLEAR.hasRequested()) 0 else editor.document.textLength) + length
   }
 
   override fun canPause(): Boolean {
@@ -913,7 +915,7 @@ open class ConsoleViewImpl protected constructor(
                   val additionalAttributes = additionalHighlight.getTextAttributes(null)
                   val hyperlinks = getHyperlinks()!!
                   if (additionalAttributes == null) {
-                    hyperlinks.highlightHyperlinks(additionalHighlight, 0)
+                    hyperlinks.highlightHyperlinks(additionalHighlight)
                   }
                   else {
                     val item = additionalHighlight.resultItems[0]
@@ -975,7 +977,7 @@ open class ConsoleViewImpl protected constructor(
 
       require(startLine <= endLine)
       for (line in startLine..endLine) {
-        // Grep Console plugin allows to fold empty lines. We need to handle this case in a special way.
+        // Grep Console plugin allows folding empty lines. We need to handle this case in a special way.
         //
         // Multiple lines are grouped into one folding, but to know when you can create the folding,
         // you need a line which does not belong to that folding.
@@ -1009,7 +1011,7 @@ open class ConsoleViewImpl protected constructor(
               }
             }
             else {
-              // create new region
+              // create a new region
               toAdd += existing to line
             }
             lastFoldingInfos -= existing
@@ -1492,7 +1494,7 @@ open class ConsoleViewImpl protected constructor(
   private val FLUSH = FlushRunnable(false)
 
   private inner class ClearRunnable : FlushRunnable(false) {
-    public override fun doRun() {
+    override fun doRun() {
       doClear()
     }
   }
@@ -1533,7 +1535,7 @@ open class ConsoleViewImpl protected constructor(
     })
     @Suppress("LeakingThis")
     ApplicationManager.getApplication().messageBus.connect(this)
-      .subscribe<EditorColorsListener>(EditorColorsManager.TOPIC, EditorColorsListener { `__`: EditorColorsScheme? ->
+      .subscribe<EditorColorsListener>(EditorColorsManager.TOPIC, EditorColorsListener { _: EditorColorsScheme? ->
         ThreadingAssertions.assertEventDispatchThread()
         if (isDisposed) {
           return@EditorColorsListener

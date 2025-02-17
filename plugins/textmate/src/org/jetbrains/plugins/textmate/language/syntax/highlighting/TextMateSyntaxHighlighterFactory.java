@@ -6,6 +6,7 @@ import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.textmate.joni.JoniRegexFactory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.textmate.TextMateService;
@@ -17,7 +18,7 @@ import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorC
 import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorWeigherImpl;
 import org.jetbrains.plugins.textmate.regex.CachingRegexFactory;
 import org.jetbrains.plugins.textmate.regex.RegexFactory;
-import org.jetbrains.plugins.textmate.regex.joni.JoniRegexFactory;
+import org.jetbrains.plugins.textmate.regex.RememberingLastMatchRegexFactory;
 
 public class TextMateSyntaxHighlighterFactory extends SyntaxHighlighterFactory {
   private static final SyntaxHighlighter PLAIN_SYNTAX_HIGHLIGHTER = new TextMateHighlighter(null);
@@ -34,7 +35,7 @@ public class TextMateSyntaxHighlighterFactory extends SyntaxHighlighterFactory {
       final TextMateLanguageDescriptor languageDescriptor = textMateService.getLanguageDescriptorByFileName(virtualFile.getName());
       if (languageDescriptor != null) {
         LOG.debug("Textmate highlighting: " + virtualFile.getPath());
-        RegexFactory regexFactory = new CachingRegexFactory(new JoniRegexFactory());
+        RegexFactory regexFactory = new CachingRegexFactory(new RememberingLastMatchRegexFactory(new JoniRegexFactory()));
         TextMateSelectorCachingWeigher weigher = new TextMateSelectorCachingWeigher(new TextMateSelectorWeigherImpl());
         TextMateCachingSyntaxMatcher syntaxMatcher = new TextMateCachingSyntaxMatcher(new TextMateSyntaxMatcherImpl(regexFactory, weigher));
         return new TextMateHighlighter(new TextMateHighlightingLexer(languageDescriptor,

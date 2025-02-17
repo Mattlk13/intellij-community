@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.platform.eel.provider.utils
 
 import com.intellij.platform.eel.EelResult
@@ -8,14 +8,14 @@ import com.intellij.platform.eel.channels.EelSendChannel
 import com.intellij.platform.eel.channels.sendWholeBuffer
 import com.intellij.platform.eel.provider.ResultErrImpl
 import com.intellij.platform.eel.provider.ResultOkImpl
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import java.io.Flushable
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
 import java.nio.channels.WritableByteChannel
@@ -44,6 +44,7 @@ internal class NioWriteToEelAdapter(
   private val flushable: Flushable? = null,
 ) : EelSendChannel<IOException> {
 
+  override val closed: Boolean get() = ! writableByteChannel.isOpen
 
   override suspend fun send(src: ByteBuffer): EelResult<Unit, IOException> =
     withContext(Dispatchers.IO) {
@@ -162,3 +163,36 @@ internal class OutputStreamAdapterImpl(
   }
 }
 
+internal fun CoroutineScope.consumeReceiveChannelAsKotlinImpl(receiveChannel: EelReceiveChannel<*>, bufferSize: Int): ReceiveChannel<ByteBuffer> {
+  val channel = Channel<ByteBuffer>()
+  launch {
+    while (true) {
+      val buffer = ByteBuffer.allocate(bufferSize)
+      when (val r = receiveChannel.receive(buffer)) {
+        is EelResult.Error -> {
+          val cause = r.error
+          channel.close(cause as? Throwable ?: IOException(cause.toString()))
+          break
+        }
+        is EelResult.Ok -> {
+          when (r.value) {
+            ReadResult.EOF -> {
+              channel.close()
+              break
+            }
+            ReadResult.NOT_EOF -> {
+              channel.send(buffer.flip())
+            }
+          }
+        }
+      }
+    }
+  }
+  return channel
+}
+
+internal fun Socket.consumeAsEelChannelImpl(): EelReceiveChannel<IOException> =
+  channel?.consumeAsEelChannel() ?: inputStream.consumeAsEelChannel()
+
+internal fun Socket.asEelChannelImpl(): EelSendChannel<IOException> =
+  channel?.asEelChannel() ?: outputStream.asEelChannel()

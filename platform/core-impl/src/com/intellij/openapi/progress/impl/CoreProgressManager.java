@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.progress.impl;
 
 import com.intellij.codeWithMe.ClientId;
@@ -60,10 +60,10 @@ public class CoreProgressManager extends ProgressManager implements Disposable {
   private static final Map<ProgressIndicator, Set<Thread>> threadsUnderIndicator = new HashMap<>(); // guarded by threadsUnderIndicator
   // the active indicator for the thread id
   private static final ConcurrentLongObjectMap<ProgressIndicator> currentIndicators =
-    Java11Shim.INSTANCE.createConcurrentLongObjectMap();
+    Java11Shim.Companion.getINSTANCE().createConcurrentLongObjectMap();
   // top-level indicators for the thread id
   private static final ConcurrentLongObjectMap<ProgressIndicator> threadTopLevelIndicators =
-    Java11Shim.INSTANCE.createConcurrentLongObjectMap();
+    Java11Shim.Companion.getINSTANCE().createConcurrentLongObjectMap();
   // threads which are running under canceled indicator
   // THashSet is avoided here because of possible tombstones overhead
   static final Set<Thread> threadsUnderCanceledIndicator = new HashSet<>(); // guarded by threadsUnderIndicator
@@ -566,8 +566,8 @@ public class CoreProgressManager extends ProgressManager implements Disposable {
       }));
   }
 
-  void notifyTaskFinished(@NotNull Task.Backgroundable task, long elapsed) {
-
+  @ApiStatus.Internal
+  public void notifyTaskFinished(@NotNull Task.Backgroundable task, long elapsed) {
   }
 
   // ASSERT IS EDT->UI bg or calling if can't
@@ -785,7 +785,8 @@ public class CoreProgressManager extends ProgressManager implements Disposable {
     }
   }
 
-  final void updateShouldCheckCanceled() {
+  @ApiStatus.Internal
+  public final void updateShouldCheckCanceled() {
     synchronized (threadsUnderIndicator) {
       boolean hasCanceledIndicator = !threadsUnderCanceledIndicator.isEmpty();
       ourCheckCanceledBehavior = !hasCheckCanceledHooks() && !hasCanceledIndicator ? CheckCanceledBehavior.NONE :
@@ -1057,7 +1058,8 @@ public class CoreProgressManager extends ProgressManager implements Disposable {
   }
 
   @FunctionalInterface
-  interface CheckCanceledHook {
+  @ApiStatus.Internal
+  public interface CheckCanceledHook {
     CheckCanceledHook[] EMPTY_ARRAY = new CheckCanceledHook[0];
     /**
      * @param indicator the indicator whose {@link ProgressIndicator#checkCanceled()} was called,
@@ -1074,6 +1076,20 @@ public class CoreProgressManager extends ProgressManager implements Disposable {
         ProgressIndicator current = threadTopLevelIndicators.get(Thread.currentThread().getId());
         LOG.error("Must be executed under progress indicator: " + indicator + " but the process is running under "+current+" indicator instead. Please see e.g. ProgressManager.runProcess()");
       }
+    }
+  }
+
+  @TestOnly
+  @ApiStatus.Internal
+  public static void __testWhileAlwaysCheckingCanceled(@NotNull Runnable runnable) {
+    @SuppressWarnings("InstantiatingAThreadWithDefaultRunMethod")
+    Thread fake = new Thread("fake");
+    try {
+      threadsUnderCanceledIndicator.add(fake);
+      runnable.run();
+    }
+    finally {
+      threadsUnderCanceledIndicator.remove(fake);
     }
   }
 }

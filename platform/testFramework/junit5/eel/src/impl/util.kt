@@ -51,7 +51,7 @@ internal fun eelInitializer(os: EelPath.OS): TestFixtureInitializer<IsolatedFile
   val directory = Files.createTempDirectory(meaningfulDirName)
 
   val fakeRoot = if (SystemInfo.isUnix) {
-    "/eel-test/${directory.name}"
+    "/eel-test-${directory.name}"
   }
   else {
     "\\\\eel-test\\${directory.name}"
@@ -63,7 +63,7 @@ internal fun eelInitializer(os: EelPath.OS): TestFixtureInitializer<IsolatedFile
   val fakeLocalFileSystem = EelUnitTestFileSystem(EelUnitTestFileSystemProvider(defaultProvider), os, directory, fakeRoot)
   val apiRef = AtomicReference<EelApi>(null)
   val descriptor = EelTestDescriptor(Ksuid.generate().toString(), os, apiRef::get)
-  service.register(fakeRoot, descriptor, "test-directory.name", true, (os == EelPath.OS.WINDOWS)) { _, _ ->
+  service.register(fakeRoot, descriptor, descriptor.id, true, (os == EelPath.OS.WINDOWS)) { _, _ ->
     fakeLocalFileSystem
   }
   val eelApi = eelApiByOs(fakeLocalFileSystem, descriptor, os)

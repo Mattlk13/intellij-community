@@ -1,6 +1,9 @@
-// Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.module;
 
+import com.intellij.codeInsight.multiverse.CodeInsightContext;
+import com.intellij.codeInsight.multiverse.FileViewProviderUtil;
+import com.intellij.codeInsight.multiverse.ModuleContext;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
@@ -16,7 +19,6 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileSystemItem;
 import com.intellij.util.PathUtilRt;
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread;
-import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.graph.Graph;
 import com.intellij.workspaceModel.ide.legacyBridge.WorkspaceModelLegacyBridge;
 import org.jetbrains.annotations.ApiStatus;
@@ -24,7 +26,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.intellij.platform.workspace.jps.entities.ExtensionsKt.collectTransitivelyDependentModules;
 
@@ -94,6 +95,18 @@ public class ModuleUtilCore {
   }
 
   /**
+   * @return modules which include the file,
+   *         empty list for project files outside module content roots or library files
+   */
+  @ApiStatus.Internal
+  public static @NotNull Set<Module> findModulesForFile(@NotNull VirtualFile file, @NotNull Project project) {
+    if (project.isDefault()) {
+      return Collections.emptySet();
+    }
+    return ReadAction.compute(() -> ProjectFileIndex.getInstance(project).getModulesForFile(file, true));
+  }
+
+  /**
    * Return module where containing file of the {@code element} is located.
    * <br>
    * For {@link com.intellij.psi.PsiDirectory}, corresponding virtual file is checked directly.
@@ -156,6 +169,14 @@ public class ModuleUtilCore {
       PsiFile originalFile = containingFile.getOriginalFile();
       if (originalFile.getUserData(KEY_MODULE) != null) {
         return originalFile.getUserData(KEY_MODULE);
+      }
+
+      CodeInsightContext codeInsightContext = FileViewProviderUtil.getCodeInsightContext(originalFile);
+      if (codeInsightContext instanceof ModuleContext) {
+        Module module = ((ModuleContext)codeInsightContext).getModule();
+        if (module != null) {
+          return module;
+        }
       }
 
       VirtualFile virtualFile = originalFile.getVirtualFile();
