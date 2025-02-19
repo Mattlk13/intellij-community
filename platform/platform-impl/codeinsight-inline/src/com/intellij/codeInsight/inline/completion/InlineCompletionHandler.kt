@@ -2,8 +2,8 @@
 package com.intellij.codeInsight.inline.completion
 
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
-import com.intellij.codeInsight.inline.completion.listeners.InlineCompletionTypingTracker
 import com.intellij.codeInsight.inline.completion.listeners.InlineSessionWiseCaretListener
+import com.intellij.codeInsight.inline.completion.listeners.typing.InlineCompletionDocumentChangesTrackerImpl
 import com.intellij.codeInsight.inline.completion.logs.InlineCompletionLogsListener
 import com.intellij.codeInsight.inline.completion.logs.InlineCompletionUsageTracker
 import com.intellij.codeInsight.inline.completion.logs.InlineCompletionUsageTracker.ShownEvents.FinishType
@@ -26,7 +26,6 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ScrollType
-import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.observable.util.whenDisposed
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
@@ -66,10 +65,7 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
 ) {
   private val executor = SafeInlineCompletionExecutor(scope)
   private val eventListeners = EventDispatcher.create(InlineCompletionEventListener::class.java)
-  private val typingTracker = InlineCompletionTypingTracker(parentDisposable)
-
-  @ApiStatus.Internal
-  protected val completionState: InlineCompletionState = InlineCompletionState()
+  private val completionState: InlineCompletionState = InlineCompletionState()
 
   @ApiStatus.Internal
   protected val sessionManager: InlineCompletionSessionManager = createSessionManager()
@@ -164,6 +160,11 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
         return
       }
 
+      if (isInlineCompletionSuppressedByPrompt()) {
+        LOG.trace("Inline Completion is suppressed. Event $event is ignored.")
+        return
+      }
+
       if (sessionManager.updateSession(request)) {
         return
       }
@@ -199,7 +200,12 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
 
     val elements = context.state.elements.map { it.element }
     val textToInsert = context.textToInsert()
-    val insertEnvironment = InlineCompletionInsertEnvironment(editor, session.request.file, TextRange.from(offset, textToInsert.length))
+    val insertEnvironment = InlineCompletionInsertEnvironment(
+      editor = editor,
+      file = session.request.file,
+      insertedRange = TextRange.from(offset, textToInsert.length),
+      request = session.request,
+    )
     context.copyUserDataTo(insertEnvironment)
     hide(context, FinishType.SELECTED)
 
@@ -240,13 +246,20 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
     }
   }
 
+  internal val documentChangesTracker = InlineCompletionDocumentChangesTrackerImpl(
+    parentDisposable,
+    sendEvent = ::invokeEvent,
+    invalidateOnUnknownChange = { sessionManager.invalidate(UpdateSessionResult.Invalidated.Reason.UnclassifiedDocumentChange) }
+  )
+
   @ApiStatus.Internal
   protected fun performHardHide(context: InlineCompletionContext, finishType: FinishType) {
     traceBlocking(InlineCompletionEventType.Hide(finishType, context.isCurrentlyDisplaying()))
     sessionManager.removeSession()
   }
 
-  private fun isCompletionSuppressed(editor: Editor): Boolean = isInlinePromptShown(editor)
+  // TODO extract EP
+  private fun isInlineCompletionSuppressedByPrompt(): Boolean = isInlinePromptShown(editor)
 
   private suspend fun invokeRequest(request: InlineCompletionRequest, session: InlineCompletionSession) {
     currentCoroutineContext().ensureActive()
@@ -313,36 +326,6 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
   }
 
   /**
-   * @see InlineCompletionTypingTracker.allowTyping
-   * @see onDocumentEvent
-   */
-  @RequiresEdt
-  internal fun allowTyping(event: TypingEvent) {
-    typingTracker.allowTyping(event)
-  }
-
-  /**
-   * If [documentEvent] offers the same as the last [allowTyping], then it creates [InlineCompletionEvent.DocumentChange] and
-   * invokes it. Otherwise, [documentEvent] is considered as 'non-typing' and a current session is invalidated.
-   * No new session is started in such a case.
-   *
-   * @see allowTyping
-   * @see InlineCompletionTypingTracker.getDocumentChangeEvent
-   */
-  @RequiresEdt
-  internal fun onDocumentEvent(documentEvent: DocumentEvent, editor: Editor) {
-    val event = typingTracker.getDocumentChangeEvent(documentEvent, editor)
-    if (event != null) {
-      if (isCompletionSuppressed(editor)) return
-
-      invokeEvent(event)
-    }
-    else if (!completionState.ignoreDocumentChanges) {
-      sessionManager.invalidate(UpdateSessionResult.Invalidated.Reason.UnclassifiedDocumentChange)
-    }
-  }
-
-  /**
    * All the document events (except typings) that appear while executing [block] do not clear the current session
    * and do not change anything in the state.
    *
@@ -353,26 +336,14 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
   @ApiStatus.Experimental
   @RequiresEdt
   fun <T> withIgnoringDocumentChanges(block: () -> T): T {
-    ThreadingAssertions.assertEventDispatchThread()
-    val currentCustomDocumentChangesAllowed = completionState.ignoreDocumentChanges
-    completionState.ignoreDocumentChanges = true
-    return try {
-      block()
-    }
-    finally {
-      check(completionState.ignoreDocumentChanges) {
-        "The state of disabling document changes tracker is switched outside."
-      }
-      completionState.ignoreDocumentChanges = currentCustomDocumentChangesAllowed
-    }
+    return documentChangesTracker.withIgnoringDocumentChanges(block)
   }
 
   @ApiStatus.Experimental
   @ApiStatus.Internal
   @RequiresEdt
   fun setIgnoringDocumentChanges(value: Boolean) {
-    ThreadingAssertions.assertEventDispatchThread()
-    completionState.ignoreDocumentChanges = value
+    documentChangesTracker.ignoreDocumentChanges = value
   }
 
   /**
@@ -386,20 +357,7 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
   @ApiStatus.Experimental
   @RequiresEdt
   internal fun <T> withIgnoringCaretMovement(block: () -> T): T {
-    ThreadingAssertions.assertEventDispatchThread()
-    if (completionState.ignoreCaretMovement) {
-      return block()
-    }
-    completionState.ignoreCaretMovement = true
-    return try {
-      block()
-    }
-    finally {
-      check(completionState.ignoreCaretMovement) {
-        "The state of disabling caret movement tracker is switched outside."
-      }
-      completionState.ignoreCaretMovement = false
-    }
+    return documentChangesTracker.withIgnoringCaretMovement(block)
   }
 
   private suspend fun request(
@@ -415,12 +373,13 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
   @ApiStatus.Internal
   protected fun getProvider(event: InlineCompletionEvent): InlineCompletionProvider? {
     if (application.isUnitTestMode && testProvider != null) {
-      return testProvider?.takeIf { it.isEnabledConsideringEventRequirements(event, remDevAggregatorAllowed = false) }
+      return testProvider?.takeIf { it.isEnabledConsideringEventRequirements(event) }
     }
 
     val allProviders = InlineCompletionProvider.extensions()
-    val result = allProviders.findSafely { it.isEnabledConsideringEventRequirements(event, remDevAggregatorAllowed = false) }
-                 ?: allProviders.findSafely { it.isEnabledConsideringEventRequirements(event, remDevAggregatorAllowed = true) }
+    val (rdProviders, regularProviders) = allProviders.partition { it is RemDevAggregatorInlineCompletionProvider }
+    val result = regularProviders.findSafely { it.isEnabledConsideringEventRequirements(event) }
+                 ?: rdProviders.findSafely { it.isEnabledConsideringEventRequirements(event) }
 
     if (result != null) {
       LOG.trace("[Inline Completion] Selected inline provider: $result")
@@ -440,13 +399,7 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
     }
   }
 
-  private fun InlineCompletionProvider.isEnabledConsideringEventRequirements(
-    event: InlineCompletionEvent,
-    remDevAggregatorAllowed: Boolean,
-  ): Boolean {
-    if (!remDevAggregatorAllowed && this is RemDevAggregatorInlineCompletionProvider) {
-      return false
-    }
+  private fun InlineCompletionProvider.isEnabledConsideringEventRequirements(event: InlineCompletionEvent): Boolean {
     if (event is InlineCompletionEvent.WithSpecificProvider) {
       // Only [RemDevAggregatorInlineCompletionProvider] can use others' events
       if (event.providerId != this@isEnabledConsideringEventRequirements.id && this !is RemDevAggregatorInlineCompletionProvider) {
@@ -576,7 +529,7 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
         }
 
       override val mode: Mode
-        get() = if (completionState.ignoreCaretMovement) Mode.ADAPTIVE else Mode.PROHIBIT_MOVEMENT
+        get() = if (documentChangesTracker.ignoreCaretMovements) Mode.ADAPTIVE else Mode.PROHIBIT_MOVEMENT
 
       override fun cancel() {
         if (!context.isDisposed) hide(context, FinishType.CARET_CHANGED)
@@ -649,10 +602,8 @@ abstract class InlineCompletionHandler @ApiStatus.Internal constructor(
     executor.awaitAll()
   }
 
-  @ApiStatus.Internal
-  protected class InlineCompletionState(
-    var ignoreDocumentChanges: Boolean = false,
-    var ignoreCaretMovement: Boolean = false,
+  @ApiStatus.Internal // TODO (remove?)
+  private class InlineCompletionState(
     var isInvokingEvent: Boolean = false,
   )
 

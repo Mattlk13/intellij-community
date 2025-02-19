@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.psi.stubs;
 
 import com.intellij.openapi.application.AppUIExecutor;
@@ -6,10 +6,7 @@ import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.project.DumbService;
-import com.intellij.openapi.project.NoAccessDuringPsiEvents;
-import com.intellij.openapi.project.Project;
-import com.intellij.openapi.project.ProjectManager;
+import com.intellij.openapi.project.*;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileWithId;
@@ -124,7 +121,12 @@ final class StubTreeLoaderImpl extends StubTreeLoader {
         stub = stubTree.getStub();
       }
       catch (SerializerNotFoundException e) {
-        var message = "No stub serializer: " + vFile.getPresentableUrl() + ": " + e.getMessage();
+        boolean isDumb = DumbService.isDumb(project);
+        boolean isScanning = UnindexedFilesScannerExecutor.getInstance(project).isRunning().getValue();
+        var message = "No stub serializer: " + vFile.getPresentableUrl() + "(" +
+                      "dumb=" + isDumb + "," +
+                      "scanning=" + isScanning +
+                      "): " + e.getMessage();
         return processError(vFile, new Exception(message, e));
       }
       if (stub == SerializedStubTree.NO_STUB) {
@@ -214,7 +216,7 @@ final class StubTreeLoaderImpl extends StubTreeLoader {
 
     for (PsiFileStub<?> root : ((PsiFileStubImpl<?>)tree.getRoot()).getStubRoots()) {
       if (root instanceof StubBase) {
-        StubList stubList = ((StubBase<?>)root).myStubList;
+        StubList stubList = ((StubBase<?>)root).getStubList();
         for (int i = 0; i < stubList.size(); i++) {
           StubBase<?> each = stubList.getCachedStub(i);
           PsiElement cachedPsi = each == null ? null : each.getCachedPsi();

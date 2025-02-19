@@ -18,16 +18,16 @@ import org.jdom.Element
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.idea.maven.MavenDisposable
 import org.jetbrains.idea.maven.importing.MavenImportUtil.getCompileExecutionConfigurations
+import org.jetbrains.idea.maven.importing.MavenImportUtil.getMavenModuleType
 import org.jetbrains.idea.maven.importing.MavenImportUtil.getTestCompileExecutionConfigurations
+import org.jetbrains.idea.maven.importing.MavenImportUtil.unescapeCompileSourceRootModuleSuffix
 import org.jetbrains.idea.maven.project.MavenProject
 import org.jetbrains.idea.maven.project.MavenProjectsManager
 import org.jetbrains.idea.maven.utils.MavenJDOMUtil
 import org.jetbrains.idea.maven.utils.MavenLog
 import org.jetbrains.jps.model.java.compiler.JpsJavaCompilerOptions
 
-private val ALL_PROJECTS_COMPILERS = Key.create<MutableSet<String>>("maven.compilers")
 internal val DEFAULT_COMPILER_EXTENSION = Key.create<MavenCompilerExtension>("default.compiler")
-internal val DEFAULT_COMPILER_IS_SET = Key.create<Boolean>("default.compiler.updated")
 private const val JAVAC_ID = "javac"
 private const val MAVEN_COMPILER_PARAMETERS = "maven.compiler.parameters"
 
@@ -115,9 +115,10 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
                                ideCompilerConfiguration: CompilerConfigurationImpl,
                                defaultCompilerExtension: MavenCompilerExtension?) {
     mavenProjectWithModule.forEach { (mavenProject, modules) ->
+      val compoundModule = modules.firstOrNull { it.getMavenModuleType() == StandardMavenModuleType.COMPOUND_MODULE }
       modules.forEach { module ->
         applyCompilerExtensionConfiguration(mavenProject, module, ideCompilerConfiguration, defaultCompilerExtension)
-        configureTargetLevel(mavenProject, module, ideCompilerConfiguration, defaultCompilerExtension)
+        configureTargetLevel(mavenProject, module, compoundModule, ideCompilerConfiguration, defaultCompilerExtension)
       }
 
       excludeArchetypeResources(project, mavenProject, ideCompilerConfiguration)
@@ -128,7 +129,7 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
                                                   module: Module,
                                                   ideCompilerConfiguration: CompilerConfigurationImpl,
                                                   defaultCompilerExtension: MavenCompilerExtension?) {
-    val isTestModule = MavenImportUtil.isTestModule(module.project, module.name)
+    val isTestModule = isTestModule(module)
     val mavenConfiguration = collectRawMavenData(mavenProject, isTestModule)
     val projectCompilerId = if (mavenProject.packaging == "pom") {
       null
@@ -172,14 +173,24 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
 
   private fun configureTargetLevel(mavenProject: MavenProject,
                                    module: Module,
+                                   compoundModule: Module?,
                                    ideCompilerConfiguration: CompilerConfiguration,
                                    defaultCompilerExtension: MavenCompilerExtension?) {
     var targetLevel = defaultCompilerExtension?.getDefaultCompilerTargetLevel(mavenProject, module)
-    MavenLog.LOG.debug("Bytecode target level $targetLevel in module ${module.name}, compiler extension = ${defaultCompilerExtension?.mavenCompilerId}")
+    val moduleName = module.name
+    MavenLog.LOG.debug("Bytecode target level $targetLevel in module $moduleName, compiler extension = ${defaultCompilerExtension?.mavenCompilerId}")
     if (targetLevel == null) {
-      var level: LanguageLevel?
-      if (MavenImportUtil.isTestModule(module.project, module.name)) {
+      var level: LanguageLevel? = null
+      val type = module.getMavenModuleType()
+      if (type == StandardMavenModuleType.TEST_ONLY) {
         level = MavenImportUtil.getTestTargetLanguageLevel(mavenProject)
+      }
+      else if (type == StandardMavenModuleType.MAIN_ONLY_ADDITIONAL) {
+        if (null != compoundModule) {
+          val moduleSuffix = moduleName.substring(compoundModule.name.length + 1)
+          val executionId = unescapeCompileSourceRootModuleSuffix(moduleSuffix)
+          level = MavenImportUtil.getTargetLanguageLevel(mavenProject, executionId)
+        }
       }
       else {
         level = MavenImportUtil.getTargetLanguageLevel(mavenProject)
@@ -192,7 +203,7 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
       targetLevel = level.toJavaVersion().toString()
     }
 
-    MavenLog.LOG.debug("Setting bytecode target level $targetLevel in module ${module.name}")
+    MavenLog.LOG.debug("Setting bytecode target level $targetLevel in module $moduleName")
     ideCompilerConfiguration.setBytecodeTargetLevel(module, targetLevel)
   }
 
@@ -260,9 +271,8 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
         }
       }
 
-
       if (configData.forTests) {
-        val testData = collectTestCompilerArgs(it);
+        val testData = collectTestCompilerArgs(it)
         if (testData.isNotEmpty()) {
           result.addAll(testData)
           return result.toList()
@@ -340,6 +350,11 @@ class MavenCompilerConfigurator : MavenApplicableConfigurator(GROUP_ID, ARTIFACT
       }
     }
     return result
+  }
+
+  private fun isTestModule(module: Module): Boolean {
+    val type = module.getMavenModuleType()
+    return type == StandardMavenModuleType.TEST_ONLY
   }
 }
 

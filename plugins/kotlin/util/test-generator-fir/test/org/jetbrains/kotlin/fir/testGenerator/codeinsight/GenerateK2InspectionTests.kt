@@ -1,4 +1,4 @@
-// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.fir.testGenerator.codeinsight
 
 import org.jetbrains.kotlin.idea.k2.codeInsight.inspections.shared.AbstractK2SharedQuickFixTest
@@ -54,6 +54,7 @@ internal fun MutableTWorkspace.generateK2InspectionTests() {
             model("${idea}/inspectionsLocal/redundantElseInIf")
             model("${idea}/inspectionsLocal/redundantExplicitType")
             model("${idea}/inspectionsLocal/coroutines/redundantRunCatching")
+            model("${idea}/inspectionsLocal/coroutines/unusedFlow")
             model("${idea}/inspectionsLocal/joinDeclarationAndAssignment")
             model("${idea}/inspectionsLocal/replaceArrayOfWithLiteral")
             model("${idea}/inspectionsLocal/selfAssignment")
@@ -82,6 +83,15 @@ internal fun MutableTWorkspace.generateK2InspectionTests() {
             model("${idea}/inspectionsLocal/canBeVal")
             model("${idea}/inspectionsLocal/addOperatorModifier")
             model("${idea}/inspectionsLocal/kotlinUnreachableCode")
+            model("${idea}/inspectionsLocal/removeRedundantLabel")
+            model("${idea}/inspectionsLocal/removeRedundantCallsOfConversionMethods")
+            model("${idea}/inspectionsLocal/removeExplicitTypeArguments")
+            model("${idea}/inspectionsLocal/contextParametersMigration")
+
+            // There is no `RemoveExplicitTypeArgumentsIntention` in K2 because `RemoveExplicitTypeArgumentsInspection` is available
+            // and the inspection can have the "No highlighting (fix available)" severity.
+            // Therefore, we generate a test for the inspection based on the tests for K1-RemoveExplicitTypeArgumentsIntention.
+            model("${idea}/intentions/removeExplicitTypeArguments", testClassName = "RemoveExplicitTypeArgumentsFormerIntentionTest")
         }
         /**
          * `unusedSymbol` tests require [com.intellij.codeInsight.daemon.impl.GeneralHighlightingPass] to run,
@@ -105,6 +115,7 @@ internal fun MutableTWorkspace.generateK2InspectionTests() {
             model("${idea}/inspections/arrayInDataClass", pattern = pattern)
             model("${idea}/inspections/publicApiImplicitType", pattern = pattern)
             model("${idea}/inspections/replaceArrayEqualityOpWithArraysEquals", pattern = pattern)
+            model("${idea}/intentions/removeExplicitTypeArguments", pattern = pattern)
         }
 
         testClass<AbstractK2MultiFileInspectionTest> {
@@ -142,12 +153,14 @@ internal fun MutableTWorkspace.generateK2InspectionTests() {
             model("${idea}/quickfix/createFromUsage/createFunction/call/abstract", pattern = pattern)
             model("${idea}/quickfix/typeMismatch/convertCollection", pattern = pattern)
             model("${idea}/quickfix/typeMismatch/wrapWithCollectionLiteral", pattern = pattern)
+            model("${idea}/quickfix/redundantInterpolationPrefix", pattern = pattern)
             model("${idea}/intentions/convertSecondaryConstructorToPrimary", pattern = pattern)
         }
 
         testClass<AbstractK2MultiFileQuickFixTest> {
             val pattern = Patterns.forRegex("""^(\w+)\.((before\.Main\.\w+)|(test))$""")
             model("${idea}/quickfix/optIn", pattern = pattern, testMethodName = "doTestWithExtraFile")
+            model("${idea}/quickfix/changeSignature/jk", pattern = pattern, testMethodName = "doTestWithExtraFile")
         }
     }
 

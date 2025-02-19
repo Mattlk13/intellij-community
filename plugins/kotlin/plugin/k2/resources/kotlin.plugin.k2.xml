@@ -1,6 +1,6 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
 
-  <module value="kotlin.plugin.k2"/>
+  <module value="com.intellij.modules.kotlin.k2"/>
 
   <dependencies>
     <plugin id="com.intellij.modules.platform"/>
@@ -36,6 +36,10 @@
   <xi:include href="extensions.xml"/>
 
   <xi:include href="ultimate-plugin.k2.xml">
+    <xi:fallback/>
+  </xi:include>
+
+  <xi:include href="command-completion-k2.xml">
     <xi:fallback/>
   </xi:include>
 
@@ -207,6 +211,7 @@
     <module name="kotlin.base.fir.analysis-api-platform"/>
     <module name="kotlin.base.fir.code-insight"/>
     <module name="kotlin.base.fir.project-structure"/>
+    <module name="kotlin.base.fir.scripting"/>
 
     <module name="kotlin.copyright"/>
     <module name="kotlin.coverage"/>

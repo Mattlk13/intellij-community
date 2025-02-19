@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
@@ -49,12 +49,9 @@ internal class FloatingPointLiteralPrecisionInspection : KotlinApplicableInspect
     override fun createQuickFix(
         element: KtConstantExpression,
         context: String
-    ): KotlinModCommandQuickFix<KtConstantExpression> {
-        return FloatingPointLiteralPrecisionQuickFix(context)
-    }
+    ): KotlinModCommandQuickFix<KtConstantExpression> = FloatingPointLiteralPrecisionQuickFix(context)
 
-    context(KaSession)
-    override fun prepareContext(element: KtConstantExpression): String? {
+    override fun KaSession.prepareContext(element: KtConstantExpression): String? {
         if (element.elementType == KtConstantExpressionElementType.kindToConstantElementType(ConstantValueKind.FLOAT_CONSTANT)) {
             val isFloat = element.expressionType?.isFloatType == true
             val uppercaseSuffix = isFloat && element.text?.endsWith('F') == true
@@ -89,9 +86,9 @@ private class FloatingPointLiteralPrecisionQuickFix(val replacementText: String)
     override fun getFamilyName(): String = name
 
     override fun applyFix(
-            project: Project,
-            element: KtConstantExpression,
-            updater: ModPsiUpdater,
+        project: Project,
+        element: KtConstantExpression,
+        updater: ModPsiUpdater,
     ) {
         element.replace(KtPsiFactory(project).createExpression(replacementText))
     }

@@ -277,11 +277,13 @@ public final class org/jetbrains/jewel/intui/standalone/styling/IntUiHorizontalP
 
 public final class org/jetbrains/jewel/intui/standalone/styling/IntUiIconButtonStylingKt {
 	public static final fun dark (Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle;
-	public static final fun dark-8v1krLo (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJLandroidx/compose/runtime/Composer;III)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
+	public static final fun dark-7HESe_I (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJ)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
+	public static synthetic fun dark-7HESe_I$default (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
 	public static final fun defaults-ij7-PLE (Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics$Companion;Landroidx/compose/foundation/shape/CornerSize;FLandroidx/compose/foundation/layout/PaddingValues;J)Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics;
 	public static synthetic fun defaults-ij7-PLE$default (Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics$Companion;Landroidx/compose/foundation/shape/CornerSize;FLandroidx/compose/foundation/layout/PaddingValues;JILjava/lang/Object;)Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics;
 	public static final fun light (Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;Lorg/jetbrains/jewel/ui/component/styling/IconButtonMetrics;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle;
-	public static final fun light-8v1krLo (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJLandroidx/compose/runtime/Composer;III)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
+	public static final fun light-7HESe_I (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJ)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
+	public static synthetic fun light-7HESe_I$default (Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors$Companion;JJJJJJJJJJJJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/ui/component/styling/IconButtonColors;
 }
 
 public final class org/jetbrains/jewel/intui/standalone/styling/IntUiInformationBannerColorFactory {
@@ -550,11 +552,11 @@ public final class org/jetbrains/jewel/intui/standalone/styling/IntUiTextAreaSty
 }
 
 public final class org/jetbrains/jewel/intui/standalone/styling/IntUiTextFieldStylingKt {
-	public static final fun dark (Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle;
+	public static final fun dark (Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle;
 	public static final fun dark-a3tHFA8 (Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors$Companion;JJJJJJJJJJJJJJJJJJJJJLandroidx/compose/runtime/Composer;IIII)Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;
 	public static final fun defaults-H1KY9o8 (Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics$Companion;Landroidx/compose/foundation/shape/CornerSize;Landroidx/compose/foundation/layout/PaddingValues;JF)Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;
 	public static synthetic fun defaults-H1KY9o8$default (Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics$Companion;Landroidx/compose/foundation/shape/CornerSize;Landroidx/compose/foundation/layout/PaddingValues;JFILjava/lang/Object;)Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;
-	public static final fun light (Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle;
+	public static final fun light (Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle$Companion;Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;Lorg/jetbrains/jewel/ui/component/styling/TextFieldMetrics;Lorg/jetbrains/jewel/ui/component/styling/IconButtonStyle;Landroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/ui/component/styling/TextFieldStyle;
 	public static final fun light-a3tHFA8 (Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors$Companion;JJJJJJJJJJJJJJJJJJJJJLandroidx/compose/runtime/Composer;IIII)Lorg/jetbrains/jewel/ui/component/styling/TextFieldColors;
 }
 
@@ -601,14 +603,22 @@ public final class org/jetbrains/jewel/intui/standalone/styling/IntUiWarningBann
 }
 
 public final class org/jetbrains/jewel/intui/standalone/theme/IntUiGlobalColorsKt {
-	public static final fun dark-GyCwops (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/BorderColors;
-	public static final fun dark-Hformbs (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/OutlineColors;
-	public static final fun dark-Hformbs (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/TextColors;
-	public static final fun dark-yrwZFoE (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;JLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/GlobalColors;
-	public static final fun light-GyCwops (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/BorderColors;
-	public static final fun light-Hformbs (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/OutlineColors;
-	public static final fun light-Hformbs (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/TextColors;
-	public static final fun light-yrwZFoE (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;JLandroidx/compose/runtime/Composer;II)Lorg/jetbrains/jewel/foundation/GlobalColors;
+	public static final fun dark-jdqzblg (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJ)Lorg/jetbrains/jewel/foundation/OutlineColors;
+	public static final fun dark-jdqzblg (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJ)Lorg/jetbrains/jewel/foundation/TextColors;
+	public static synthetic fun dark-jdqzblg$default (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/OutlineColors;
+	public static synthetic fun dark-jdqzblg$default (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/TextColors;
+	public static final fun dark-xwkQ0AY (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;J)Lorg/jetbrains/jewel/foundation/GlobalColors;
+	public static synthetic fun dark-xwkQ0AY$default (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;JILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/GlobalColors;
+	public static final fun dark-zSO0fhY (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJ)Lorg/jetbrains/jewel/foundation/BorderColors;
+	public static synthetic fun dark-zSO0fhY$default (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/BorderColors;
+	public static final fun light-jdqzblg (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJ)Lorg/jetbrains/jewel/foundation/OutlineColors;
+	public static final fun light-jdqzblg (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJ)Lorg/jetbrains/jewel/foundation/TextColors;
+	public static synthetic fun light-jdqzblg$default (Lorg/jetbrains/jewel/foundation/OutlineColors$Companion;JJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/OutlineColors;
+	public static synthetic fun light-jdqzblg$default (Lorg/jetbrains/jewel/foundation/TextColors$Companion;JJJJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/TextColors;
+	public static final fun light-xwkQ0AY (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;J)Lorg/jetbrains/jewel/foundation/GlobalColors;
+	public static synthetic fun light-xwkQ0AY$default (Lorg/jetbrains/jewel/foundation/GlobalColors$Companion;Lorg/jetbrains/jewel/foundation/BorderColors;Lorg/jetbrains/jewel/foundation/OutlineColors;Lorg/jetbrains/jewel/foundation/TextColors;JILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/GlobalColors;
+	public static final fun light-zSO0fhY (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJ)Lorg/jetbrains/jewel/foundation/BorderColors;
+	public static synthetic fun light-zSO0fhY$default (Lorg/jetbrains/jewel/foundation/BorderColors$Companion;JJJILjava/lang/Object;)Lorg/jetbrains/jewel/foundation/BorderColors;
 }
 
 public final class org/jetbrains/jewel/intui/standalone/theme/IntUiGlobalMetricsKt {

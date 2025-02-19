@@ -18,7 +18,7 @@ package org.jetbrains.idea.maven.importing
 import com.intellij.execution.CommonProgramRunConfigurationParameters
 import com.intellij.execution.util.ProgramParametersUtil
 import com.intellij.maven.testFramework.MavenMultiVersionImportingTestCase
-import com.intellij.openapi.application.writeAction
+import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.externalSystem.service.project.ProjectDataManager
 import com.intellij.openapi.module.ModuleManager.Companion.getInstance
 import com.intellij.openapi.project.Project
@@ -74,8 +74,17 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
 
   @Test
   fun testDoNotResetFoldersAfterResolveIfProjectIsInvalid() = runBlocking {
-    runWithoutStaticSync()
     createStdProjectFolders()
+    importProjectAsync("""
+                       <groupId>test</groupId>
+                       <artifactId>project</artifactId>
+                       <version>1</version>""")
+    assertModules("project")
+    assertSources("project", "src/main/java")
+    assertDefaultResources("project")
+    assertTestSources("project", "src/test/java")
+    assertDefaultTestResources("project")
+
     createProjectPom("""
                        <groupId>test</groupId>
                        <artifactId>project</artifactId>
@@ -107,7 +116,7 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
                     <artifactId>project</artifactId>
                     <version>1</version>
                     """.trimIndent())
-    writeAction {
+    edtWriteAction {
       val adapter = MavenRootModelAdapter(MavenRootModelAdapterLegacyImpl(
         projectsTree.findProject(projectPom)!!,
         getModule("project"),
@@ -1180,7 +1189,6 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
 
   @Test
   fun testExcludingOutputDirectoriesIfProjectOutputIsUsed() = runBlocking {
-    runWithoutStaticSync()
     mavenImporterSettings.isUseMavenOutput = false
     importProjectAsync("""
                     <groupId>test</groupId>
@@ -1226,7 +1234,6 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
 
   @Test
   fun testExcludingCustomOutputDirectories() = runBlocking {
-    runWithoutStaticSync()
     importProjectAsync("""
                     <groupId>test</groupId>
                     <artifactId>project</artifactId>
@@ -1571,7 +1578,7 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
                   "src/main/java",
                   "target/generated-sources/baz")
     assertDefaultResources("project")
-    writeAction {
+    edtWriteAction {
       try {
         subDir.delete(this)
       }
@@ -1640,7 +1647,7 @@ class FoldersImportingTest : MavenMultiVersionImportingTestCase() {
       assertDefaultTestResources("project")
     }
     testAssertions.accept(true)
-    writeAction {
+    edtWriteAction {
       try {
         target.delete(this)
       }

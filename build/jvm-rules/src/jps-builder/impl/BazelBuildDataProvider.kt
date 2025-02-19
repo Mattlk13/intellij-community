@@ -4,22 +4,30 @@ package org.jetbrains.bazel.jvm.jps.impl
 
 import org.apache.arrow.memory.RootAllocator
 import org.jetbrains.bazel.jvm.jps.SourceDescriptor
+import org.jetbrains.bazel.jvm.jps.emptyStringArray
 import org.jetbrains.jps.builders.BuildTarget
+import org.jetbrains.jps.builders.BuildTargetType
 import org.jetbrains.jps.builders.storage.SourceToOutputMapping
-import org.jetbrains.jps.incremental.storage.*
+import org.jetbrains.jps.incremental.storage.BuildDataProvider
+import org.jetbrains.jps.incremental.storage.OneToManyPathMapping
+import org.jetbrains.jps.incremental.storage.OutputToTargetMapping
+import org.jetbrains.jps.incremental.storage.PathTypeAwareRelativizer
+import org.jetbrains.jps.incremental.storage.RelativePathType
+import org.jetbrains.jps.incremental.storage.SourceToOutputMappingCursor
+import org.jetbrains.jps.incremental.storage.StampsStorage
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 
 internal class BazelBuildDataProvider(
   @JvmField val relativizer: PathTypeAwareRelativizer,
-  actualDigestMap: Map<Path, ByteArray>,
   private val sourceToDescriptor: Map<Path, SourceDescriptor>,
   @JvmField val storeFile: Path,
   @JvmField val allocator: RootAllocator,
   @JvmField val isCleanBuild: Boolean,
+  @JvmField val libRootManager: BazelLibraryRoots,
 ) : BuildDataProvider {
   @JvmField
-  val stampStorage = BazelStampStorage(actualDigestMap = actualDigestMap, map = sourceToDescriptor)
+  val stampStorage = BazelStampStorage(sourceToDescriptor)
 
   @JvmField
   val sourceToOutputMapping = BazelSourceToOutputMapping(map = sourceToDescriptor, relativizer = relativizer)
@@ -50,7 +58,15 @@ internal class BazelBuildDataProvider(
   override fun clearCache() {
   }
 
-  override fun removeStaleTarget(targetId: String, targetTypeId: String) {
+  override fun removeStaleTarget(targetId: String, targetType: BuildTargetType<*>) {
+  }
+
+  override fun flushStorage(memoryCachesOnly: Boolean) {
+  }
+
+  override fun getLibraryRoots() = libRootManager
+
+  override fun wipeStorage() {
   }
 
   override fun getFileStampStorage(target: BuildTarget<*>): BazelStampStorage = stampStorage
@@ -64,20 +80,11 @@ internal class BazelBuildDataProvider(
   override fun closeTargetMaps(target: BuildTarget<*>) {
   }
 
-  override fun removeAllMaps() {
-  }
-
-  override fun commit() {
-  }
-
   override fun close() {
   }
 }
 
-internal class BazelStampStorage(
-  private val actualDigestMap: Map<Path, ByteArray>,
-  private val map: Map<Path, SourceDescriptor>,
-) : StampsStorage<ByteArray> {
+internal class BazelStampStorage(private val map: Map<Path, SourceDescriptor>) : StampsStorage<ByteArray> {
   override fun updateStamp(sourceFile: Path, buildTarget: BuildTarget<*>?, currentFileTimestamp: Long) {
     throw IllegalStateException()
   }
@@ -85,11 +92,7 @@ internal class BazelStampStorage(
   fun markAsUpToDate(sourceFiles: Collection<Path>) {
     synchronized(map) {
       for (sourceFile in sourceFiles) {
-        val actualDigest = requireNotNull(actualDigestMap.get(sourceFile)) {
-          "No digest is provided for $sourceFile"
-        }
-
-        requireNotNull(map.get(sourceFile)) { "Source file is unknown: $sourceFile" }.digest = actualDigest
+        requireNotNull(map.get(sourceFile)) { "Source file is unknown: $sourceFile" }.isChanged = false
       }
     }
   }
@@ -97,15 +100,17 @@ internal class BazelStampStorage(
   override fun removeStamp(sourceFile: Path, buildTarget: BuildTarget<*>?) {
     // used by BazelKotlinFsOperationsHelper (markChunk -> fsState.markDirty)
     synchronized(map) {
-      map.get(sourceFile)?.digest = null
+      map.get(sourceFile)?.isChanged = true
+    }
+  }
+
+  fun markChanged(sourceFile: Path) {
+    synchronized(map) {
+      map.get(sourceFile)?.isChanged = true
     }
   }
 
   override fun getCurrentStampIfUpToDate(file: Path, buildTarget: BuildTarget<*>?, attrs: BasicFileAttributes?): ByteArray? {
-    //val key = createKey(file)
-    //val storedDigest = synchronized(map) { map.get(key)?.digest } ?: return null
-    //val actualDigest = actualDigestMap.get(file) ?: return null
-    //return actualDigest.takeIf { storedDigest.contentEquals(actualDigest) }
     throw UnsupportedOperationException("Must not be used")
   }
 }
@@ -115,9 +120,14 @@ internal class BazelSourceToOutputMapping(
   private val relativizer: PathTypeAwareRelativizer,
 ) : SourceToOutputMapping {
   override fun setOutputs(sourceFile: Path, outputPaths: List<Path>) {
-    val relativeOutputPaths = if (outputPaths.isEmpty()) null else outputPaths.map { relativizer.toRelative(it, RelativePathType.OUTPUT) }
+    val relativeOutputPaths = if (outputPaths.isEmpty()) {
+      emptyStringArray
+    }
+    else {
+      Array(outputPaths.size) { relativizer.toRelative(outputPaths[it], RelativePathType.OUTPUT) }
+    }
     synchronized(map) {
-      val value = if (relativeOutputPaths == null) {
+      val value = if (relativeOutputPaths.isEmpty()) {
         map.get(sourceFile) ?: return
       }
       else {
@@ -140,8 +150,8 @@ internal class BazelSourceToOutputMapping(
     synchronized(map) {
       val sourceInfo = getDescriptorOrError(sourceFile)
       val existingOutputs = sourceInfo.outputs
-      if (existingOutputs == null) {
-        sourceInfo.outputs = java.util.List.of(relativeOutputPath)
+      if (existingOutputs.isEmpty()) {
+        sourceInfo.outputs = arrayOf(relativeOutputPath)
       }
       else if (!existingOutputs.contains(relativeOutputPath)) {
         sourceInfo.outputs = existingOutputs + relativeOutputPath
@@ -151,14 +161,14 @@ internal class BazelSourceToOutputMapping(
 
   override fun remove(sourceFile: Path) {
     synchronized(map) {
-      map.get(sourceFile)?.outputs = null
+      map.get(sourceFile)?.outputs = emptyStringArray
     }
   }
 
   fun remove(sourceFiles: Collection<Path>) {
     synchronized(map) {
       for (sourceFile in sourceFiles) {
-        map.get(sourceFile)?.outputs = null
+        map.get(sourceFile)?.outputs = emptyStringArray
       }
     }
   }
@@ -168,13 +178,16 @@ internal class BazelSourceToOutputMapping(
     val relativeOutputPath = relativizer.toRelative(outputPath, RelativePathType.OUTPUT)
     synchronized(map) {
       val sourceInfo = map.get(sourceFile) ?: return
-      val existingOutputs = sourceInfo.outputs ?: return
-      if (existingOutputs.contains(relativeOutputPath)) {
+      val existingOutputs = sourceInfo.outputs.takeIf { it.isNotEmpty() } ?: return
+      val indexToRemove = existingOutputs.indexOf(relativeOutputPath)
+      if (indexToRemove != -1) {
         if (existingOutputs.size == 1) {
-          sourceInfo.outputs = null
+          sourceInfo.outputs = emptyStringArray
         }
         else {
-          sourceInfo.outputs = existingOutputs - relativeOutputPath
+          sourceInfo.outputs = Array(existingOutputs.size - 1) {
+            existingOutputs[if (it < indexToRemove) it else it + 1]
+          }
         }
       }
     }
@@ -191,13 +204,13 @@ internal class BazelSourceToOutputMapping(
       ?.map { relativizer.toAbsoluteFile(it, RelativePathType.OUTPUT) }
   }
 
-  fun getAndClearOutputs(sourceFile: Path): MutableList<Path>? {
+  fun getAndClearOutputs(sourceFile: Path): Array<String>? {
     synchronized(map) {
       // must be not null - probably, later we should add warning here
       val descriptor = map.get(sourceFile) ?: return null
-      val result = descriptor.outputs?.takeIf { it.isNotEmpty() } ?: return null
-      descriptor.outputs = null
-      return result.mapTo(ArrayList(result.size)) { relativizer.toAbsoluteFile(it, RelativePathType.OUTPUT) }
+      val result = descriptor.outputs.takeIf { it.isNotEmpty() } ?: return null
+      descriptor.outputs = emptyStringArray
+      return result
     }
   }
 
@@ -205,14 +218,14 @@ internal class BazelSourceToOutputMapping(
     return synchronized(map) { map.get(sourceFile) }
   }
 
-  fun findAffectedSources(affectedSources: List<List<String>>): List<Path> {
-    val result = ArrayList<Path>(affectedSources.size)
+  fun findAffectedSources(affectedSources: List<Array<String>>): List<SourceDescriptor> {
+    val result = ArrayList<SourceDescriptor>(affectedSources.size)
     synchronized(map) {
       for (descriptor in map.values) {
-        val outputs = descriptor.outputs ?: continue
-        for (output in outputs) {
-          if (affectedSources.any { it.contains(output) }) {
-            result.add(descriptor.sourceFile)
+        for (output in descriptor.outputs) {
+          // see KTIJ-197
+          if (!output.endsWith(".kotlin_module") && affectedSources.any { it.contains(output) }) {
+            result.add(descriptor)
             break
           }
         }
@@ -223,16 +236,10 @@ internal class BazelSourceToOutputMapping(
 
   override fun getSourceFileIterator(): Iterator<Path> {
     throw UnsupportedOperationException("Must not be used")
-    //return synchronized(map) { map.keys.toTypedArray() }.asSequence()
-    //  .map { relativizer.toAbsoluteFile(it, RelativePathType.SOURCE) }
-    //  .iterator()
   }
 
   override fun getSourcesIterator(): Iterator<String> {
     throw UnsupportedOperationException("Must not be used")
-    //return synchronized(map) { map.keys.toTypedArray() }.asSequence()
-    //  .map { relativizer.toAbsolute(it, RelativePathType.SOURCE) }
-    //  .iterator()
   }
 
   override fun cursor(): SourceToOutputMappingCursor {

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.analysis.AnalysisBundle;
@@ -32,6 +32,7 @@ import com.intellij.util.concurrency.EdtExecutorService;
 import com.intellij.util.containers.ContainerUtil;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -43,7 +44,8 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingPass implements DumbAware
+@ApiStatus.Internal
+public sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingPass implements DumbAware
   permits NasueousGeneralHighlightingPass {
   static final Logger LOG = Logger.getInstance(GeneralHighlightingPass.class);
   private static final Key<Boolean> HAS_ERROR_ELEMENT = Key.create("HAS_ERROR_ELEMENT");
@@ -54,17 +56,17 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
   private static final Random RESTART_DAEMON_RANDOM = new Random();
 
   private final boolean myUpdateAll;
-  final @NotNull ProperTextRange myPriorityRange;
+  private final @NotNull ProperTextRange myPriorityRange;
 
-  final List<HighlightInfo> myHighlights = Collections.synchronizedList(new ArrayList<>());
+  private final List<HighlightInfo> myHighlights = Collections.synchronizedList(new ArrayList<>());
 
-  protected volatile boolean myHasErrorElement;
+  private volatile boolean myHasErrorElement;
   private volatile boolean myHasErrorSeverity;
   private final boolean myRunAnnotators;
   private final HighlightInfoUpdater myHighlightInfoUpdater;
   private final HighlightVisitorRunner myHighlightVisitorRunner;
 
-  GeneralHighlightingPass(@NotNull PsiFile psiFile,
+  public GeneralHighlightingPass(@NotNull PsiFile psiFile,
                           @NotNull Document document,
                           int startOffset,
                           int endOffset,
@@ -91,10 +93,15 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
     myHighlightVisitorRunner = new HighlightVisitorRunner(psiFile, globalScheme, runVisitors, highlightErrorElements);
   }
 
+  boolean hasErrorElement() {
+    return myHasErrorElement;
+  }
+
   private @NotNull PsiFile getFile() {
     return myFile;
   }
-  static void assertHighlightingPassNotRunning() {
+
+  public static void assertHighlightingPassNotRunning() {
     HighlightVisitorRunner.assertHighlightingPassNotRunning();
   }
 
@@ -197,7 +204,7 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
         });
         if (success) {
           if (myUpdateAll) {
-            daemonCodeAnalyzer.getFileStatusMap().setErrorFoundFlag(myProject, getDocument(), myHasErrorSeverity);
+            daemonCodeAnalyzer.getFileStatusMap().setErrorFoundFlag(getDocument(), getContext(), myHasErrorSeverity);
             reportErrorsToWolf(myHasErrorSeverity);
           }
         }
@@ -243,7 +250,7 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
     AnnotationSession session = AnnotationSessionImpl.create(getFile());
     setupAnnotationSession(session, myPriorityRange, myRestrictRange,
                            ((HighlightingSessionImpl)getHighlightingSession()).getMinimumSeverity());
-    AnnotatorRunner annotatorRunner = myRunAnnotators ? new AnnotatorRunner(getFile(), false, session) : null;
+    AnnotatorRunner annotatorRunner = myRunAnnotators ? new AnnotatorRunner(session, false) : null;
     if (annotatorRunner == null) {
       runnable.run();
       return true;
@@ -251,11 +258,12 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
     return annotatorRunner.runAnnotatorsAsync(elements1, elements2, runnable, resultSink);
   }
 
-  static final int POST_UPDATE_ALL = 5;
+  @ApiStatus.Internal
+  public static final int POST_UPDATE_ALL = 5;
   private static final AtomicInteger RESTART_REQUESTS = new AtomicInteger();
 
   @TestOnly
-  static boolean isRestartPending() {
+  public static boolean isRestartPending() {
     return RESTART_REQUESTS.get() > 0;
   }
 
@@ -318,7 +326,8 @@ sealed class GeneralHighlightingPass extends ProgressableTextEditorHighlightingP
     return holder;
   }
 
-  static void setupAnnotationSession(@NotNull AnnotationSession annotationSession,
+  @ApiStatus.Internal
+  public static void setupAnnotationSession(@NotNull AnnotationSession annotationSession,
                                      @NotNull TextRange priorityRange,
                                      @NotNull TextRange highlightRange,
                                      @Nullable HighlightSeverity minimumSeverity) {

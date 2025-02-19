@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
 import com.intellij.codeInspection.ProblemHighlightType
@@ -52,9 +52,8 @@ internal class BooleanLiteralArgumentInspection(
         context: Context,
     ): @InspectionMessage String = KotlinBundle.message("boolean.literal.argument.without.parameter.name")
 
-    context(KaSession)
     @OptIn(KaExperimentalApi::class)
-    override fun prepareContext(element: KtValueArgument): Context? {
+    override fun KaSession.prepareContext(element: KtValueArgument): Context? {
         if (element.isNamed()) return null
         val argumentExpression = element.getArgumentExpression() ?: return null
         if (!argumentExpression.isBooleanLiteral()) return null

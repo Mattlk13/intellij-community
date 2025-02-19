@@ -13,24 +13,21 @@ import com.jetbrains.python.sdk.PythonSdkUtil
 import com.jetbrains.python.statistics.PyPackagesUsageCollector
 import org.jetbrains.annotations.Nls
 
-class InstallAllPackagesQuickFix : LocalQuickFix {
-  var packageNames: List<String> = emptyList()
+class InstallAllPackagesQuickFix(private val packageNames: List<String>) : LocalQuickFix {
 
   override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
     val element = descriptor.psiElement ?: return
     val module = ModuleUtilCore.findModuleForPsiElement(element) ?: return
     val sdk = PythonSdkUtil.findPythonSdk(element) ?: return
+    val confirmedPackages = getConfirmedPackages(packageNames.map { pyRequirement(it) }, project)
 
-    val confirmedPackages = getConfirmedPackages(packageNames, project)
     if (confirmedPackages.isEmpty()) return
 
-    val requirements = confirmedPackages.map { pyRequirement(it) }
-
     val fix = PyInstallRequirementsFix(familyName, module, sdk,
-                                       requirements,
+                                       confirmedPackages.toList(),
                                        emptyList())
     fix.applyFix(module.project, descriptor)
-    PyPackagesUsageCollector.installAllEvent.log(requirements.size)
+    PyPackagesUsageCollector.installAllEvent.log(confirmedPackages.size)
   }
 
   override fun getFamilyName(): @Nls String = PyBundle.message("python.unresolved.reference.inspection.install.all")

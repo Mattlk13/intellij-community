@@ -116,19 +116,13 @@ public class JavaHomeFinderBasic {
   }
 
   /// Detects the paths of JDKs on the machine with information about the Java version and architecture.
-  public final @NotNull Set<KeyFMap> findExistingJdkEntries() {
+  public final @NotNull Set<JavaHomeFinder.JdkEntry> findExistingJdkEntries() {
     final var paths = findExistingJdks();
     final var detector = JdkVersionDetector.getInstance();
 
     return paths.stream().map(path -> {
       final var version = detector.detectJdkVersionInfo(path);
-      var info = KeyFMap.EMPTY_MAP.plus(SdkType.HOMEPATH_KEY, path);
-      if (version != null) {
-        info = info
-          .plus(JavaHomeFinder.JDK_VERSION_KEY, version)
-          .plus(SdkType.VERSION_KEY, version.displayVersionString());
-      }
-      return info;
+      return new JavaHomeFinder.JdkEntry(path, version);
     }).collect(Collectors.toSet());
 
   }
@@ -308,11 +302,18 @@ public class JavaHomeFinderBasic {
     Path miseDataDir = getPathInEnvironmentVariable("MISE_DATA_DIR", "installs");
     if (miseDataDir != null) return miseDataDir;
 
-    Path xdgDataDir = getPathInEnvironmentVariable("XDG_DATA_DIR", "mise/installs");
-    if (xdgDataDir != null) return xdgDataDir;
+    Path xdgDataHome = getPathInEnvironmentVariable("XDG_DATA_HOME", "mise/installs");
+    if (xdgDataHome != null) return xdgDataHome;
 
-    // finally, try the usual location in Unix or macOS
-    if (!(this instanceof JavaHomeFinderWindows) && !(this instanceof JavaHomeFinderWsl)) {
+    // finally, try the usual system-specific directories
+    if (this instanceof JavaHomeFinderWindows) {
+      // Windows
+      Path localAppData = getPathInEnvironmentVariable("LOCALAPPDATA", "mise/installs");
+      if (localAppData != null) return localAppData;
+      localAppData = getPathInUserHome("AppData/Local/mise/installs");
+      if (localAppData != null && safeIsDirectory(localAppData)) return localAppData;
+    } else if (!(this instanceof JavaHomeFinderWsl)) {
+      // Unix and macOS
       Path installsDir = getPathInUserHome(".local/share/mise/installs");
       if (installsDir != null && safeIsDirectory(installsDir)) return installsDir;
     }

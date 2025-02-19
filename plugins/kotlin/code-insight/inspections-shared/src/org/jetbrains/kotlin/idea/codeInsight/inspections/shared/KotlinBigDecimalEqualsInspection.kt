@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.codeInsight.inspections.shared
 
 import com.intellij.codeInspection.CleanupLocalInspectionTool
@@ -21,7 +21,8 @@ import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.*
 
-internal class KotlinBigDecimalEqualsInspection : KotlinApplicableInspectionBase.Simple<KtExpression, KotlinBigDecimalEqualsInspection.Context>(), CleanupLocalInspectionTool {
+internal class KotlinBigDecimalEqualsInspection :
+    KotlinApplicableInspectionBase.Simple<KtExpression, KotlinBigDecimalEqualsInspection.Context>(), CleanupLocalInspectionTool {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): KtVisitorVoid =
         expressionVisitor {
             visitTargetElement(it, holder, isOnTheFly)
@@ -54,6 +55,7 @@ internal class KotlinBigDecimalEqualsInspection : KotlinApplicableInspectionBase
                         val compareToExpression = psiFactory.createExpression(expressionString)
                         element.replace(compareToExpression)
                     }
+
                     is KtCallExpression -> {
                         val qualifiedExpression = element.parent as KtQualifiedExpression
                         val receiverExpression = qualifiedExpression.receiverExpression
@@ -63,6 +65,7 @@ internal class KotlinBigDecimalEqualsInspection : KotlinApplicableInspectionBase
                         val compareToExpression = psiFactory.createExpression("($expressionString)")
                         qualifiedExpression.replace(compareToExpression)
                     }
+
                     else -> return
                 }
             }
@@ -120,8 +123,7 @@ internal class KotlinBigDecimalEqualsInspection : KotlinApplicableInspectionBase
                 element.calleeExpression?.text == "equals" &&
                 element.parent is KtQualifiedExpression
 
-    context(KaSession)
-    override fun prepareContext(element: KtExpression): Context? {
+    override fun KaSession.prepareContext(element: KtExpression): Context? {
         return when (element) {
             is KtBinaryExpression -> {
                 val left = element.left ?: return null

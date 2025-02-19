@@ -17,6 +17,7 @@ import kotlin.concurrent.withLock
 import kotlin.coroutines.cancellation.CancellationException
 
 @ApiStatus.Internal
+@Deprecated("will be moved to inline.completion.v2")
 object InlineCompletionUsageTracker : CounterUsagesCollector() {
   private val GROUP = EventLogGroup("inline.completion", 38)
 
@@ -132,7 +133,8 @@ object InlineCompletionUsageTracker : CounterUsagesCollector() {
     val COMMON_SUFFIX_LENGTH: EventField<Int> = EventFields.Int("common_suffix_length", "Length of common suffix between the suggestion and what remained in Editor")
   }
 
-  internal val INSERTED_STATE_EVENT: VarargEventId = GROUP.registerVarargEvent(
+  @Deprecated("Superseded by INSERTED_STATE_EVENT")
+  internal val INSERTED_STATE_EVENT_OLD: VarargEventId = GROUP.registerVarargEvent(
     eventId = INSERTED_STATE_EVENT_ID,
     description = "State of the inserted inline proposal in the editor after some time",
     ShownEvents.REQUEST_ID,

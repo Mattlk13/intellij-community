@@ -1290,29 +1290,17 @@ com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable
 - a:getRange(com.intellij.diff.util.Side,I):com.intellij.diff.util.Range
 - a:isSyncScrollEnabled():Z
 - a:transfer(com.intellij.diff.util.Side,I):I
-c:com.intellij.diff.tools.util.SyncScrollSupport$ThreesideSyncScrollSupport
+f:com.intellij.diff.tools.util.SyncScrollSupport$ThreesideSyncScrollSupport
 - com.intellij.diff.tools.util.SyncScrollSupport$Support
 - <init>(java.util.List,com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable,com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable):V
-- p:doMakeVisible(I,I[],I[],Z,Z):V
-- enterDisableScrollSection():V
-- exitDisableScrollSection():V
-- p:getEditors():java.util.List
-- p:getScrollHelpers():java.util.List
 - getScrollable12():com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable
 - getScrollable23():com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable
-- isDuringSyncScroll():Z
 - makeVisible(com.intellij.diff.util.ThreeSide,I[],I[],Z):V
 - visibleAreaChanged(com.intellij.openapi.editor.event.VisibleAreaEvent):V
-c:com.intellij.diff.tools.util.SyncScrollSupport$TwosideSyncScrollSupport
+f:com.intellij.diff.tools.util.SyncScrollSupport$TwosideSyncScrollSupport
 - com.intellij.diff.tools.util.SyncScrollSupport$Support
 - <init>(java.util.List,com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable):V
-- p:doMakeVisible(I,I[],I[],Z,Z):V
-- enterDisableScrollSection():V
-- exitDisableScrollSection():V
-- p:getEditors():java.util.List
-- p:getScrollHelpers():java.util.List
 - getScrollable():com.intellij.diff.tools.util.SyncScrollSupport$SyncScrollable
-- isDuringSyncScroll():Z
 - makeVisible(com.intellij.diff.util.Side,I,I,I,I,Z):V
 - visibleAreaChanged(com.intellij.openapi.editor.event.VisibleAreaEvent):V
 c:com.intellij.diff.tools.util.ThreeDiffSplitter
@@ -1982,6 +1970,7 @@ f:com.intellij.diff.util.DiffUtil
 - s:createTextDiffProvider(com.intellij.openapi.project.Project,com.intellij.diff.requests.ContentDiffRequest,com.intellij.diff.tools.util.base.TextDiffSettingsHolder$TextDiffSettings,java.lang.Runnable,com.intellij.openapi.Disposable):com.intellij.diff.tools.util.text.TwosideTextDiffProvider
 - s:createTextTitles(com.intellij.diff.FrameDiffTool$DiffViewer,com.intellij.diff.requests.ContentDiffRequest,java.util.List):java.util.List
 - s:createTitle(java.lang.String):javax.swing.JComponent
+- s:createTitle(java.lang.String,com.intellij.diff.DiffEditorTitleCustomizer):javax.swing.JComponent
 - s:createTooltipText(java.lang.String,java.lang.String):java.lang.String
 - s:createUserDataHolder(com.intellij.openapi.util.Key,java.lang.Object):com.intellij.openapi.util.UserDataHolderBase
 - s:disableBlitting(com.intellij.openapi.editor.ex.EditorEx):V

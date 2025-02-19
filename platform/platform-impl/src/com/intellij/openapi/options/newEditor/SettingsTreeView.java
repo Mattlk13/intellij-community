@@ -37,6 +37,7 @@ import com.intellij.ui.treeStructure.SimpleTreeStructure;
 import com.intellij.ui.treeStructure.filtered.FilteringTreeStructure;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.ObjectUtils;
+import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.*;
 import com.intellij.util.ui.tree.TreeUtil;
 import com.intellij.util.ui.tree.WideSelectionTreeUI;
@@ -335,7 +336,18 @@ public class SettingsTreeView extends JComponent implements Accessible, Disposab
 
   @Nullable
   MyNode findNode(Configurable configurable) {
-    return myConfigurableToNodeMap.get(configurable);
+    MyNode result = myConfigurableToNodeMap.get(configurable);
+    if (result != null || !(configurable instanceof ConfigurableWrapper))
+      return result;
+    ConfigurableEP<?> ep = ((ConfigurableWrapper)configurable).getExtensionPoint();
+    Configurable confKey = ContainerUtil.find(
+      myConfigurableToNodeMap.keySet(),
+      key -> (key instanceof ConfigurableWrapper) && ((ConfigurableWrapper)key).getExtensionPoint() == ep
+    );
+    if (confKey == null) {
+      return null;
+    }
+    return myConfigurableToNodeMap.get(confKey);
   }
 
   @Nullable
@@ -434,12 +446,14 @@ public class SettingsTreeView extends JComponent implements Accessible, Disposab
           return;
         }
 
+        /*
         Runnable handler = () -> {
           fireSelected(configurable).processed(promise);
         };
+        */
 
         if (configurable == null) {
-          handler.run();
+          fireSelected(null).processed(promise);
           return;
         }
 
@@ -447,7 +461,7 @@ public class SettingsTreeView extends JComponent implements Accessible, Disposab
         FilteringTreeStructure.FilteringNode editorUiNode = myModel.getTreeStructure().getVisibleNodeFor(editorNode);
         if (editorUiNode == null) return;
 
-        myModel.select(editorUiNode, myTree, treePath -> handler.run());
+        myModel.select(editorUiNode, myTree, unused -> {});
       }
 
       @Override

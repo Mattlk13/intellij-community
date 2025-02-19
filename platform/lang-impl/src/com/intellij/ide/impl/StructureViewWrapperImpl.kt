@@ -72,6 +72,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
+import kotlin.jvm.Throws
 
 @OptIn(FlowPreview::class)
 class StructureViewWrapperImpl(
@@ -109,7 +110,9 @@ class StructureViewWrapperImpl(
       val state = ModalityState.stateForComponent(component)
       if (!ModalityState.current().accepts(state)) return@createNamedTimer
 
-      val successful = loggedRun("check if update needed") { checkUpdate() }
+      val successful = WriteIntentReadAction.compute<Boolean, Throwable> {
+        loggedRun("check if update needed") { checkUpdate() }
+      }
       if (successful) myActivityCount = count // to check on the next turn
     }
     LOG.debug("timer to check if update needed: add")
@@ -473,6 +476,16 @@ class StructureViewWrapperImpl(
         val component = policy?.getDefaultComponent(container)
         if (component != null) IdeFocusManager.getInstance(project).requestFocusInProject(component, project)
       }
+    }
+  }
+
+  @ApiStatus.Internal
+  fun queueUpdate() {
+    if (myStructureView is StructureViewComponent) {
+      (myStructureView as StructureViewComponent).queueUpdate()
+    }
+    if (myStructureView is StructureViewComposite) {
+      ((myStructureView as StructureViewComposite).selectedStructureView as? StructureViewComponent)?.queueUpdate()
     }
   }
 

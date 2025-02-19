@@ -479,6 +479,8 @@ class PluginDetailsPageComponent @JvmOverloads constructor(
         { this.createUninstallAction() })
       nameAndButtons.addButtonComponent(enableDisableController!!.button.also { gearButton = it })
       nameAndButtons.addButtonComponent(enableDisableController!!.bundledButton.also { myEnableDisableButton = it })
+      myEnableDisableButton?.isEnabled = showComponent?.isNotFreeInFreeMode == true
+      gearButton?.isEnabled = showComponent?.isNotFreeInFreeMode == true
     }
     else {
       gearButton = SelectionBasedPluginModelAction.createGearButton(
@@ -1403,7 +1405,7 @@ class PluginDetailsPageComponent @JvmOverloads constructor(
           plugin!!.pluginId)
         gearButton!!.isVisible = !uninstalled && !bundled
         myEnableDisableButton!!.isVisible = bundled
-        myEnableDisableButton!!.isEnabled = !isEssential
+        myEnableDisableButton!!.isEnabled = !isEssential && showComponent?.isNotFreeInFreeMode != true
       }
       else {
         gearButton!!.isVisible = !uninstalled
@@ -1427,9 +1429,11 @@ class PluginDetailsPageComponent @JvmOverloads constructor(
   }
 
   private fun updateErrors() {
-    val errors = pluginModel.getErrors(descriptorForActions!!)
-    updateIcon(errors)
-    errorComponent!!.setErrors(errors) { this.handleErrors() }
+    if (showComponent?.isNotFreeInFreeMode != true) {
+      val errors = pluginModel.getErrors(descriptorForActions!!)
+      updateIcon(errors)
+      errorComponent!!.setErrors(errors) { this.handleErrors() }
+    }
   }
 
   private fun handleErrors() {

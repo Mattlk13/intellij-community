@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.psi.stubs;
 
 import com.intellij.ide.lightEdit.LightEditCompatible;
@@ -9,7 +9,6 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.ModificationTracker;
-import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileWithId;
@@ -67,7 +66,7 @@ public abstract class StubIndexEx extends StubIndex {
   private final StubProcessingHelper myStubProcessingHelper = new StubProcessingHelper();
 
   @ApiStatus.Internal
-  abstract void initializeStubIndexes();
+  public abstract void initializeStubIndexes();
 
   @ApiStatus.Internal
   public abstract void initializationFailed(@NotNull Throwable error);
@@ -145,8 +144,9 @@ public abstract class StubIndexEx extends StubIndex {
       if (dumb) {
         if (project instanceof LightEditCompatible) return false;
         DumbModeAccessType accessType = FileBasedIndex.getInstance().getCurrentDumbModeAccessType(project);
-        if (accessType == DumbModeAccessType.RAW_INDEX_DATA_ACCEPTABLE &&
-            Registry.is("ide.dumb.mode.check.awareness")) {
+        if (accessType == DumbModeAccessType.RAW_INDEX_DATA_ACCEPTABLE) {
+          // Do not disable this assertion.
+          // Accessing Stub index in RAW_INDEX_DATA_ACCEPTABLE mode will likely cause stub/psi inconsistency
           throw new AssertionError("raw index data access is not available for StubIndex");
         }
       }
@@ -258,7 +258,7 @@ public abstract class StubIndexEx extends StubIndex {
 
         for (VirtualFile file : filesWithProblems) {
           int fileId = FileBasedIndex.getFileId(file);
-          index.mapInputAndPrepareUpdate(fileId, null).update();
+          index.mapInputAndPrepareUpdate(fileId, null).update(); // update what? In-memory or persistent?
         }
 
         for (VirtualFile file : filesWithProblems) {
@@ -424,10 +424,10 @@ public abstract class StubIndexEx extends StubIndex {
   }
 
   @ApiStatus.Internal
-  void setDataBufferingEnabled(boolean enabled) { }
+  public void setDataBufferingEnabled(boolean enabled) { }
 
   @ApiStatus.Internal
-  void cleanupMemoryStorage() { }
+  public void cleanupMemoryStorage() { }
 
   @ApiStatus.Internal
   public static @NotNull <K> FileBasedIndexExtension<K, Void> wrapStubIndexExtension(StubIndexExtension<K, ?> extension) {

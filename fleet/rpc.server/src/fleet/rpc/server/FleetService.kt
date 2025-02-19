@@ -6,43 +6,40 @@ import fleet.rpc.core.connectionLoop
 import fleet.util.UID
 import fleet.util.async.use
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
 
 class FleetService private constructor(
   val serviceId: UID,
 ) {
   companion object {
-    suspend fun service(
+    suspend fun <T> service(
       providerId: UID,
       transportFactory: FleetTransportFactory,
       services: RpcServiceLocator,
       rpcInterceptor: RpcExecutorMiddleware = RpcExecutorMiddleware,
       rpcCallDispatcher: CoroutineDispatcher? = null,
-      body: suspend CoroutineScope.(FleetService) -> Unit,
-    ) {
+      body: suspend CoroutineScope.(FleetService) -> T,
+    ): T =
       coroutineScope {
         launch {
-          val status = MutableStateFlow(false)
-          val (_, _) = connectionLoop("RpcExecutor for service provider ${providerId}") {
+          connectionLoop(debugName = "RpcExecutor for service provider ${providerId}") { cc ->
             transportFactory.connect(transportStats = null) { transport ->
-              status.value = true
-              try {
-                RpcExecutor.serve(services = services,
-                                  sendChannel = transport.outgoing,
-                                  receiveChannel = transport.incoming,
-                                  rpcInterceptor = rpcInterceptor,
-                                  rpcCallDispatcher = rpcCallDispatcher,
-                                  route = providerId)
-              }
-              finally {
-                status.value = false
-              }
+              cc(
+                RpcExecutor.serve(
+                  services = services,
+                  sendChannel = transport.outgoing,
+                  receiveChannel = transport.incoming,
+                  rpcInterceptor = rpcInterceptor,
+                  rpcCallDispatcher = rpcCallDispatcher,
+                  route = providerId,
+                )
+              )
             }
+          }.use {
+            awaitCancellation()
           }
         }.use {
           body(FleetService(serviceId = providerId))
         }
       }
-    }
   }
 }

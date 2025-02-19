@@ -1503,6 +1503,11 @@ public abstract class K2JvmBasicCompletionTestGenerated extends AbstractK2JvmBas
                 runTest("../../completion/testData/basic/common/inSuperTypes/KTIJ-27931.kt");
             }
 
+            @TestMetadata("KTIJ-30149.kt")
+            public void testKTIJ_30149() throws Exception {
+                runTest("../../completion/testData/basic/common/inSuperTypes/KTIJ-30149.kt");
+            }
+
             @TestMetadata("typeParameter.kt")
             public void testTypeParameter() throws Exception {
                 runTest("../../completion/testData/basic/common/inSuperTypes/typeParameter.kt");
@@ -2521,6 +2526,11 @@ public abstract class K2JvmBasicCompletionTestGenerated extends AbstractK2JvmBas
                 runTest("../../completion/testData/basic/common/shadowing/InInitializer7.kt");
             }
 
+            @TestMetadata("InInitializer8.kt")
+            public void testInInitializer8() throws Exception {
+                runTest("../../completion/testData/basic/common/shadowing/InInitializer8.kt");
+            }
+
             @TestMetadata("InInitializerProperty.kt")
             public void testInInitializerProperty() throws Exception {
                 runTest("../../completion/testData/basic/common/shadowing/InInitializerProperty.kt");
@@ -3429,6 +3439,11 @@ public abstract class K2JvmBasicCompletionTestGenerated extends AbstractK2JvmBas
                 runTest("../../completion/testData/basic/common/KTIJ-26747.kt");
             }
 
+            @TestMetadata("KTIJ-28837.kt")
+            public void testKTIJ_28837() throws Exception {
+                runTest("../../completion/testData/basic/common/KTIJ-28837.kt");
+            }
+
             @TestMetadata("KTIJ-28919.kt")
             public void testKTIJ_28919() throws Exception {
                 runTest("../../completion/testData/basic/common/KTIJ-28919.kt");
@@ -3437,6 +3452,16 @@ public abstract class K2JvmBasicCompletionTestGenerated extends AbstractK2JvmBas
             @TestMetadata("KTIJ-30306.kt")
             public void testKTIJ_30306() throws Exception {
                 runTest("../../completion/testData/basic/common/KTIJ-30306.kt");
+            }
+
+            @TestMetadata("KTIJ-31854.kt")
+            public void testKTIJ_31854() throws Exception {
+                runTest("../../completion/testData/basic/common/KTIJ-31854.kt");
+            }
+
+            @TestMetadata("KTIJ-32862.kt")
+            public void testKTIJ_32862() throws Exception {
+                runTest("../../completion/testData/basic/common/KTIJ-32862.kt");
             }
 
             @TestMetadata("KeywordsAreLowInParameterTypeCompletion1.kt")

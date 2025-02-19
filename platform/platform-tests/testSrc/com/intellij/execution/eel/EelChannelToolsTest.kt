@@ -1,4 +1,6 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+@file:OptIn(EelSendApi::class)
+
 package com.intellij.execution.eel
 
 import com.intellij.platform.eel.EelResult
@@ -6,6 +8,8 @@ import com.intellij.platform.eel.ReadResult
 import com.intellij.platform.eel.ReadResult.EOF
 import com.intellij.platform.eel.ReadResult.NOT_EOF
 import com.intellij.platform.eel.channels.EelReceiveChannel
+import com.intellij.platform.eel.channels.EelSendApi
+import com.intellij.platform.eel.channels.EelSendChannel
 import com.intellij.platform.eel.channels.sendWholeBuffer
 import com.intellij.platform.eel.getOrThrow
 import com.intellij.platform.eel.provider.ResultErrImpl
@@ -14,6 +18,7 @@ import com.intellij.platform.eel.provider.utils.*
 import com.intellij.testFramework.common.timeoutRunBlocking
 import io.ktor.util.decodeString
 import io.mockk.coEvery
+import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,11 +34,8 @@ import org.junit.jupiter.api.Timeout
 import org.junitpioneer.jupiter.cartesian.CartesianTest
 import org.junitpioneer.jupiter.params.IntRangeSource
 import org.opentest4j.AssertionFailedError
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
+import java.io.*
+import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.nio.ByteBuffer.allocate
 import java.nio.ByteBuffer.wrap
@@ -139,7 +141,9 @@ class EelChannelToolsTest {
     }
 
     val dst = spyk(ByteArrayOutputStream().asEelChannel())
-    coEvery { dst.send(any()) } answers {
+    coEvery {
+      @Suppress("OPT_IN_USAGE") dst.send(any())
+    } answers {
       if (dstErr) {
         ResultErrImpl(IOException(dstErrorText))
       }
@@ -164,6 +168,59 @@ class EelChannelToolsTest {
         }
       }
     }
+  }
+
+  @CartesianTest
+  fun testErrorWithContinue(@CartesianTest.Values(booleans = [true, false]) dstError: Boolean) = timeoutRunBlocking {
+    val limit = 10
+    val src = object : EelReceiveChannel<IOException> {
+      var error = false
+      var counter = limit
+      override suspend fun receive(dst: ByteBuffer): EelResult<ReadResult, IOException> {
+        error = !error
+        return when {
+          error && !dstError -> ResultErrImpl(SocketTimeoutException("wait"))
+          counter < 0 -> ResultOkImpl(EOF)
+          else -> {
+            dst.put(counter.toByte())
+            counter -= 1
+            ResultOkImpl(NOT_EOF)
+          }
+        }
+      }
+
+      override suspend fun close() = Unit
+    }
+
+    val result = mutableListOf<Byte>()
+    val dst = object : EelSendChannel<IOException> {
+      override val closed: Boolean = false
+      var error = false
+
+      @Suppress("OPT_IN_OVERRIDE")
+      override suspend fun send(dst: ByteBuffer): EelResult<Unit, IOException> {
+        error = !error
+        if (error && dstError) return ResultErrImpl(SocketTimeoutException("wait"))
+        result.add(dst.get())
+        return ResultOkImpl(Unit)
+      }
+
+      override suspend fun close() = Unit
+    }
+
+    var errorHappened = false
+    copy(src, dst, onReadError = {
+      assertEquals(SocketTimeoutException::class, it::class)
+      errorHappened = true
+      OnError.RETRY
+    }, onWriteError = {
+      assertEquals(SocketTimeoutException::class, it::class)
+      errorHappened = true
+      OnError.RETRY
+    }).getOrThrow()
+
+    assertTrue(errorHappened, "No error callback called")
+    assertArrayEquals((0..limit).map { it.toByte() }.reversed().toTypedArray(), result.toTypedArray(), "wrong data copied")
   }
 
   @Test
@@ -216,24 +273,20 @@ class EelChannelToolsTest {
     // 8192
     launch {
       pipe.sink.sendWholeBuffer(allocate(bytesCount)).getOrThrow()
-    }
-    // 8192 * 2
+    } // 8192 * 2
     launch {
       pipe.sink.sendWholeBuffer(allocate(bytesCount)).getOrThrow()
     }
     awaitForCondition {
       Assertions.assertEquals(bytesCount * 2, input.available(), "Wrong number of bytes available")
-    }
-    // 8192
-    pipe.source.receive(allocate(bytesCount)).getOrThrow()
-    // 8193
+    } // 8192
+    pipe.source.receive(allocate(bytesCount)).getOrThrow() // 8193
     launch {
       pipe.sink.sendWholeBuffer(allocate(1)).getOrThrow()
     }
     awaitForCondition {
       Assertions.assertEquals(bytesCount + 1, input.available(), "Wrong number of bytes available")
-    }
-    // 1
+    } // 1
     pipe.source.receive(allocate(bytesCount)).getOrThrow()
     awaitForCondition {
       Assertions.assertEquals(1, input.available(), "After receiving there must be 0 bytes")
@@ -291,7 +344,9 @@ class EelChannelToolsTest {
       repeat(repeatText) {
         input.sendWholeBuffer(wrap(data)).getOrThrow()
       }
+      assertFalse(input.closed)
       input.close()
+      assertTrue(input.closed)
     }
 
     val buffer = allocate(blockSize)
@@ -396,12 +451,64 @@ class EelChannelToolsTest {
     val readJob = async {
       pipe.source.readWholeText()
     }
+    assertFalse(pipe.sink.closed)
     sendJob1.join()
     sendJob2.join()
     pipe.sink.close()
+    assertTrue(pipe.sink.closed)
     val text = readJob.await().getOrThrow()
     assertThat("Some litters missing", text.toCharArray().toList(), containsInAnyOrder(*lettersSent.toTypedArray()))
 
+  }
+
+  @CartesianTest
+  fun testKotlinChannel(
+    @IntRangeSource(from = 1, to = TEXT.length + 1) srcBlockSize: Int,
+  ): Unit = timeoutRunBlocking {
+    val eelChannel = ByteArrayInputStreamLimited(data, srcBlockSize).consumeAsEelChannel()
+    val kotlinChannel = consumeReceiveChannelAsKotlin(eelChannel)
+    val result = ByteArrayOutputStream()
+    for (buffer in kotlinChannel) {
+      val data = ByteArray(buffer.remaining())
+      buffer.get(data)
+      result.writeBytes(data)
+    }
+    assertEquals(TEXT, result.toString())
+  }
+
+  @Test
+  fun testKotlinChannelWithError(
+  ): Unit = timeoutRunBlocking {
+    val brokenChannel = mockk<EelReceiveChannel<IOException>>()
+    val error = IOException("go away me busy")
+    coEvery { brokenChannel.receive(any()) } returns ResultErrImpl(error)
+    try {
+      consumeReceiveChannelAsKotlin(brokenChannel).receive()
+    }
+    catch (e: IOException) {
+      assertEquals(error.toString(), e.toString())
+      return@timeoutRunBlocking
+    }
+    fail("No exception was thrown, also channel returned an error")
+  }
+
+  @CartesianTest
+  fun testLines(
+    @IntRangeSource(from = 1, to = 10) blockSize: Int,
+    @CartesianTest.Values(strings = ["\n", "\r\n"]) separator: String,
+  ): Unit = timeoutRunBlocking {
+    val lines = buildList {
+      add("`Twas brillig, and the slithy toves")
+      add("Did gyre and gimble in the wabe")
+      add("All mimsy were the borogoves,")
+      add("And the mome raths outgrabe")
+    }
+    val eelChannel = ByteArrayInputStreamLimited(lines.joinToString(separator).encodeToByteArray(), blockSize).consumeAsEelChannel()
+    val result = mutableListOf<String>()
+    eelChannel.lines().collect { line ->
+      result.add(line.getOrThrow().trim())
+    }
+    Assertions.assertArrayEquals(lines.toTypedArray(), result.toTypedArray(), "Wrong lines collected")
   }
 }
 
