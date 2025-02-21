@@ -4,36 +4,49 @@
 package org.jetbrains.bazel.jvm.jps.impl
 
 import com.intellij.openapi.util.text.Formats.formatDuration
-import com.intellij.tracing.Tracer.start
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.Span
+import io.opentelemetry.api.trace.Tracer
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap
 import it.unimi.dsi.fastutil.objects.ObjectArraySet
 import kotlinx.coroutines.ensureActive
-import org.jetbrains.bazel.jvm.jps.hashMap
-import org.jetbrains.bazel.jvm.jps.linkedSet
+import org.jetbrains.bazel.jvm.hashMap
+import org.jetbrains.bazel.jvm.jps.OutputSink
 import org.jetbrains.bazel.jvm.jps.state.LoadStateResult
 import org.jetbrains.bazel.jvm.jps.state.RemovedFileInfo
+import org.jetbrains.bazel.jvm.linkedSet
+import org.jetbrains.bazel.jvm.span
+import org.jetbrains.bazel.jvm.use
 import org.jetbrains.jps.ModuleChunk
 import org.jetbrains.jps.builders.BuildRootDescriptor
 import org.jetbrains.jps.builders.BuildTarget
-import org.jetbrains.jps.builders.FileProcessor
-import org.jetbrains.jps.builders.impl.DirtyFilesHolderBase
+import org.jetbrains.jps.builders.DirtyFilesHolder
 import org.jetbrains.jps.builders.java.JavaBuilderUtil
 import org.jetbrains.jps.builders.java.JavaSourceRootDescriptor
 import org.jetbrains.jps.builders.storage.BuildDataCorruptedException
-import org.jetbrains.jps.incremental.*
-import org.jetbrains.jps.incremental.fs.BuildFSState
+import org.jetbrains.jps.incremental.BuildListener
+import org.jetbrains.jps.incremental.Builder
+import org.jetbrains.jps.incremental.BuilderCategory
+import org.jetbrains.jps.incremental.CompileContext
+import org.jetbrains.jps.incremental.FSOperations
+import org.jetbrains.jps.incremental.ModuleBuildTarget
+import org.jetbrains.jps.incremental.ModuleLevelBuilder
+import org.jetbrains.jps.incremental.ProjectBuildException
+import org.jetbrains.jps.incremental.RebuildRequestedException
+import org.jetbrains.jps.incremental.StopBuildException
+import org.jetbrains.jps.incremental.Utils
 import org.jetbrains.jps.incremental.fs.BuildFSState.CURRENT_ROUND_DELTA_KEY
 import org.jetbrains.jps.incremental.fs.BuildFSState.NEXT_ROUND_DELTA_KEY
 import org.jetbrains.jps.incremental.fs.CompilationRound
-import org.jetbrains.jps.incremental.messages.*
-import org.jetbrains.jps.incremental.storage.BuildTargetConfiguration
+import org.jetbrains.jps.incremental.messages.BuildMessage.Kind
+import org.jetbrains.jps.incremental.messages.FileDeletedEvent
+import org.jetbrains.jps.incremental.messages.FileGeneratedEvent
+import org.jetbrains.jps.incremental.messages.ProgressMessage
+import org.jetbrains.jps.model.module.JpsModule
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
-import java.util.*
+import java.util.Map
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
@@ -41,50 +54,68 @@ import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 import kotlin.time.toJavaDuration
 
+internal abstract class BazelTargetBuilder(category: BuilderCategory) : ModuleLevelBuilder(category) {
+  abstract suspend fun build(
+    context: BazelCompileContext,
+    module: JpsModule,
+    chunk: ModuleChunk,
+    target: BazelModuleBuildTarget,
+    dirtyFilesHolder: BazelDirtyFileHolder,
+    outputConsumer: BazelTargetBuildOutputConsumer,
+    outputSink: OutputSink,
+  ): ExitCode
+  final override fun build(
+    context: CompileContext,
+    chunk: ModuleChunk,
+    dirtyFilesHolder: DirtyFilesHolder<JavaSourceRootDescriptor, ModuleBuildTarget>,
+    outputConsumer: OutputConsumer,
+  ): ExitCode? {
+    throw IllegalStateException("Should not be called")
+  }
+}
+
 internal class JpsTargetBuilder(
   private val log: RequestLog,
-  private val span: Span,
+  private val tracer: Tracer,
   private val isCleanBuild: Boolean,
-  private val dataManager: BazelBuildDataProvider,
+  private val dataManager: BazelBuildDataProvider?,
 ) {
   private val builderToDuration = hashMap<Builder, AtomicLong>()
   private val numberOfSourcesProcessedByBuilder = hashMap<Builder, AtomicInteger>()
 
   suspend fun build(
-    context: CompileContextImpl,
+    context: BazelCompileContext,
     moduleTarget: BazelModuleBuildTarget,
-    builders: Array<ModuleLevelBuilder>,
+    builders: Array<out ModuleLevelBuilder>,
     buildState: LoadStateResult?,
+    outputSink: OutputSink,
+    parentSpan: Span,
   ): Int {
     try {
-      val buildSpan = start("JpsTargetBuilder.runBuild")
       context.setDone(0.0f)
-      context.addBuildListener(ChainedTargetsBuildListener(context, dataManager))
-      val allModuleLevelBuildersBuildStartedSpan = start("All ModuleLevelBuilder.buildStarted")
+      if (dataManager != null) {
+        context.addBuildListener(ChainedTargetsBuildListener(context, dataManager))
+      }
       for (builder in builders) {
         builder.buildStarted(context)
       }
-      allModuleLevelBuildersBuildStartedSpan.complete()
 
       try {
-        val span = start("build target")
-        buildTarget(context = context, target = moduleTarget, builders = builders, buildState = buildState)
-        span.complete()
+        buildTarget(context = context, target = moduleTarget, builders = builders, outputSink = outputSink, buildState = buildState)
       }
       finally {
         for (builder in builders) {
           builder.buildFinished(context)
         }
       }
-      buildSpan.complete()
 
       for ((builder, time) in builderToDuration) {
         val processedSources = numberOfSourcesProcessedByBuilder.get(builder)?.get() ?: 0
         val time = time.get().toDuration(DurationUnit.NANOSECONDS)
         val message = "Build duration: ${builder.presentableName} took ${formatDuration(time.toJavaDuration())}; " +
-          processedSources + " sources processed" +
+          processedSources + " sources processed (not unique if multiple outputs are produced for a source file)" +
           (if (processedSources == 0) "" else " (${time.inWholeMilliseconds / processedSources} ms per file)")
-        span.addEvent(message)
+        parentSpan.addEvent(message)
       }
     }
     catch (e: StopBuildException) {
@@ -95,7 +126,7 @@ internal class JpsTargetBuilder(
       return if (log.hasErrors()) 1 else 0
     }
     catch (e: BuildDataCorruptedException) {
-      span.recordException(
+      parentSpan.recordException(
         e,
         Attributes.of(
           AttributeKey.stringKey("message"), "internal caches are corrupted or have outdated format, forcing project rebuild"
@@ -106,7 +137,7 @@ internal class JpsTargetBuilder(
     catch (e: ProjectBuildException) {
       val cause = e.cause
       if (cause is IOException || cause is BuildDataCorruptedException || (cause is RuntimeException && cause.cause is IOException)) {
-        span.recordException(
+        parentSpan.recordException(
           e,
           Attributes.of(
             AttributeKey.stringKey("message"), "internal caches are corrupted or have outdated format, forcing project rebuild"
@@ -124,56 +155,45 @@ internal class JpsTargetBuilder(
 
   // return true if changed something, false otherwise
   private suspend fun runModuleLevelBuilders(
-    context: CompileContext,
+    context: BazelCompileContext,
     target: BazelModuleBuildTarget,
-    builders: Array<ModuleLevelBuilder>,
+    builders: Array<out ModuleLevelBuilder>,
+    outputSink: OutputSink,
+    parentSpan: Span,
   ): Boolean {
     val chunk = ModuleChunk(java.util.Set.of<ModuleBuildTarget>(target))
     for (builder in builders) {
       builder.chunkBuildStarted(context, chunk)
     }
 
-    if (!isCleanBuild) {
+    if (!isCleanBuild && dataManager != null) {
       completeRecompiledSourcesSet(context, target, dataManager)
     }
 
     var doneSomething = false
-    val outputConsumer = ChunkBuildOutputConsumerImpl(context = context, target = target, dataManager = dataManager)
+    val outputConsumer = BazelTargetBuildOutputConsumer(dataManager = dataManager, outputSink = outputSink)
     try {
       val fsState = context.projectDescriptor.fsState
-      val dirtyFilesHolder = object : DirtyFilesHolderBase<JavaSourceRootDescriptor, ModuleBuildTarget>(context) {
-        override fun processDirtyFiles(processor: FileProcessor<JavaSourceRootDescriptor, ModuleBuildTarget>) {
-          fsState.processFilesToRecompile(context, target, processor)
-        }
-      }
-
       var rebuildFromScratchRequested = false
       var nextPassRequired: Boolean
       do {
         nextPassRequired = false
         fsState.beforeNextRoundStart(context, chunk)
 
-        if (!isCleanBuild) {
+        if (dataManager != null && !isCleanBuild) {
           cleanOutputsCorrespondingToChangedFiles(
             context = context,
             target = target,
             dataManager = dataManager,
-            span = span,
+            outputSink = outputSink,
+            parentSpan = parentSpan,
           )
         }
 
+        val dirtyFilesHolder = BazelDirtyFileHolder(context, fsState, target)
         try {
           var buildersPassed = 0
-          var instrumentedClassesSaved = false
           for (builder in builders) {
-            if (builder.category == BuilderCategory.CLASS_POST_PROCESSOR && !instrumentedClassesSaved) {
-              instrumentedClassesSaved = true
-              // ensure changes from instruments are visible to class post-processors
-              saveInstrumentedClasses(outputConsumer)
-            }
-
-            outputConsumer.setCurrentBuilderName(builder.presentableName)
-
             val deletedFiles = fsState.getAndClearDeletedPaths(target)
             require(deletedFiles.isEmpty()) {
               "Unexpected files to delete: $deletedFiles"
@@ -181,14 +201,29 @@ internal class JpsTargetBuilder(
 
             val start = System.nanoTime()
             val processedSourcesBefore = outputConsumer.getNumberOfProcessedSources()
-            val buildResult = builder.build(context, chunk, dirtyFilesHolder, outputConsumer)
+            val buildResult = tracer.span("runBuilder") { span ->
+              if (builder is BazelTargetBuilder) {
+                builder.build(
+                  context = context,
+                  module = target.module,
+                  chunk = chunk,
+                  dirtyFilesHolder = dirtyFilesHolder,
+                  target = target,
+                  outputConsumer = outputConsumer,
+                  outputSink = outputSink,
+                )
+              }
+              else {
+                builder.build(context, chunk, dirtyFilesHolder, outputConsumer)
+              }
+            }
             storeBuilderStatistics(
               builder = builder,
               elapsedTime = System.nanoTime() - start,
               processedFiles = outputConsumer.getNumberOfProcessedSources() - processedSourcesBefore,
             )
 
-            if (buildResult != null && buildResult != ModuleLevelBuilder.ExitCode.NOTHING_DONE) {
+            if (buildResult != ModuleLevelBuilder.ExitCode.NOTHING_DONE) {
               doneSomething = true
             }
             if (buildResult == ModuleLevelBuilder.ExitCode.ABORT) {
@@ -202,7 +237,10 @@ internal class JpsTargetBuilder(
             }
             else if (buildResult == ModuleLevelBuilder.ExitCode.CHUNK_REBUILD_REQUIRED) {
               if (!rebuildFromScratchRequested && !isCleanBuild) {
-                notifyChunkRebuildRequested(context, chunk, builder)
+                var infoMessage = "Builder \"${builder.presentableName}\" requested rebuild of module chunk \"${chunk.name}\""
+                infoMessage += ".\n"
+                infoMessage += "Consider building whole project or rebuilding the module."
+                context.compilerMessage(kind = Kind.INFO, message = infoMessage)
                 // allow rebuild from scratch only once per chunk
                 rebuildFromScratchRequested = true
                 // forcibly mark all files in the chunk dirty
@@ -214,7 +252,7 @@ internal class JpsTargetBuilder(
                 break
               }
               else {
-                span.addEvent("builder requested second chunk rebuild", Attributes.of(
+                parentSpan.addEvent("builder requested second chunk rebuild", Attributes.of(
                   AttributeKey.stringKey("builder"), builder.presentableName,
                 ))
               }
@@ -224,8 +262,7 @@ internal class JpsTargetBuilder(
           }
         }
         finally {
-          outputConsumer.setCurrentBuilderName(null)
-          val moreToCompile = JavaBuilderUtil.updateMappingsOnRoundCompletion(context, dirtyFilesHolder, chunk)
+          val moreToCompile = dataManager != null && JavaBuilderUtil.updateMappingsOnRoundCompletion(context, dirtyFilesHolder, chunk)
           if (moreToCompile) {
             nextPassRequired = true
           }
@@ -234,14 +271,13 @@ internal class JpsTargetBuilder(
       } while (nextPassRequired)
     }
     finally {
-      saveInstrumentedClasses(outputConsumer)
       outputConsumer.fireFileGeneratedEvents()
       outputConsumer.clear()
       for (builder in builders) {
         builder.chunkBuildFinished(context, chunk)
       }
       if (Utils.errorsDetected(context)) {
-        context.processMessage(CompilerMessage("", BuildMessage.Kind.JPS_INFO, "Errors occurred while compiling module ${chunk.presentableShortName}"))
+        context.compilerMessage(kind = Kind.JPS_INFO, message = "Errors occurred while compiling module ${chunk.presentableShortName}")
       }
     }
 
@@ -249,10 +285,11 @@ internal class JpsTargetBuilder(
   }
 
   private suspend fun buildTarget(
-    context: CompileContext,
+    context: BazelCompileContext,
     target: BazelModuleBuildTarget,
-    builders: Array<ModuleLevelBuilder>,
+    builders: Array<out ModuleLevelBuilder>,
     buildState: LoadStateResult?,
+    outputSink: OutputSink,
   ) {
     val targets = java.util.Set.of<BuildTarget<*>>(target)
     try {
@@ -264,48 +301,57 @@ internal class JpsTargetBuilder(
 
       val fsState = context.projectDescriptor.fsState
       require(!fsState.isInitialScanPerformed(target))
-      if (isCleanBuild || buildState == null) {
-        initFsStateForCleanBuild(context = context, target = target)
-      }
-      else {
-        val projectDescriptor = context.projectDescriptor
-        require(context.getUserData(CURRENT_ROUND_DELTA_KEY) == null)
-        require(context.getUserData(NEXT_ROUND_DELTA_KEY) == null)
-        // linked - stable results
-        val buildRootIndex = projectDescriptor.buildRootIndex as BazelBuildRootIndex
-        val k = Array<BuildRootDescriptor>(buildState.changedFiles.size) {
-          buildRootIndex.fileToDescriptors.get(buildState.changedFiles.get(it))!!
-        }
-        val v = Array<Set<Path>>(buildState.changedFiles.size) {
-          ObjectArraySet(arrayOf(buildState.changedFiles.get(it)))
-        }
-        val fsState = projectDescriptor.fsState
-        fsState.getDelta(target).initRecompile(Object2ObjectArrayMap(k, v))
-        fsState.markInitialScanPerformed(target)
+      tracer.spanBuilder("fs state init")
+        .setAttribute("isCleanBuild", isCleanBuild)
+        .use { span ->
+          if (isCleanBuild || buildState == null) {
+            initFsStateForCleanBuild(context = context, target = target)
+          }
+          else {
+            val projectDescriptor = context.projectDescriptor
+            require(context.getUserData(CURRENT_ROUND_DELTA_KEY) == null)
+            require(context.getUserData(NEXT_ROUND_DELTA_KEY) == null)
+            val buildRootIndex = projectDescriptor.buildRootIndex as BazelBuildRootIndex
+            if (buildState.changedFiles.isEmpty()) {
+              fsState.getDelta(target).initRecompile(Map.of())
+            }
+            else {
+              val k = Array<BuildRootDescriptor>(buildState.changedFiles.size) {
+                buildRootIndex.fileToDescriptors.get(buildState.changedFiles.get(it))!!
+              }
+              val v = Array<Set<Path>>(buildState.changedFiles.size) {
+                ObjectArraySet(arrayOf(buildState.changedFiles.get(it)))
+              }
+              val fsState = projectDescriptor.fsState
+              fsState.getDelta(target).initRecompile(Object2ObjectArrayMap(k, v))
+            }
+            fsState.markInitialScanPerformed(target)
 
-        val deletedFiles = buildState.deletedFiles
-        if (!deletedFiles.isEmpty()) {
-          doneSomething = deleteOutputsAssociatedWithDeletedPaths(
-            context = context,
-            target = target,
-            deletedFiles = deletedFiles,
-            span = span,
-          )
+            val deletedFiles = buildState.deletedFiles
+            if (!deletedFiles.isEmpty()) {
+              doneSomething = deleteOutputsAssociatedWithDeletedPaths(
+                context = context,
+                target = target,
+                deletedFiles = deletedFiles,
+                outputSink = outputSink,
+                span = span,
+              )
+            }
+          }
         }
-      }
 
       fsState.beforeChunkBuildStart(context, targets)
 
-      val runBuildersSpan = start("runBuilders")
-      if (runModuleLevelBuilders(context, target, builders)) {
-        doneSomething = true
+      tracer.span("runModuleLevelBuilders") { span ->
+        if (runModuleLevelBuilders(context, target, builders, outputSink, span)) {
+          doneSomething = true
+        }
       }
-      runBuildersSpan.complete()
 
       fsState.clearContextRoundData(context)
       fsState.clearContextChunk(context)
 
-      if (doneSomething) {
+      if (doneSomething && dataManager != null) {
         markTargetUpToDate(context = context, target = target, dataManager = dataManager)
       }
     }
@@ -334,7 +380,7 @@ internal class JpsTargetBuilder(
   }
 }
 
-private class ChainedTargetsBuildListener(private val context: CompileContextImpl, private val dataManager: BazelBuildDataProvider) : BuildListener {
+private class ChainedTargetsBuildListener(private val context: CompileContext, private val dataManager: BazelBuildDataProvider) : BuildListener {
   override fun filesGenerated(event: FileGeneratedEvent) {
     val projectDescriptor = context.projectDescriptor
     val fsState = projectDescriptor.fsState
@@ -372,91 +418,41 @@ private fun deleteOutputsAssociatedWithDeletedPaths(
   context: CompileContext,
   target: ModuleBuildTarget,
   deletedFiles: List<RemovedFileInfo>,
+  outputSink: OutputSink,
   span: Span,
 ): Boolean {
-  val dirsToDelete = linkedSet<Path>()
   var doneSomething = false
   // delete outputs associated with removed paths
   for (item in deletedFiles) {
-    val deletedOutputFiles = ArrayList<Path>()
+    val deletedOutputFiles = ArrayList<String>(item.outputs.size)
     for (output in item.outputs) {
-      val deleted = Files.deleteIfExists(output)
-      if (deleted) {
-        deletedOutputFiles.add(output)
-        output.parent?.let {
-          dirsToDelete.add(it)
-        }
-      }
+      outputSink.remove(output)
+      deletedOutputFiles.add(output)
     }
     if (!deletedOutputFiles.isEmpty()) {
       doneSomething = true
       if (span.isRecording) {
         span.addEvent(
           "deleted files",
-          Attributes.of(AttributeKey.stringArrayKey("deletedOutputFiles"), deletedOutputFiles.map { it.toString() }),
+          Attributes.of(AttributeKey.stringArrayKey("deletedOutputFiles"), deletedOutputFiles),
         )
       }
-      context.processMessage(FileDeletedEvent(deletedOutputFiles.map { it.toString() }))
+      //context.processMessage(FileDeletedEvent(deletedOutputFiles.map { it.toString() }))
     }
   }
 
   val removedSources = context.getUserData(Utils.REMOVED_SOURCES_KEY)?.get(target)
   if (removedSources == null) {
-    Utils.REMOVED_SOURCES_KEY.set(context, java.util.Map.of(target, deletedFiles.map { it.sourceFile } as Collection<Path>))
+    Utils.REMOVED_SOURCES_KEY.set(context, Map.of(target, deletedFiles.map { it.sourceFile } as Collection<Path>))
   }
   else {
     val set = linkedSet<Path>()
     set.addAll(removedSources)
     deletedFiles.mapTo(set) { it.sourceFile }
-    context.putUserData(Utils.REMOVED_SOURCES_KEY, java.util.Map.of(target, set as Collection<Path>))
+    context.putUserData(Utils.REMOVED_SOURCES_KEY, Map.of(target, set as Collection<Path>))
   }
 
-  FSOperations.pruneEmptyDirs(context, dirsToDelete)
   return doneSomething
-}
-
-internal fun reportRebuiltModules(context: CompileContextImpl) {
-  val modules = BuildTargetConfiguration.MODULES_WITH_TARGET_CONFIG_CHANGED_KEY.get(context)
-  if (modules.isNullOrEmpty()) {
-    return
-  }
-
-  val text = "${modules.joinToString { m -> "'" + m.name + "'" }} was fully rebuilt due to project configuration changes"
-  context.processMessage(CompilerMessage("", BuildMessage.Kind.INFO, text))
-}
-
-internal fun reportUnprocessedChanges(context: CompileContextImpl, moduleTarget: ModuleBuildTarget) {
-  if (context.projectDescriptor.fsState.hasUnprocessedChanges(context, moduleTarget)) {
-    context.processMessage(UnprocessedFSChangesNotification())
-  }
-}
-
-private inline fun processFilesToRecompile(
-  context: CompileContext,
-  target: BazelModuleBuildTarget,
-  fsState: BuildFSState,
-  processor: (Path, JavaSourceRootDescriptor) -> Boolean,
-): Boolean {
-  val scope = context.scope
-  val delta = fsState.getEffectiveFilesDelta(context, target)
-  delta.lockData()
-  try {
-    for (entry in delta.sourceMapToRecompile.entries) {
-      val root = entry.key as JavaSourceRootDescriptor
-      for (file in entry.value) {
-        if (!scope.isAffected(target, file)) {
-          continue
-        }
-        if (!processor(file, root)) {
-          return false
-        }
-      }
-    }
-    return true
-  }
-  finally {
-    delta.unlockData()
-  }
 }
 
 /**
@@ -464,17 +460,25 @@ private inline fun processFilesToRecompile(
  */
 private fun completeRecompiledSourcesSet(context: CompileContext, target: BazelModuleBuildTarget, dataManager: BazelBuildDataProvider) {
   val projectDescriptor = context.projectDescriptor
-  val affected = mutableListOf<List<String>>()
-  val affectedSources = HashSet<Path>()
-
+  val affected = mutableListOf<Array<String>>()
   val sourceToOut = dataManager.sourceToOutputMapping
-  processFilesToRecompile(context = context, target = target, fsState = projectDescriptor.fsState) { file, root ->
-    if (!affectedSources.add(file)) {
-      sourceToOut.getDescriptor(file)?.outputs?.let {
-        affected.add(it)
+  val delta = projectDescriptor.fsState.getEffectiveFilesDelta(context, target)
+  delta.lockData()
+  try {
+    if (delta.sourceMapToRecompile.isEmpty()) {
+      return
+    }
+
+    for (entry in delta.sourceMapToRecompile.entries) {
+      for (file in entry.value) {
+        sourceToOut.getDescriptor(file)?.outputs?.let {
+          affected.add(it)
+        }
       }
     }
-    true
+  }
+  finally {
+    delta.unlockData()
   }
 
   if (affected.isEmpty()) {
@@ -482,45 +486,22 @@ private fun completeRecompiledSourcesSet(context: CompileContext, target: BazelM
   }
 
   // one output can be produced by different sources, so, we find intersection by outputs
-  val affectedSourceFiles = sourceToOut.findAffectedSources(affected)
-  if (affectedSourceFiles.isEmpty()) {
+  val affectedSources = sourceToOut.findAffectedSources(affected)
+  if (affectedSources.isEmpty()) {
     return
   }
 
   val fileToDescriptors = (context.projectDescriptor.buildRootIndex as BazelBuildRootIndex).fileToDescriptors
-  val stampStorage = dataManager.stampStorage
-  val fsState = context.projectDescriptor.fsState
-  for (file in affectedSourceFiles) {
-    val rootDescriptor = fileToDescriptors.get(file) ?: continue
-    fsState.markDirtyIfNotDeleted(
-      context,
-      CompilationRound.CURRENT,
-      file,
-      rootDescriptor,
-      stampStorage
-    )
-  }
-}
-
-private fun notifyChunkRebuildRequested(context: CompileContext, chunk: ModuleChunk, builder: ModuleLevelBuilder) {
-  var infoMessage = "Builder \"${builder.presentableName}\" requested rebuild of module chunk \"${chunk.name}\""
-  var kind = BuildMessage.Kind.JPS_INFO
-  val scope = context.scope
-  for (target in chunk.targets) {
-    if (!scope.isWholeTargetAffected(target)) {
-      infoMessage += ".\n"
-      infoMessage += "Consider building whole project or rebuilding the module."
-      kind = BuildMessage.Kind.INFO
-      break
-    }
-  }
-  context.processMessage(CompilerMessage("", kind, infoMessage))
-}
-
-private fun saveInstrumentedClasses(outputConsumer: ChunkBuildOutputConsumerImpl) {
-  for (compiledClass in outputConsumer.compiledClasses.values) {
-    if (compiledClass.isDirty) {
-      compiledClass.save()
+  val currentRoundFileDelta = context.getUserData(CURRENT_ROUND_DELTA_KEY)
+  val fileDelta = context.projectDescriptor.fsState.getDelta(target)
+  for (sourceDescriptor in affectedSources) {
+    val sourceFile = sourceDescriptor.sourceFile
+    val rootDescriptor = fileToDescriptors.get(sourceFile) ?: continue
+    val marked = fileDelta.markRecompileIfNotDeleted(rootDescriptor, sourceFile)
+    if (marked) {
+      sourceDescriptor.isChanged = true
+      currentRoundFileDelta?.markRecompile(rootDescriptor, sourceFile)
     }
   }
 }
+

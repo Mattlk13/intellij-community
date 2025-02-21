@@ -59,7 +59,7 @@ internal class BazelJpsServiceManager : JpsServiceManager() {
 
     // confine costly service initialization to single thread for defined startup profile
     return synchronized(services) {
-      return services.computeIfAbsent(serviceClass) {
+      services.computeIfAbsent(serviceClass) {
         doComputeService(it) as T
       } as T
     }

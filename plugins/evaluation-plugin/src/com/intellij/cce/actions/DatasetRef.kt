@@ -1,10 +1,13 @@
 package com.intellij.cce.actions
 
 import com.intellij.cce.util.httpGet
-import java.nio.file.Files
+import com.intellij.openapi.diagnostic.fileLogger
+import com.intellij.openapi.diagnostic.logger
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
+import kotlin.io.path.Path
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
+import kotlin.io.path.name
 
 
 sealed interface DatasetRef {
@@ -13,7 +16,10 @@ sealed interface DatasetRef {
 
   fun prepare(datasetContext: DatasetContext)
 
+  fun resultPath(datasetContext: DatasetContext): Path = datasetContext.path(name)
+
   companion object {
+    private const val CONFIG_PROTOCOL = "config:"
     private const val EXISTING_PROTOCOL = "existing:"
     private const val REMOTE_PROTOCOL = "remote:"
     private const val AI_PLATFORM_PROTOCOL = "ai_platform:"
@@ -21,6 +27,10 @@ sealed interface DatasetRef {
     fun parse(ref: String): DatasetRef {
       if (ref.startsWith(EXISTING_PROTOCOL)) {
         return ExistingRef(ref.substring(EXISTING_PROTOCOL.length))
+      }
+
+      if (ref.startsWith(CONFIG_PROTOCOL)) {
+        return ConfigRelativeRef(ref.substring(CONFIG_PROTOCOL.length))
       }
 
       if (ref.startsWith(REMOTE_PROTOCOL)) {
@@ -35,29 +45,42 @@ sealed interface DatasetRef {
         throw IllegalArgumentException("Protocol is not supported: $ref")
       }
 
-      return ConfigRelativeRef(ref)
+      return AbsoluteRef(ref)
     }
   }
+}
+
+internal data class AbsoluteRef(val relativePath: String) : DatasetRef {
+  override val name: String = Path.of(relativePath).name.toString()
+
+  override fun prepare(datasetContext: DatasetContext) {
+    val path = resultPath(datasetContext)
+    check(path.exists()) {
+      "Path ${relativePath} doesn't exist: ${path.absolutePathString()}"
+    }
+  }
+
+  override fun resultPath(datasetContext: DatasetContext): Path = Path(relativePath)
 }
 
 internal data class ConfigRelativeRef(val relativePath: String) : DatasetRef {
   override val name: String = Path.of(relativePath).normalize().toString()
 
   override fun prepare(datasetContext: DatasetContext) {
-    val targetPath = datasetContext.path(this)
+    val path = resultPath(datasetContext)
 
+    check(path.exists()) {
+      "Config-relative path $relativePath does not exist: $path"
+    }
+  }
+
+  override fun resultPath(datasetContext: DatasetContext): Path {
     val configPath = checkNotNull(datasetContext.configPath) {
       "Path $relativePath supposed to be relative to config, but there is no config explicitly provided. " +
       "Note that this option is only for test purposes and not supposed to be used in production."
     }
 
-    val sourcePath = Path.of(configPath).parent.resolve(relativePath)
-
-    check(sourcePath.exists()) {
-      "Config-relative path $relativePath does not exist: $sourcePath"
-    }
-
-    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING)
+    return Path.of(configPath).parent.resolve(relativePath)
   }
 }
 
@@ -88,6 +111,7 @@ internal data class RemoteFileRef(private val url: String) : DatasetRef {
       "Token for dataset $url should be configured"
     }
 
+    LOG.info("Downloading dataset $url to $path")
     val content = httpGet(url, readToken)
     path.toFile().writeText(content)
   }
@@ -96,3 +120,5 @@ internal data class RemoteFileRef(private val url: String) : DatasetRef {
 internal data class AiPlatformFileRef(override val name: String): DatasetRef {
   override fun prepare(datasetContext: DatasetContext) { }
 }
+
+private val LOG = fileLogger()

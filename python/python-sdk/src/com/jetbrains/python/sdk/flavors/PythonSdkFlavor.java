@@ -33,7 +33,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import static com.jetbrains.python.sdk.PythonSdkUtilKtKt.tryResolvePath;
+import static com.jetbrains.python.venvReader.ResolveUtilKt.tryResolvePath;
 import static com.jetbrains.python.sdk.flavors.PySdkFlavorUtilKt.getFileExecutionError;
 import static com.jetbrains.python.sdk.flavors.PySdkFlavorUtilKt.getFileExecutionErrorOnEdt;
 
@@ -104,7 +104,7 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   /**
    * @deprecated use {@link #suggestLocalHomePaths(Module, UserDataHolder)}
    */
-  @Deprecated
+  @Deprecated(forRemoval = true)
   public Collection<String> suggestHomePaths(final @Nullable Module module, final @Nullable UserDataHolder context) {
     return Collections.emptyList();
   }
@@ -264,10 +264,10 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
    * if you do not have sdk yet, and you want to guess the flavor, use {@link #tryDetectFlavorByLocalPath(Path)}
    */
   //No warning yet as there are usages: to be fixed
-  @Deprecated
+  @Deprecated(forRemoval = true)
   @RequiresBackgroundThread(generateAssertion = false)
   public static @Nullable PythonSdkFlavor<?> getFlavor(@Nullable String sdkPath) {
-    if (sdkPath == null || PythonSdkUtil.isCustomPythonSdkHomePath(sdkPath)) return null;
+    if (sdkPath == null || CustomSdkHomePattern.isCustomPythonSdkHomePath(sdkPath)) return null;
     return tryDetectFlavorByLocalPath(sdkPath);
   }
 
@@ -289,7 +289,7 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   /**
    * @deprecated SDK path is not enough to get flavor, use {@link #getFlavor(Sdk)} instead
    */
-  @Deprecated
+  @Deprecated(forRemoval = true)
   public static @Nullable PythonSdkFlavor<?> getPlatformIndependentFlavor(final @Nullable String sdkPath) {
     if (sdkPath == null) {
       return null;
@@ -322,9 +322,9 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   }
 
   /**
-   * @deprecated use {@link #getVersionStringStatic(String)}
    * @param sdkHome
    * @return
+   * @deprecated use {@link #getVersionStringStatic(String)}
    */
   //because of process output
   @Deprecated(forRemoval = true)
@@ -413,13 +413,31 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
 
   /**
    * Returns wrong language level when argument is null which isn't probably what you except.
-   * Be sure to check argument for null
+   * Be sure to check argument for null.
+   * If string can't be parsed -- returns default.
+   * <p>
+   * Consider using {@link #getLanguageLevelFromVersionStringStaticSafe(String...)}
    */
   public static @NotNull LanguageLevel getLanguageLevelFromVersionStringStatic(@Nullable String version) {
-    if (version != null && version.startsWith(PYTHON_VERSION_STRING_PREFIX)) {
-      return LanguageLevel.fromPythonVersion(version.substring(PYTHON_VERSION_STRING_PREFIX.length()));
+    if (version == null) {
+      return LanguageLevel.getDefault();
     }
-    return LanguageLevel.getDefault();
+    var result = getLanguageLevelFromVersionStringStaticSafe(version);
+    return (result == null) ? LanguageLevel.getDefault() : result;
+  }
+
+  /**
+   * For <code>python --version</code> output (i.e <code>Python 3.12</code>) returns {@link LanguageLevel}.
+   * Typical usage: call `python --version`, trim, and provide here.
+   *
+   * @param versionString output to look language level for
+   * @return level or null if no parsable output was found
+   */
+  public static @Nullable LanguageLevel getLanguageLevelFromVersionStringStaticSafe(@NotNull String versionString) {
+    if (versionString.startsWith(PYTHON_VERSION_STRING_PREFIX)) {
+      return LanguageLevel.fromPythonVersionSafe(versionString.substring(PYTHON_VERSION_STRING_PREFIX.length()));
+    }
+    return null;
   }
 
   public @NotNull Icon getIcon() {

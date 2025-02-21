@@ -15,7 +15,7 @@ import com.intellij.util.Processor
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.idea.devkit.dom.Extension
 import org.jetbrains.idea.devkit.util.PsiUtil
-import org.jetbrains.idea.devkit.util.processExtensionCandidates
+import org.jetbrains.idea.devkit.util.processAllExtensionCandidates
 import org.jetbrains.uast.UExpression
 import org.jetbrains.uast.UField
 import org.jetbrains.uast.evaluateString
@@ -34,7 +34,7 @@ internal object ActionOrGroupIdResolveUtil {
     val executorClass = JavaPsiFacade.getInstance(project).findClass(Executor::class.java.getName(), scope)
     if (executorClass == null) return
 
-    for (inheritor in ClassInheritorsSearch.search(executorClass, scope, true)) {
+    for (inheritor in ClassInheritorsSearch.search(executorClass, scope, true).asIterable()) {
       val id = computeConstantReturnValue(inheritor, "getId")
       if (id != null && !processor.process(id, inheritor)) return
 
@@ -54,7 +54,7 @@ internal object ActionOrGroupIdResolveUtil {
 
   @JvmStatic
   fun processActivateToolWindowActions(project: Project, processor: Processor<Extension>) {
-    processExtensionCandidates(project, "com.intellij.toolWindow", processor, null, null)
+    processAllExtensionCandidates(project, "com.intellij.toolWindow", processor)
   }
 
   @JvmStatic
@@ -69,9 +69,9 @@ internal object ActionOrGroupIdResolveUtil {
     if (toolWindowIdClass == null) return
 
     for (field in toolWindowIdClass.getFields()) {
-      val initializer = field.toUElement<UField>(UField::class.java)?.uastInitializer ?: continue
+      val initializer = field.toUElement(UField::class.java)?.uastInitializer ?: continue
       val value = initializer.evaluateString() ?: continue
-      if (!processor.process(value, field)) return
+      if (!processor.process(value.replace(" ", ""), field)) return
     }
   }
 

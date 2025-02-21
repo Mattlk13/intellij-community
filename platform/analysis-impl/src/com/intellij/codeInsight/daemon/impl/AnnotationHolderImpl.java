@@ -188,10 +188,6 @@ public final class AnnotationHolderImpl extends SmartList<@NotNull Annotation> i
     return annotation;
   }
 
-  public boolean hasAnnotations() {
-    return !isEmpty();
-  }
-
   @Override
   public @NotNull AnnotationSession getCurrentAnnotationSession() {
     return myAnnotationSession;
@@ -206,7 +202,7 @@ public final class AnnotationHolderImpl extends SmartList<@NotNull Annotation> i
     return createBuilder(severity, null);
   }
 
-  private @NotNull B createBuilder(@NotNull HighlightSeverity severity, @Nls String message) {
+  private @NotNull AnnotationBuilder createBuilder(@NotNull HighlightSeverity severity, @Nls String message) {
     return new B(this, severity, message, myCurrentElement.get(), myAnnotator);
   }
 
@@ -220,7 +216,7 @@ public final class AnnotationHolderImpl extends SmartList<@NotNull Annotation> i
   }
 
   /**
-   * use {@link #runAnnotatorWithContext(PsiElement)}
+   * @deprecated use {@link #runAnnotatorWithContext(PsiElement)}
    */
   @ApiStatus.Internal
   @Deprecated(forRemoval = true)

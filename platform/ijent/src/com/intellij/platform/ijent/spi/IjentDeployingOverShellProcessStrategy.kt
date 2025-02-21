@@ -44,7 +44,7 @@ abstract class IjentDeployingOverShellProcessStrategy(scope: CoroutineScope) : I
       createdShellProcess = shellProcess
       createDeployingContext(shellProcess.apply {
         val initializationTime = measureTime {
-          withTimeout(Registry.intValue("ijent.shell.initialization.timeout").milliseconds) {
+          withTimeout(runCatching { Registry.intValue("ijent.shell.initialization.timeout") }.getOrDefault(30_000).milliseconds) {
             write("set -ex")
             ensureActive()
             filterOutBanners()
@@ -300,8 +300,8 @@ private suspend fun DeployingContextAndShell.getTargetPlatform(): EelPlatform.Po
 
   val targetPlatform = when {
     arch.isEmpty() -> throw IjentStartupError.IncompatibleTarget("Empty output of `uname`")
-    "x86_64" in arch -> EelPlatform.X8664Linux
-    "aarch64" in arch -> EelPlatform.Aarch64Linux
+    "x86_64" in arch -> EelPlatform.Linux(EelPlatform.X86_64)
+    "aarch64" in arch -> EelPlatform.Linux(EelPlatform.ARM_64)
     else -> throw IjentStartupError.IncompatibleTarget("No binary for architecture $arch")
   }
   return targetPlatform

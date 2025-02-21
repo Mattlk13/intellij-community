@@ -2,6 +2,7 @@
 package com.intellij.openapi.externalSystem.autoimport
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.externalSystem.autoimport.AutoImportProjectTracker.Companion.isAsyncChangesProcessing
 import com.intellij.openapi.externalSystem.autoimport.ExternalSystemModificationType.EXTERNAL
@@ -17,8 +18,7 @@ import com.intellij.openapi.externalSystem.autoimport.changes.FilesChangesListen
 import com.intellij.openapi.externalSystem.autoimport.changes.NewFilesListener.Companion.whenNewFilesCreated
 import com.intellij.openapi.externalSystem.autoimport.settings.AsyncSupplier
 import com.intellij.openapi.externalSystem.autoimport.settings.BackgroundAsyncSupplier
-import com.intellij.openapi.externalSystem.autoimport.settings.CachingAsyncSupplier
-import com.intellij.openapi.externalSystem.autoimport.settings.ReadAsyncSupplier
+import com.intellij.openapi.externalSystem.service.ui.completion.cache.AsyncLocalCache
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
 import com.intellij.openapi.externalSystem.util.calculateCrc
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -27,6 +27,7 @@ import com.intellij.openapi.observable.operation.core.isOperationInProgress
 import com.intellij.openapi.observable.operation.core.whenOperationFinished
 import com.intellij.openapi.observable.operation.core.whenOperationStarted
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.SimpleModificationTracker
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -161,21 +162,6 @@ class ProjectSettingsTracker(
     }
   }
 
-  private fun submitSettingsFilesCRCCalculation(
-    operationName: String,
-    settingsPaths: Set<String>,
-    isMergeSameCalls: Boolean,
-    callback: (Map<String, Long>) -> Unit,
-  ) {
-    val builder = ReadAsyncSupplier.Builder { calculateSettingsFilesCRC(settingsPaths) }
-      .shouldKeepTasksAsynchronous(::isAsyncChangesProcessing)
-    if (isMergeSameCalls) {
-      builder.coalesceBy(this, operationName)
-    }
-    builder.build(backgroundExecutor)
-      .supply(parentDisposable, callback)
-  }
-
   private fun submitSettingsFilesCollection(
     isRefreshVfs: Boolean,
     isInvalidateCache: Boolean,
@@ -217,11 +203,12 @@ class ProjectSettingsTracker(
       // Therefore, the operation stamp cannot be taken earlier than VFS refresh for the settings files.
       // @see the AsyncFileChangesListener#apply function for details
       val operationStamp = Stamp.nextStamp()
-      submitSettingsFilesCRCCalculation(operationName, settingsPaths, context.isMergeSameCalls) { newSettingsFilesCRC ->
-        val settingsFilesStatus = updateSettingsFilesStatus(operationName, newSettingsFilesCRC, context.reloadStatus)
-        updateProjectStatus(operationStamp, context.syncEvent, context.changeEvent, settingsFilesStatus)
-        context.callback?.invoke()
+      val newSettingsFilesCRC = runReadAction {
+        calculateSettingsFilesCRC(settingsPaths)
       }
+      val settingsFilesStatus = updateSettingsFilesStatus(operationName, newSettingsFilesCRC, context.reloadStatus)
+      updateProjectStatus(operationStamp, context.syncEvent, context.changeEvent, settingsFilesStatus)
+      context.callback?.invoke()
     }
   }
 
@@ -264,7 +251,6 @@ class ProjectSettingsTracker(
 
   private class SettingsFilesStatusUpdateContext(
     var reloadStatus: ReloadStatus,
-    var isMergeSameCalls: Boolean = false,
     var isRefreshVfs: Boolean = false,
     var isInvalidateCache: Boolean = false,
     var syncEvent: ((Stamp) -> ProjectStatus.ProjectEvent)? = null,
@@ -349,7 +335,6 @@ class ProjectSettingsTracker(
 
     override fun apply() {
       submitSettingsFilesStatusUpdate("ProjectSettingsListener.apply") {
-        isMergeSameCalls = true
         syncEvent = ::Revert
         callback = { projectTracker.scheduleChangeProcessing() }
       }
@@ -369,12 +354,17 @@ class ProjectSettingsTracker(
 
   private inner class SettingsFilesAsyncSupplier : AsyncSupplier<Set<String>> {
 
-    private val cachingAsyncSupplier = CachingAsyncSupplier(
-      BackgroundAsyncSupplier.Builder(projectAware::settingsFiles)
-        .shouldKeepTasksAsynchronous(::isAsyncChangesProcessing)
-        .build(backgroundExecutor))
+    private val modificationTracker = SimpleModificationTracker()
 
-    private val supplier = BackgroundAsyncSupplier.Builder(cachingAsyncSupplier)
+    private val settingsFilesCache = AsyncLocalCache<Set<String>>()
+
+    private fun getOrCollectSettingsFiles(): Set<String> {
+      return settingsFilesCache.getOrCreateValueBlocking(modificationTracker.modificationCount) {
+        projectAware.settingsFiles
+      }
+    }
+
+    private val supplier = BackgroundAsyncSupplier.Builder(::getOrCollectSettingsFiles)
       .shouldKeepTasksAsynchronous(::isAsyncChangesProcessing)
       .build(backgroundExecutor)
 
@@ -387,7 +377,7 @@ class ProjectSettingsTracker(
     }
 
     fun invalidate() {
-      cachingAsyncSupplier.invalidate()
+      modificationTracker.incModificationCount()
     }
   }
 

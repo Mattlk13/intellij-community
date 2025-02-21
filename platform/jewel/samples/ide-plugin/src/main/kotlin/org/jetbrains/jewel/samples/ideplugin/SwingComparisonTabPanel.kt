@@ -63,6 +63,7 @@ import org.jetbrains.jewel.ui.theme.textAreaStyle
 internal class SwingComparisonTabPanel : BorderLayoutPanel() {
     private val mainContent =
         panel {
+                separator()
                 buttonsRow()
                 separator()
                 labelsRows()
@@ -175,7 +176,7 @@ internal class SwingComparisonTabPanel : BorderLayoutPanel() {
                 compose {
                     Icon(
                         key = IdeSampleIconKeys.jewelToolWindow,
-                        contentDescription = null,
+                        contentDescription = "Jewel Tool Window Icon",
                         modifier = Modifier.border(1.dp, Color.Red),
                     )
                 }

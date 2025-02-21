@@ -36,6 +36,7 @@ class CommonActionsInvoker(private val project: Project) : ActionsInvoker {
 
   override fun moveCaret(offset: Int) = onEdt {
     val editor = getEditorSafe(project)
+    editor.selectionModel.removeSelection()
     editor.caretModel.moveToOffset(offset)
     editor.scrollingModel.scrollToCaret(ScrollType.MAKE_VISIBLE)
   }
@@ -51,7 +52,7 @@ class CommonActionsInvoker(private val project: Project) : ActionsInvoker {
       LOG.warn("Psi identifier wasn't found")
       return@runWriteCommandAction
     }
-    for (ref in ReferencesSearch.search(psiElement)) {
+    for (ref in ReferencesSearch.search(psiElement).asIterable()) {
       if (!isThisReference(ref.canonicalText) ) {
         ref.handleElementRename(text)
       }

@@ -39,10 +39,10 @@ def get_data(table, use_csv_serialization, start_index=None, end_index=None, for
      # type: (datasets.arrow_dataset.Dataset, int, int) -> str
 
     def convert_data_to_csv(data, format):
-        return repr(data.to_csv(na_rep = "NaN", float_format=format, sep=CSV_FORMAT_SEPARATOR))
+        return repr(__convert_to_df(data).to_csv(na_rep = "NaN", float_format=format, sep=CSV_FORMAT_SEPARATOR))
 
     def convert_data_to_html(data, format):
-        return repr(data.to_html(notebook=True))
+        return repr(__convert_to_df(data).to_html(notebook=True))
 
     if use_csv_serialization:
         computed_data = __compute_sliced_data(table, convert_data_to_csv, start_index, end_index, format)
@@ -56,8 +56,8 @@ def get_data(table, use_csv_serialization, start_index=None, end_index=None, for
 def display_data_html(table, start_index, end_index):
     # type: (datasets.arrow_dataset.Dataset, int, int) -> None
     def ipython_display(data, format):
-        from IPython.display import display
-        display(data)
+        from IPython.display import display, HTML
+        display(HTML(__convert_to_df(data).to_html(notebook=True)))
     __compute_sliced_data(table, ipython_display, start_index, end_index)
 
 
@@ -70,7 +70,7 @@ def display_data_csv(table, start_index, end_index):
             data = data.to_csv(na_rep = "NaN", sep=CSV_FORMAT_SEPARATOR, float_format=format)
         except AttributeError:
             pass
-        print(data)
+        print(repr(__convert_to_df(data)))
     __compute_sliced_data(table, ipython_display, start_index, end_index)
 
 
@@ -99,8 +99,6 @@ def __compute_sliced_data(table, fun, start_index=None, end_index=None, format=N
 
     if start_index is not None and end_index is not None:
         table = __get_data_slice(table, start_index, end_index)
-    else:
-        table = __convert_to_df(table)
 
     data = fun(table, pd.get_option('display.float_format'))
 
@@ -118,20 +116,16 @@ def __define_format_function(format):
     if format is None or format == 'null':
         return None
 
-    if format.startswith("%"):
+    if type(format) == str and format.startswith("%"):
         return lambda x: format % x
 
     return None
 
 
-# In old versions of pandas max_colwidth accepted only Int-s
 def __get_tables_display_options():
     # type: () -> Tuple[None, Union[int, None], None]
-    import sys
-    if sys.version_info < (3, 0):
-        return None, MAX_COLWIDTH_PYTHON_2, None
     try:
-        import pandas as pd
+        # In pandas versions earlier than 1.0, max_colwidth must be set as an integer
         if int(pd.__version__.split('.')[0]) < 1:
             return None, MAX_COLWIDTH_PYTHON_2, None
     except ImportError:

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections.diagnosticBased
 
 import com.intellij.codeInspection.ProblemsHolder
@@ -9,25 +9,23 @@ import com.intellij.openapi.util.TextRange
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.fir.diagnostics.KaFirDiagnostic
 import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
-import org.jetbrains.kotlin.idea.codeinsight.api.applicable.inspections.KotlinDiagnosticBasedInspectionBase
+import org.jetbrains.kotlin.idea.codeinsight.api.applicable.inspections.KotlinKtDiagnosticBasedInspectionBase
 import org.jetbrains.kotlin.idea.codeinsight.api.applicable.inspections.KotlinModCommandQuickFix
 import org.jetbrains.kotlin.idea.codeinsight.api.applicators.ApplicabilityRange
 import org.jetbrains.kotlin.psi.*
 import kotlin.reflect.KClass
 
-internal class CanBeValInspection : KotlinDiagnosticBasedInspectionBase<KtDeclaration, KaFirDiagnostic.CanBeVal, Unit>() {
+internal class CanBeValInspection : KotlinKtDiagnosticBasedInspectionBase<KtDeclaration, KaFirDiagnostic.CanBeVal, Unit>() {
     override val diagnosticType: KClass<KaFirDiagnostic.CanBeVal>
         get() = KaFirDiagnostic.CanBeVal::class
 
     override fun buildVisitor(
         holder: ProblemsHolder,
         isOnTheFly: Boolean
-    ): KtVisitor<*, *> = object : KtVisitorVoid() {
-        override fun visitDeclaration(dcl: KtDeclaration) {
-            if (dcl !is KtProperty && dcl !is KtDestructuringDeclaration) return
-            visitTargetElement(dcl, holder, isOnTheFly)
-        }
-    }
+    ): KtVisitor<*, *> = declarationVisitor(fun(declaration) {
+        if (declaration !is KtProperty && declaration !is KtDestructuringDeclaration) return
+        visitTargetElement(declaration, holder, isOnTheFly)
+    })
 
     override fun getProblemDescription(
         element: KtDeclaration,
@@ -38,8 +36,7 @@ internal class CanBeValInspection : KotlinDiagnosticBasedInspectionBase<KtDeclar
         return ApplicabilityRange.single(element) { (it as? KtValVarKeywordOwner)?.valOrVarKeyword }
     }
 
-    context(KaSession@KaSession)
-    override fun prepareContextByDiagnostic(
+    override fun KaSession.prepareContextByDiagnostic(
         element: KtDeclaration,
         diagnostic: KaFirDiagnostic.CanBeVal
     ): Unit? {

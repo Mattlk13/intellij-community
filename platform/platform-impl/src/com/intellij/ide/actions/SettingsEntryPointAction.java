@@ -25,7 +25,6 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.ui.popup.*;
-import com.intellij.openapi.ui.popup.JBPopupFactory.ActionSelectionAid;
 import com.intellij.openapi.ui.popup.util.PopupUtil;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.NlsActions;
@@ -210,7 +209,7 @@ public final class SettingsEntryPointAction extends ActionGroup
     }
     else {
       popup = JBPopupFactory.getInstance().createActionGroupPopup(
-        null, group, context, ActionSelectionAid.MNEMONICS, true, place);
+        null, group, context, null, true, place);
     }
 
     popup.setShowSubmenuOnHover(true);
@@ -224,7 +223,7 @@ public final class SettingsEntryPointAction extends ActionGroup
 
     MyPopup(@NotNull ActionGroup group, @NotNull DataContext context, @NotNull PresentationFactory presentationFactory, @NotNull String place) {
       super(null, null, group, context, place, presentationFactory,
-            ActionPopupOptions.mnemonicsAndDisabled(), null);
+            ActionPopupOptions.showDisabled(), null);
       myPresentationFactory = presentationFactory;
     }
 

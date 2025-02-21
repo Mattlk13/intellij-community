@@ -31,6 +31,7 @@ import com.intellij.openapi.util.Pair
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.openapi.wm.ex.StatusBarEx
 import com.intellij.platform.diagnostic.startUpPerformanceReporter.StartUpPerformanceReporter.Companion.logStats
+import com.intellij.platform.eel.provider.EelInitialization
 import com.intellij.platform.ide.progress.ModalTaskOwner
 import com.intellij.platform.ide.progress.runWithModalProgressBlocking
 import com.intellij.tools.ide.starter.bus.EventsBus
@@ -56,7 +57,6 @@ import java.net.ConnectException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
-import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.function.Function
 import kotlin.time.Duration.Companion.minutes
@@ -213,6 +213,14 @@ private fun runScriptDuringIndexing(project: Project, alarm: Alarm) {
 @Internal
 class ProjectLoaded : ApplicationInitializedListener {
   override suspend fun execute() {
+    // Under flag since a proper solution should be implemented in the platform later
+    // https://youtrack.jetbrains.com/issue/IJPL-176231/ProductionWslIjentAvailabilityService-Registry-key-wsl.use.remote.agent.for.nio.filesystem-is-not-defined
+    if (System.getenv("STARTER_TESTS_SUPPORT_TARGETS").toBoolean()) {
+      IntegrationTestApplicationLoadListener.projectPathFromCommandLine?.run {
+        EelInitialization.runEelInitialization(this)
+      }
+    }
+
     if (System.getProperty("com.sun.management.jmxremote") == "true") {
       serviceAsync<InvokerService>().register({ PerformanceTestSpan.TRACER },
                                                { PerformanceTestSpan.getContext() },

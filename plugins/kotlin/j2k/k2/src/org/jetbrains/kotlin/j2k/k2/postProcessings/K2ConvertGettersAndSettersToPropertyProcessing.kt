@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("DuplicatedCode")
 
 package org.jetbrains.kotlin.j2k.k2.postProcessings
@@ -27,6 +27,7 @@ import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget.PROPERTY_GETTER
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget.PROPERTY_SETTER
+import org.jetbrains.kotlin.idea.base.analysis.api.utils.findSamSymbolOrNull
 import org.jetbrains.kotlin.idea.base.psi.replaced
 import org.jetbrains.kotlin.idea.base.util.or
 import org.jetbrains.kotlin.idea.base.util.projectScope
@@ -290,8 +291,7 @@ private class PropertiesDataCollector(private val searcher: JKInMemoryFilesSearc
         val classSymbol = classSymbol as? KaNamedClassSymbol ?: return false
         if (!classSymbol.isFun) return false
 
-        val callableSymbolsWithSameName = classSymbol.declaredMemberScope.callables(functionSymbol.name)
-        return callableSymbolsWithSameName.filter { it is KaNamedFunctionSymbol && it.modality == KaSymbolModality.ABSTRACT }.count() == 1
+        return classSymbol.findSamSymbolOrNull() != null
     }
 
     context(KaSession)
@@ -531,7 +531,7 @@ private class PropertiesDataFilter(
     }
 
     private fun KtElement.hasUsagesOutsideOf(inElement: KtElement, outsideElements: List<KtElement>): Boolean =
-        ReferencesSearch.search(this, LocalSearchScope(inElement)).any { reference ->
+        ReferencesSearch.search(this, LocalSearchScope(inElement)).asIterable().any { reference ->
             outsideElements.none { it.isAncestor(reference.element) }
         }
 }

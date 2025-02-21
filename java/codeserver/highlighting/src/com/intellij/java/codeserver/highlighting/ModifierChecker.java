@@ -1,12 +1,12 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.java.codeserver.highlighting;
 
+import com.intellij.java.codeserver.core.JavaPsiModifierUtil;
 import com.intellij.java.codeserver.highlighting.errors.JavaErrorKinds;
 import com.intellij.pom.java.JavaFeature;
 import com.intellij.pom.java.LanguageLevel;
 import com.intellij.psi.*;
 import com.intellij.psi.util.FileTypeUtils;
-import com.intellij.psi.util.JavaPsiModifierUtil;
 import com.intellij.psi.util.JavaPsiRecordUtil;
 import com.intellij.psi.util.PsiUtil;
 import org.jetbrains.annotations.NotNull;
@@ -32,7 +32,6 @@ final class ModifierChecker {
       modifierOwner instanceof PsiMember psiMember ? psiMember.getContainingClass() : modifierOwner.getParent();
     if (modifierOwnerParent == null) modifierOwnerParent = modifierOwner.getParent();
     boolean isAllowed = true;
-    String message = null;
     if (modifierOwner instanceof PsiClass aClass) {
       boolean privateOrProtected = PsiModifier.PRIVATE.equals(modifier) || PsiModifier.PROTECTED.equals(modifier);
       if (aClass.isInterface()) {
@@ -179,4 +178,76 @@ final class ModifierChecker {
     }
   }
 
+  void reportAccessProblem(@NotNull PsiJavaCodeReferenceElement ref,
+                           @NotNull PsiModifierListOwner resolved,
+                           @NotNull JavaResolveResult result) {
+    result = withElement(result, resolved);
+    if (resolved.hasModifierProperty(PsiModifier.PRIVATE)) {
+      myVisitor.report(JavaErrorKinds.ACCESS_PRIVATE.create(ref, result));
+      return;
+    }
+
+    if (resolved.hasModifierProperty(PsiModifier.PROTECTED)) {
+      myVisitor.report(JavaErrorKinds.ACCESS_PROTECTED.create(ref, result));
+      return;
+    }
+
+    PsiClass packageLocalClass = JavaPsiModifierUtil.getPackageLocalClassInTheMiddle(ref);
+    if (packageLocalClass != null) {
+      result = withElement(result, packageLocalClass);
+    }
+
+    if (resolved.hasModifierProperty(PsiModifier.PACKAGE_LOCAL) || packageLocalClass != null) {
+      myVisitor.report(JavaErrorKinds.ACCESS_PACKAGE_LOCAL.create(ref, result));
+      return;
+    }
+
+    checkModuleAccess(resolved, ref);
+    if (myVisitor.hasErrorResults()) return;
+    myVisitor.report(JavaErrorKinds.ACCESS_GENERIC_PROBLEM.create(ref, result));
+  }
+
+  private void checkModuleAccess(@NotNull PsiModifierListOwner resolved, @NotNull PsiElement ref) {
+    // TODO: JPMS
+  }
+
+  private static @NotNull JavaResolveResult withElement(@NotNull JavaResolveResult original, @NotNull PsiElement newElement) {
+    if (newElement == original.getElement()) return original;
+    return new JavaResolveResult() {
+      @Override
+      public PsiElement getElement() {
+        return newElement;
+      }
+
+      @Override
+      public @NotNull PsiSubstitutor getSubstitutor() {
+        return original.getSubstitutor();
+      }
+
+      @Override
+      public boolean isPackagePrefixPackageReference() {
+        return original.isPackagePrefixPackageReference();
+      }
+
+      @Override
+      public boolean isAccessible() {
+        return original.isAccessible();
+      }
+
+      @Override
+      public boolean isStaticsScopeCorrect() {
+        return original.isStaticsScopeCorrect();
+      }
+
+      @Override
+      public PsiElement getCurrentFileResolveScope() {
+        return original.getCurrentFileResolveScope();
+      }
+
+      @Override
+      public boolean isValidResult() {
+        return original.isValidResult();
+      }
+    };
+  }
 }

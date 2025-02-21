@@ -360,6 +360,16 @@ class ExtraUsageOfAutoCloseableInFinally {
       }
     }
   }
+
+  public void expressionList() throws Exception {
+    MyAutoCloseable first = create();
+    try {
+      System.out.println(first.hashCode());
+    } finally {
+      first.close();
+      System.out.println(first.hashCode());
+    }
+  }
 }
 
 class NestedCatchSections {
@@ -435,7 +445,7 @@ class NestedCatchSections {
   }
 
   void duplicateExceptionsInOuterAndInnerCatch(InputStream stream) {
-    try {
+    <warning descr="'try' can use automatic resource management">try</warning> {
       stream.read();
     } catch (IOException e) {
 
@@ -448,7 +458,7 @@ class NestedCatchSections {
   }
 
   void disjointExceptionsInOuterAndInnerCatch(InputStream stream) {
-    try {
+    <warning descr="'try' can use automatic resource management">try</warning> {
       System.out.println(1);
     } catch (A | B e) {
 
@@ -477,6 +487,49 @@ class NestedCatchSections {
       }
       catch (B | IOException e) {
 
+      }
+    }
+  }
+
+  void variableUsedInSecondInnerTry(InputStream stream) {
+    try {
+      System.out.println(1);
+    } finally {
+      try {
+        stream.close();
+      }
+      catch (Exception e) {
+      }
+      try {
+        stream.close();
+      } catch (Exception e) {
+      }
+    }
+  }
+
+  void nonFirstTryStatementsInFinallyBlock(InputStream stream) {
+    try {
+      System.out.println(1);
+    } finally {
+      System.out.println(1);
+      try {
+        stream.close();
+      } catch (Exception e) {
+      }
+    }
+  }
+
+  void twoTryStatementsInFinallyBlock(InputStream stream, InputStream stream2) {
+    try {
+      System.out.println(1);
+    } finally {
+      try {
+        stream.close();
+      } catch (Exception e) {
+      }
+      try {
+        stream2.close();
+      } catch (Exception e) {
       }
     }
   }

@@ -60,8 +60,8 @@ public class LocalTerminalDirectRunner extends AbstractTerminalRunner<PtyProcess
     ShellStartupOptions updatedOptions = LocalOptionsConfigurer.configureStartupOptions(baseOptions, myProject);
     if (enableShellIntegration()) {
       updatedOptions = LocalShellIntegrationInjector.injectShellIntegration(updatedOptions,
-                                                                            isBlockTerminalEnabled(),
-                                                                            isReworkedBlockTerminalEnabled());
+                                                                            isGenOneTerminalEnabled(),
+                                                                            isGenTwoTerminalEnabled());
     }
     return applyTerminalCustomizers(updatedOptions);
   }
@@ -95,10 +95,9 @@ public class LocalTerminalDirectRunner extends AbstractTerminalRunner<PtyProcess
     }
 
     var shellIntegration = options.getShellIntegration();
-    boolean isBlockTerminal = isReworkedBlockTerminalEnabled() ||
-                              (isBlockTerminalEnabled() &&
-                               shellIntegration != null &&
-                               shellIntegration.getCommandBlockIntegration() != null);
+    boolean isBlockTerminal =
+      (isGenOneTerminalEnabled() && shellIntegration != null && shellIntegration.getCommandBlockIntegration() != null)
+      || (isGenTwoTerminalEnabled() && !isGenOneTerminalEnabled());
     TerminalUsageTriggerCollector.triggerLocalShellStarted(myProject, command, isBlockTerminal);
 
     if (isBlockTerminal) {
@@ -217,12 +216,7 @@ public class LocalTerminalDirectRunner extends AbstractTerminalRunner<PtyProcess
   }
 
   @ApiStatus.Internal
-  protected boolean isBlockTerminalEnabled() {
-    return false;
-  }
-
-  @ApiStatus.Internal
-  protected boolean isReworkedBlockTerminalEnabled() {
+  protected boolean isGenOneTerminalEnabled() {
     return false;
   }
 
@@ -247,7 +241,7 @@ public class LocalTerminalDirectRunner extends AbstractTerminalRunner<PtyProcess
   @NotNull ShellStartupOptions injectShellIntegration(@NotNull List<String> shellCommand,
                                                              @NotNull Map<String, String> envs) {
     ShellStartupOptions options = new ShellStartupOptions.Builder().shellCommand(shellCommand).envVariables(envs).build();
-    return LocalShellIntegrationInjector.injectShellIntegration(options, isBlockTerminalEnabled(), isReworkedBlockTerminalEnabled());
+    return LocalShellIntegrationInjector.injectShellIntegration(options, isGenOneTerminalEnabled(), isGenTwoTerminalEnabled());
   }
 
   /**

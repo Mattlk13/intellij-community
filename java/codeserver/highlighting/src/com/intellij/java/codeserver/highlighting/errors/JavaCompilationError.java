@@ -8,6 +8,8 @@ import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Optional;
+
 /**
  * A concrete instance of a Java compilation error. Note that the instance is bound to a PSI element, so it should not
  * outlive the read-action. Otherwise it may become invalid.
@@ -20,14 +22,11 @@ import org.jetbrains.annotations.Nullable;
 public record JavaCompilationError<Psi extends PsiElement, Context>(@NotNull JavaErrorKind<Psi, Context> kind, 
                                                                     @NotNull Psi psi, 
                                                                     Context context) {
-  static final String JAVA_DISPLAY_INFORMATION = "--java-display-information";
-  static final String JAVA_DISPLAY_GRAYED = "--java-display-grayed";
-  static final String JAVA_DISPLAY_ERROR = "--java-display-error";
-  
-  public JavaCompilationError {
-    kind.validate(psi, context);
-  }
-  
+  public static final String JAVA_DISPLAY_INFORMATION = "--java-display-information";
+  public static final String JAVA_DISPLAY_GRAYED = "--java-display-grayed";
+  public static final String JAVA_DISPLAY_PARAMETER = "--java-display-parameter";
+  public static final String JAVA_DISPLAY_ERROR = "--java-display-error";
+
   public @NotNull Project project() {
     return psi.getProject();
   }
@@ -36,7 +35,7 @@ public record JavaCompilationError<Psi extends PsiElement, Context>(@NotNull Jav
    * @return a desired anchor to put the error message at
    */
   public @NotNull PsiElement anchor() {
-    return kind.anchor(psi, context);
+    return kind.anchor(psi);
   }
 
   /**
@@ -74,4 +73,43 @@ public record JavaCompilationError<Psi extends PsiElement, Context>(@NotNull Jav
   public @NotNull HtmlChunk tooltip() {
     return kind.tooltip(psi, context);
   }
+
+  /**
+   * A helper method to match wanted error message and extract PSI without doing unchecked casts in client code.
+   * 
+   * @param kinds wanted error kinds
+   * @return an optional containing typed {@link #psi()} if the current error is one of supplied kinds;
+   * empty optional otherwise
+   * @param <WantedPsi> the common PSI type of wanted kinds
+   */
+  @SafeVarargs
+  public final <WantedPsi extends PsiElement> @NotNull Optional<WantedPsi> psiForKind(JavaErrorKind<? extends WantedPsi, ?>... kinds) {
+    for (JavaErrorKind<? extends WantedPsi, ?> errorKind : kinds) {
+      if (errorKind.equals(kind)) {
+        //noinspection unchecked
+        return Optional.of((WantedPsi)psi);
+      }
+    }
+    return Optional.empty();
+  } 
+
+  /**
+   * A helper method to match the wanted error message and cast it safely.
+   * 
+   * @param kinds wanted error kinds
+   * @return an optional containing this object typed, if it matches one of wanted kinds; empty optional otherwise
+   * @param <WantedPsi> the common context type of wanted kinds
+   * @param <WantedContext> the common context type of wanted kinds
+   */
+  @SafeVarargs
+  public final <WantedPsi extends PsiElement, WantedContext> @NotNull Optional<JavaCompilationError<WantedPsi, WantedContext>> 
+  forKind(JavaErrorKind<? extends WantedPsi, ? extends WantedContext>... kinds) {
+    for (JavaErrorKind<? extends WantedPsi, ? extends WantedContext> errorKind : kinds) {
+      if (errorKind.equals(kind)) {
+        //noinspection unchecked
+        return Optional.of((JavaCompilationError<WantedPsi, WantedContext>)this);
+      }
+    }
+    return Optional.empty();
+  } 
 }

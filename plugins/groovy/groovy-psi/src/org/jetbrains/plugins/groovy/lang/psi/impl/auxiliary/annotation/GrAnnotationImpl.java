@@ -13,6 +13,7 @@ import com.intellij.util.PairFunction;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.plugins.groovy.config.GroovyConfigUtils;
 import org.jetbrains.plugins.groovy.lang.parser.GroovyEmptyStubElementTypes;
 import org.jetbrains.plugins.groovy.lang.parser.GroovyStubElementTypes;
 import org.jetbrains.plugins.groovy.lang.psi.GroovyElementVisitor;
@@ -147,21 +148,21 @@ public class GrAnnotationImpl extends GrStubElementBase<GrAnnotationStub> implem
   public static TargetType @NotNull [] getApplicableElementTypeFields(PsiElement owner) {
     if (owner instanceof PsiClass aClass) {
       if (aClass.isAnnotationType()) {
-        return new TargetType[]{TargetType.ANNOTATION_TYPE, TargetType.TYPE};
+        return addTypeUseIfApplicable(owner, TargetType.ANNOTATION_TYPE, TargetType.TYPE);
       }
       else if (aClass instanceof GrTypeParameter) {
-        return new TargetType[]{TargetType.TYPE_PARAMETER};
+        return addTypeUseIfApplicable(owner, TargetType.TYPE_PARAMETER);
       }
       else {
-        return new TargetType[]{TargetType.TYPE};
+        return addTypeUseIfApplicable(owner, TargetType.TYPE);
       }
     }
     if (owner instanceof GrMethod) {
       if (((PsiMethod)owner).isConstructor()) {
-        return new TargetType[]{TargetType.CONSTRUCTOR};
+        return addTypeUseIfApplicable(owner, TargetType.CONSTRUCTOR);
       }
       else {
-        return new TargetType[]{TargetType.METHOD};
+        return addTypeUseIfApplicable(owner, TargetType.METHOD);
       }
     }
     if (owner instanceof GrVariableDeclaration) {
@@ -170,14 +171,14 @@ public class GrAnnotationImpl extends GrStubElementBase<GrAnnotationStub> implem
         return TargetType.EMPTY_ARRAY;
       }
       if (variables[0] instanceof GrField || ResolveUtil.isScriptField(variables[0])) {
-        return new TargetType[]{TargetType.FIELD};
+        return addTypeUseIfApplicable(owner, TargetType.FIELD);
       }
       else {
-        return new TargetType[]{TargetType.LOCAL_VARIABLE};
+        return addTypeUseIfApplicable(owner, TargetType.LOCAL_VARIABLE);
       }
     }
     if (owner instanceof GrParameter) {
-      return new TargetType[]{TargetType.PARAMETER};
+      return addTypeUseIfApplicable(owner, TargetType.PARAMETER);
     }
     if (owner instanceof GrPackageDefinition) {
       return new TargetType[]{TargetType.PACKAGE};
@@ -191,6 +192,18 @@ public class GrAnnotationImpl extends GrStubElementBase<GrAnnotationStub> implem
 
 
     return TargetType.EMPTY_ARRAY;
+  }
+
+  private static TargetType[] addTypeUseIfApplicable(@NotNull PsiElement element, TargetType @NotNull ... baseTargetTypeArray) {
+    if (GroovyConfigUtils.isAtLeastGroovy40(element)) {
+      int length = baseTargetTypeArray.length;
+      TargetType[] newTargetTypeArray = new TargetType[length + 1];
+      System.arraycopy(baseTargetTypeArray, 0, newTargetTypeArray, 0, length);
+      newTargetTypeArray[length] = TargetType.TYPE_USE;
+      return newTargetTypeArray;
+    } else {
+      return baseTargetTypeArray;
+    }
   }
 
   public static boolean isAnnotationApplicableTo(GrAnnotation annotation, TargetType @NotNull ... elementTypeFields) {

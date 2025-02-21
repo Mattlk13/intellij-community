@@ -67,9 +67,22 @@ fun detectUvExecutable(): Path? {
     else -> "uv"
   }
 
-  return PathEnvironmentVariableUtil.findInPath(name)?.toPath() ?: SystemProperties.getUserHome().let { homePath ->
-    Path.of(homePath, ".local", "bin", name).takeIf { it.exists() } ?: Path.of(homePath, ".cargo", "bin", name).takeIf { it.exists() }
+  val binary = PathEnvironmentVariableUtil.findInPath(name)?.toPath()
+  if (binary != null) {
+    return binary
   }
+
+  val userHome = SystemProperties.getUserHome()
+  val appData = if (SystemInfo.isWindows) System.getenv("APPDATA") else null
+  val paths = mutableListOf<Path>().apply {
+    add(Path.of(userHome, ".local", "bin", name))
+    add(Path.of(userHome, ".local", "bin", name))
+    if (appData != null) {
+      add(Path.of(appData, "Python", "Scripts", name))
+    }
+  }
+
+  return paths.firstOrNull { it.exists() }
 }
 
 fun getUvExecutable(): Path? {
@@ -80,6 +93,10 @@ fun setUvExecutable(path: Path) {
   PropertiesComponent.getInstance().uvPath = path
 }
 
-fun createUvCli(dispatcher: CoroutineDispatcher = Dispatchers.IO, uv: Path? = null): UvCli {
+fun hasUvExecutable(): Boolean {
+  return getUvExecutable() != null
+}
+
+fun createUvCli(uv: Path? = null, dispatcher: CoroutineDispatcher = Dispatchers.IO): UvCli {
   return UvCliImpl(dispatcher, uv)
 }

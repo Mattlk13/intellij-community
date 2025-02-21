@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.refactoring.introduceParameter
 
 import com.intellij.CommonBundle
@@ -85,7 +85,7 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
         targetParent.getValueParameters()
             .filter { !it.hasValOrVar() }
             .forEach {
-                val paramUsages = ReferencesSearch.search(it).map { reference -> reference.element as KtElement }
+                val paramUsages = ReferencesSearch.search(it).asIterable().map { reference -> reference.element as KtElement }
                 if (paramUsages.isNotEmpty()) {
                     usages.put(it, paramUsages)
                 }
@@ -161,7 +161,7 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
             suggestedNames.addAll(KotlinNameSuggester.suggestNamesByType(expressionType, targetParent, nameValidator, "p"))
             suggestedNames
         }
-        addParameter(project, editor, expression, targetParent, expressionTypeEvaluator, nameSuggester)
+        addParameter(project, editor, expression, expression, targetParent, expressionTypeEvaluator, nameSuggester)
     }
 
     /**
@@ -173,6 +173,7 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
         project: Project,
         editor: Editor,
         expression: KtExpression,
+        argumentValue: KtExpression?,
         targetParent: KtNamedDeclaration,
         expressionTypeEvaluator: KaSession.() -> KaType?,
         nameSuggester: KaSession.(KaType) -> List<String>,
@@ -212,7 +213,7 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
                 ?: Collections.emptyList()
 
             val occurrencesToReplace = if (expression is KtProperty) {
-                ReferencesSearch.search(expression).mapNotNullTo(SmartList(expression.toRange())) { it.element.toRange() }
+                ReferencesSearch.search(expression).asIterable().mapNotNullTo(SmartList(expression.toRange())) { it.element.toRange() }
             } else {
                 K2SemanticMatcher.findMatches(patternElement = expression, scopeElement = targetParent)
                     .filterNot {
@@ -237,7 +238,8 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
                 expressionType,
                 parametersUsages,
                 occurrencesToReplace,
-                psiFactory
+                psiFactory,
+                argumentValue
             ) to expressionType
         }
 
@@ -336,7 +338,8 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
         replacementType: KaType,
         parametersUsages: MultiMap<KtElement, KtElement>,
         occurrencesToReplace: List<KotlinPsiRange>,
-        psiFactory: KtPsiFactory
+        psiFactory: KtPsiFactory,
+        argumentValue: KtExpression?
     ): IntroduceParameterDescriptor<KtNamedDeclaration> = helper.configure(
         IntroduceParameterDescriptor(
             originalRange = originalExpression.toRange(),
@@ -348,7 +351,7 @@ open class KotlinFirIntroduceParameterHandler(private val helper: KotlinIntroduc
                     functionalTypeRenderer = KaFunctionalTypeRenderer.AS_FUNCTIONAL_TYPE
                 }, position = Variance.IN_VARIANCE)
             },
-            argumentValue = originalExpression,
+            argumentValue = argumentValue,
             withDefaultValue = false,
             parametersUsages = parametersUsages,
             occurrencesToReplace = occurrencesToReplace,
@@ -498,7 +501,7 @@ fun IntroduceParameterDescriptor<KtNamedDeclaration>.performRefactoring(editor: 
         context = targetCallable
     )
 
-    val containingParameter = defaultValue?.parentOfType<KtParameter>()
+    val containingParameter = originalRange.elements.firstOrNull()?.parentOfType<KtParameter>()
 
     val targetParameterIndex = containingParameter?.let { (callable as? KtFunction)?.valueParameterList?.parameters?.indexOf(containingParameter) } ?: -1
 

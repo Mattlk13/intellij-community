@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("JAVA_MODULE_DOES_NOT_EXPORT_PACKAGE")
 package com.intellij.ide
 
@@ -24,6 +24,7 @@ import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.editor.impl.ad.ThreadLocalRhizomeDB
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.keymap.impl.IdeKeyEventDispatcher
 import com.intellij.openapi.keymap.impl.IdeMouseEventDispatcher
@@ -42,7 +43,6 @@ import com.intellij.openapi.wm.impl.FocusManagerImpl
 import com.intellij.platform.ide.bootstrap.StartupErrorReporter
 import com.intellij.ui.ComponentUtil
 import com.intellij.ui.speedSearch.SpeedSearchSupply
-import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.concurrency.unwrapContextRunnable
 import com.intellij.util.containers.ContainerUtil
@@ -298,7 +298,7 @@ class IdeEventQueue private constructor() : EventQueue() {
           val progressManager = ProgressManager.getInstanceOrNull()
           try {
             runCustomProcessors(finalEvent, preProcessors)
-            performActivity(finalEvent, !nakedRunnable && isCoroutineWILEnabled && !threadingSupport.isInsideUnlockedWriteIntentLock()) {
+            performActivity(finalEvent, !nakedRunnable && isPureSwingEventWilEnabled && !threadingSupport.isInsideUnlockedWriteIntentLock()) {
               if (progressManager == null) {
                 _dispatchEvent(finalEvent)
               }
@@ -449,7 +449,7 @@ class IdeEventQueue private constructor() : EventQueue() {
     if (isUserActivityEvent(e)) {
       ActivityTracker.getInstance().inc()
     }
-    if (popupManager.isPopupActive && popupManager.dispatch(e)) {
+    if (popupManager.isPopupActive && threadingSupport.runWriteIntentReadAction<Boolean, Throwable> { popupManager.dispatch(e) }) {
       if (keyEventDispatcher.isWaitingForSecondKeyStroke) {
         keyEventDispatcher.state = KeyState.STATE_INIT
       }
@@ -460,7 +460,9 @@ class IdeEventQueue private constructor() : EventQueue() {
       // app activation can call methods that need write intent (like project saving)
       threadingSupport.runWriteIntentReadAction<Unit, Throwable> { processAppActivationEvent(e) }
     }
-    if (dispatchByCustomDispatchers(e)) {
+
+    // IJPL-177735 Remove Write-Intent lock from IdeEventQueue.EventDispatcher
+    if (threadingSupport.runWriteIntentReadAction<Boolean, Throwable> { dispatchByCustomDispatchers(e) }) {
       return
     }
     if (e is InputMethodEvent && SystemInfoRt.isMac && keyEventDispatcher.isWaitingForSecondKeyStroke) {
@@ -569,7 +571,8 @@ class IdeEventQueue private constructor() : EventQueue() {
     return false
   }
 
-  private fun defaultDispatchEvent(e: AWTEvent) {
+  @Internal
+  fun defaultDispatchEvent(e: AWTEvent) {
     try {
       maybeReady()
       val me = e as? MouseEvent
@@ -935,6 +938,8 @@ internal fun performActivity(e: AWTEvent, needWIL: Boolean, runnable: () -> Unit
     }
   }
 
+  setImplicitThreadLocalRhizomeIfEnabled()
+
   if (transactionGuard == null) {
     runnable()
   }
@@ -942,15 +947,9 @@ internal fun performActivity(e: AWTEvent, needWIL: Boolean, runnable: () -> Unit
     val runnableWithWIL =
       if (needWIL) {
         {
-            WriteIntentReadAction.run {
-              ThreadingAssertions.setImplicitLockOnEDT(true)
-              try {
-                runnable()
-              }
-              finally {
-                ThreadingAssertions.setImplicitLockOnEDT(false)
-              }
-            }
+          WriteIntentReadAction.run {
+            runnable()
+          }
         }
       }
       else {
@@ -1199,4 +1198,17 @@ private fun abracadabraDaberBoreh(eventQueue: IdeEventQueue) {
     .findConstructor(aClass, MethodType.methodType(Void.TYPE, EventQueue::class.java))
   val postEventQueue = constructor.invoke(eventQueue)
   AppContext.getAppContext().put("PostEventQueue", postEventQueue)
+}
+
+private fun setImplicitThreadLocalRhizomeIfEnabled() {
+  if (isRhizomeAdEnabled) {
+    // It is a workaround on tricky `updateDbInTheEventDispatchThread()` where
+    // the thread local DB is reset by `fleet.kernel.DbSource.ContextElement.restoreThreadContext`
+    try {
+      ThreadLocalRhizomeDB.setThreadLocalDb(ThreadLocalRhizomeDB.lastKnownDb())
+    }
+    catch (e: Exception) {
+      Logs.LOG.error(e)
+    }
+  }
 }

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.encapsulateFields;
 
 import com.intellij.java.refactoring.JavaRefactoringBundle;
@@ -122,7 +122,7 @@ public class EncapsulateFieldsProcessor extends BaseRefactoringProcessor {
       }
       if (!getters.isEmpty() || !setters.isEmpty()) {
         final PsiField field = fieldDescriptor.getField();
-        for (PsiReference reference : ReferencesSearch.search(field)) {
+        for (PsiReference reference : ReferencesSearch.search(field).asIterable()) {
           final PsiElement place = reference.getElement();
           if (place instanceof PsiReferenceExpression) {
             final PsiExpression qualifierExpression = ((PsiReferenceExpression)place).getQualifierExpression();
@@ -198,7 +198,7 @@ public class EncapsulateFieldsProcessor extends BaseRefactoringProcessor {
         while (containingClass != null && existing == null) {
           existing = containingClass.findMethodBySignature(prototype, true);
           if (existing != null) {
-            for (PsiReference reference : ReferencesSearch.search(existing)) {
+            for (PsiReference reference : ReferencesSearch.search(existing).asIterable()) {
               final PsiElement place = reference.getElement();
               if (place instanceof PsiReferenceExpression) {
                 final PsiExpression qualifierExpression = ((PsiReferenceExpression)place).getQualifierExpression();
@@ -245,7 +245,7 @@ public class EncapsulateFieldsProcessor extends BaseRefactoringProcessor {
   }
 
   protected @Unmodifiable Iterable<? extends PsiReference> getFieldReferences(@NotNull PsiField field) {
-    return ReferencesSearch.search(field);
+    return ReferencesSearch.search(field).asIterable();
   }
 
   @Override

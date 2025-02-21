@@ -4,6 +4,7 @@ import com.intellij.ide.DataManager
 import com.intellij.ide.actions.DistractionFreeModeController
 import com.intellij.ide.ui.UISettings
 import com.intellij.notebooks.ui.visualization.NotebookEditorAppearanceUtils.isDiffKind
+import com.intellij.notebooks.ui.visualization.NotebookEditorAppearanceUtils.isOrdinaryNotebookEditor
 import com.intellij.notebooks.ui.visualization.NotebookUtil.notebookAppearance
 import com.intellij.notebooks.ui.visualization.markerRenderers.NotebookCellHighlighterRenderer
 import com.intellij.notebooks.ui.visualization.markerRenderers.NotebookCodeCellBackgroundLineMarkerRenderer
@@ -11,6 +12,7 @@ import com.intellij.notebooks.visualization.*
 import com.intellij.notebooks.visualization.NotebookCellInlayController.InputFactory
 import com.intellij.notebooks.visualization.context.NotebookDataContext
 import com.intellij.notebooks.visualization.ui.cellsDnD.DropHighlightableCellPanel
+import com.intellij.notebooks.visualization.ui.jupyterToolbars.NotebookCellActionsToolbarStateTracker
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataProvider
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
@@ -29,6 +31,7 @@ import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.util.asSafely
+import java.awt.Color
 import java.awt.Rectangle
 import java.time.ZonedDateTime
 import javax.swing.JComponent
@@ -72,19 +75,21 @@ class EditorCellView(
     private set
 
   private val myEditorCellFrameManager: EditorCellFrameManager? =
-    when (interval.type == NotebookCellLines.CellType.MARKDOWN && Registry.`is`("jupyter.markdown.cells.border")) {
-      true -> EditorCellFrameManager(editor, this)
-      else -> null
-    }
+    if (interval.type == NotebookCellLines.CellType.MARKDOWN && Registry.`is`("jupyter.markdown.cells.border")) {
+      EditorCellFrameManager(editor, this, NotebookCellLines.CellType.MARKDOWN)
+    } else if (interval.type == NotebookCellLines.CellType.CODE && Registry.`is`("jupyter.code.cells.border")) {
+      EditorCellFrameManager(editor, this, NotebookCellLines.CellType.CODE)
+    } else null
 
   var selected: Boolean = false
     set(value) {
       field = value
       updateFolding()
       updateRunButtonVisibility()
+      updateDraggableBarVisibility()
       updateCellHighlight()
       updateCellActionsToolbarVisibility()
-      myEditorCellFrameManager?.updateMarkdownCellShow(mouseOver || value)
+      myEditorCellFrameManager?.updateCellFrameShow(value, mouseOver)
     }
 
   private var mouseOver = false
@@ -97,6 +102,14 @@ class EditorCellView(
       if (field == value) return
       field = value
       updateRunButtonVisibility()
+      updateDraggableBarVisibility()
+    }
+
+  var isUnderDiff: Boolean = false
+    set(value) {
+      if (field == value) return
+      field = value
+      updateCellActionsToolbarVisibility()
     }
 
   init {
@@ -115,6 +128,13 @@ class EditorCellView(
     editor.notebookAppearance.codeCellBackgroundColor.afterChange(this) { backgroundColor ->
       updateCellHighlight(force = true)
     }
+    cell.notebook.readOnly.afterChange(this) {
+      updateRunButtonVisibility()
+      updateDraggableBarVisibility()
+    }
+    cell.notebook.showCellToolbar.afterChange(this) {
+      updateCellActionsToolbarVisibility()
+    }
     recreateControllers()
     updateSelection(false)
     updateOutputs()
@@ -131,7 +151,7 @@ class EditorCellView(
     _controllers.forEach { controller ->
       disposeController(controller)
     }
-    myEditorCellFrameManager?.dispose()
+    myEditorCellFrameManager?.let { Disposer.dispose(it) }
     removeCellHighlight()
   }
 
@@ -264,7 +284,8 @@ class EditorCellView(
     mouseOver = false
     updateFolding()
     updateRunButtonVisibility()
-    myEditorCellFrameManager?.updateMarkdownCellShow(mouseOver || selected)
+    updateDraggableBarVisibility()
+    myEditorCellFrameManager?.updateCellFrameShow(selected, mouseOver)
     updateCellActionsToolbarVisibility()
   }
 
@@ -272,7 +293,8 @@ class EditorCellView(
     mouseOver = true
     updateFolding()
     updateRunButtonVisibility()
-    myEditorCellFrameManager?.updateMarkdownCellShow(mouseOver || selected)
+    updateDraggableBarVisibility()
+    myEditorCellFrameManager?.updateCellFrameShow(selected, mouseOver)
     updateCellActionsToolbarVisibility()
   }
 
@@ -354,7 +376,7 @@ class EditorCellView(
     selected = value
     updateFolding()
     updateCellHighlight()
-    myEditorCellFrameManager?.updateMarkdownCellShow(mouseOver || selected)
+    myEditorCellFrameManager?.updateCellFrameShow(selected, mouseOver)
   }
 
   private fun updateFolding() {
@@ -366,21 +388,42 @@ class EditorCellView(
 
   private fun updateRunButtonVisibility() {
     input.runCellButton ?: return
-    val shouldBeVisible = !disableActions && (mouseOver || selected)
+    val isReadOnlyNotebook = editor.notebook?.readOnly?.get() == true
+    val shouldBeVisible = !isReadOnlyNotebook && !disableActions && (mouseOver || selected)
     if (input.runCellButton.lastRunButtonVisibility == shouldBeVisible) return
 
     input.runCellButton.visible = shouldBeVisible
-    input.runCellButton.lastRunButtonVisibility = shouldBeVisible // 更新状態を記録
+    input.runCellButton.lastRunButtonVisibility = shouldBeVisible
+  }
+
+  private fun updateDraggableBarVisibility() {
+    val isReadOnlyNotebook = editor.notebook?.readOnly?.get() == true
+    val shouldBeVisible =
+      Registry.`is`("jupyter.editor.dnd.cells")
+      && !isReadOnlyNotebook
+      && !disableActions
+      && (mouseOver || selected)
+      && editor.isOrdinaryNotebookEditor()
+
+    if (input.draggableBar.visible == shouldBeVisible) return
+    input.draggableBar.visible = shouldBeVisible
   }
 
   private fun updateCellActionsToolbarVisibility() {
-    input.cellActionsToolbar ?: return
-    when (selected || mouseOver) {
-      true -> {
-        val targetComponent = _controllers.filterIsInstance<DataProviderComponent>().firstOrNull()?.retrieveDataProvider() ?: return
-        input.cellActionsToolbar.showToolbar(targetComponent)
+    val toolbarManager = input.cellActionsToolbar ?: return
+    if ((isUnderDiff == true)) return
+    val targetComponent = _controllers.filterIsInstance<DataProviderComponent>().firstOrNull()?.retrieveDataProvider() ?: return
+    val tracker = NotebookCellActionsToolbarStateTracker.get(editor) ?: return
+    when {
+      !cell.notebook.showCellToolbar.get() -> toolbarManager.hideToolbar()
+      mouseOver -> toolbarManager.showToolbar(targetComponent)
+      selected -> {
+        // we show the toolbar only for the last selected cell
+        if (tracker.lastSelectedCell == input) return
+        tracker.updateLastSelectedCell(input)
+        toolbarManager.showToolbar(targetComponent)
       }
-      else -> input.cellActionsToolbar.hideToolbar()
+      else -> toolbarManager.hideToolbar()
     }
   }
 
@@ -394,7 +437,9 @@ class EditorCellView(
     return Rectangle(0, inputBounds.y, editor.contentSize.width, height)
   }
 
-  fun updateFrameVisibility(selected: Boolean): Unit = _controllers.forEach { it.updateFrameVisibility(selected, interval) }
+  fun updateFrameVisibility(selected: Boolean, color: Color): Unit = _controllers.forEach {
+    it.updateFrameVisibility(selected, interval, color)
+  }
 
   private fun updateExecutionStatus(executionCount: Int?, progressStatus: ProgressStatus?, startTime: ZonedDateTime?, endTime: ZonedDateTime?) {
     _controllers.filterIsInstance<CellExecutionStatusView>().firstOrNull()
@@ -402,10 +447,10 @@ class EditorCellView(
     input.runCellButton?.updateGutterAction(progressStatus)
   }
 
-  fun highlightAbovePanel(): Unit? =
+  fun addDropHighlightIfApplicable(): Unit? =
     _controllers.filterIsInstance<DropHighlightableCellPanel>().firstOrNull()?.addDropHighlight()
 
-  fun removeHighlightAbovePanel(): Unit? =
+  fun removeDropHighlightIfPresent(): Unit? =
     _controllers.filterIsInstance<DropHighlightableCellPanel>().firstOrNull()?.removeDropHighlight()
 
   internal data class NotebookCellDataProvider(

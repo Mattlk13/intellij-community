@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package com.intellij.refactoring.extractMethodObject;
 
@@ -123,7 +123,7 @@ public class ExtractMethodObjectProcessor extends BaseRefactoringProcessor {
         if (usedMethod.hasModifierProperty(PsiModifier.PRIVATE) &&
             (!usedMethod.hasModifierProperty(PsiModifier.STATIC) || myExtractProcessor.isStatic())) {
           PsiMethod toMove = usedMethod;
-          for (PsiReference reference : ReferencesSearch.search(usedMethod)) {
+          for (PsiReference reference : ReferencesSearch.search(usedMethod).asIterable()) {
             if (!PsiTreeUtil.isAncestor(getMethod(), reference.getElement(), false)) {
               toMove = null;
               break;
@@ -361,7 +361,7 @@ public class ExtractMethodObjectProcessor extends BaseRefactoringProcessor {
 
     for (PsiLocalVariable var : vars) {
       final String fieldName = var2FieldNames.get(var.getName());
-      for (PsiReference reference : ReferencesSearch.search(var, var.getUseScope())) {
+      for (PsiReference reference : ReferencesSearch.search(var, var.getUseScope()).asIterable()) {
         reference.handleElementRename(fieldName);
       }
     }
@@ -610,7 +610,7 @@ public class ExtractMethodObjectProcessor extends BaseRefactoringProcessor {
       parameterList.add(parm);
 
       final PsiField field = createField(parm, constructor, parameterModifierList.hasModifierProperty(PsiModifier.FINAL));
-      for (PsiReference reference : ReferencesSearch.search(parameter, parameter.getUseScope())) {
+      for (PsiReference reference : ReferencesSearch.search(parameter, parameter.getUseScope()).asIterable()) {
         reference.handleElementRename(field.getName());
       }
     }

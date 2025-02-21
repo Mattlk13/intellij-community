@@ -1,5 +1,6 @@
 package org.jetbrains.plugins.textmate.language.syntax.lexer;
 
+import com.intellij.textmate.joni.JoniRegexFactory;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.plugins.textmate.language.TextMateLanguageDescriptor;
@@ -7,7 +8,7 @@ import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorC
 import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorWeigherImpl;
 import org.jetbrains.plugins.textmate.regex.CachingRegexFactory;
 import org.jetbrains.plugins.textmate.regex.RegexFactory;
-import org.jetbrains.plugins.textmate.regex.joni.JoniRegexFactory;
+import org.jetbrains.plugins.textmate.regex.RememberingLastMatchRegexFactory;
 
 import java.util.Queue;
 
@@ -32,7 +33,7 @@ public class TextMateLexer {
    */
   @Deprecated
   public TextMateLexer(@NotNull TextMateLanguageDescriptor languageDescriptor, int lineLimit, boolean stripWhitespaces) {
-    RegexFactory regexFactory = new CachingRegexFactory(new JoniRegexFactory());
+    RegexFactory regexFactory = new CachingRegexFactory(new RememberingLastMatchRegexFactory(new JoniRegexFactory()));
     TextMateSelectorCachingWeigher weigher = new TextMateSelectorCachingWeigher(new TextMateSelectorWeigherImpl());
     TextMateCachingSyntaxMatcher syntaxMatcher = new TextMateCachingSyntaxMatcher(new TextMateSyntaxMatcherImpl(regexFactory, weigher));
     myLexerCore = new TextMateLexerCore(languageDescriptor, syntaxMatcher, lineLimit, stripWhitespaces);

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.wrapreturnvalue;
 
 import com.intellij.ide.highlighter.JavaFileType;
@@ -111,13 +111,13 @@ public class WrapReturnValueProcessor extends FixableUsagesRefactoringProcessor 
   @Override
   public void findUsages(@NotNull List<? super FixableUsageInfo> usages) {
     findUsagesForMethod(myMethod, usages);
-    for (PsiMethod overridingMethod : OverridingMethodsSearch.search(myMethod)) {
+    for (PsiMethod overridingMethod : OverridingMethodsSearch.search(myMethod).asIterable()) {
       findUsagesForMethod(overridingMethod, usages);
     }
   }
 
   private void findUsagesForMethod(PsiMethod psiMethod, List<? super FixableUsageInfo> usages) {
-    for (PsiReference reference : ReferencesSearch.search(psiMethod, psiMethod.getUseScope())) {
+    for (PsiReference reference : ReferencesSearch.search(psiMethod, psiMethod.getUseScope()).asIterable()) {
       final PsiElement referenceElement = reference.getElement();
       final PsiElement parent = referenceElement.getParent();
       if (parent instanceof PsiCallExpression) {
