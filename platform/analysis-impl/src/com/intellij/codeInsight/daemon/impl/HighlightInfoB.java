@@ -1,7 +1,8 @@
-// Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.codeInsight.daemon.HighlightDisplayKey;
+import com.intellij.codeInsight.daemon.QuickFixActionRegistrar;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.annotation.HighlightSeverity;
@@ -14,18 +15,20 @@ import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiReference;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.xml.util.XmlStringUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
-final class HighlightInfoB implements HighlightInfo.Builder {
+@ApiStatus.Internal
+public final class HighlightInfoB implements HighlightInfo.Builder {
   private static final Logger LOG = Logger.getInstance(HighlightInfoB.class);
   private Boolean myNeedsUpdateOnTyping;
   private TextAttributes forcedTextAttributes;
@@ -45,12 +48,11 @@ final class HighlightInfoB implements HighlightInfo.Builder {
 
   private GutterIconRenderer gutterIconRenderer;
   private ProblemGroup problemGroup;
-  private Object toolId;
   private PsiElement psiElement;
   private int group;
   private final List<HighlightInfo.IntentionActionDescriptor> fixes = new ArrayList<>();
   private boolean created;
-  private PsiReference unresolvedReference;
+  private final List<Consumer<? super QuickFixActionRegistrar>> myLazyFixes = new ArrayList<>();
 
   HighlightInfoB(@NotNull HighlightInfoType type) {
     this.type = type;
@@ -75,7 +77,7 @@ final class HighlightInfoB implements HighlightInfo.Builder {
   private void assertNotCreated() {
     assert !created : "Must not call this method after Builder.create() was called";
   }
-  private void assertNotSet(Object field, @NotNull String fieldName) {
+  private static void assertNotSet(Object field, @NotNull String fieldName) {
     if (field != null) {
       throw new IllegalArgumentException(fieldName +" already set");
     }
@@ -85,7 +87,6 @@ final class HighlightInfoB implements HighlightInfo.Builder {
   @Override
   public @NotNull HighlightInfo.Builder inspectionToolId(@NotNull String inspectionToolId) {
     assertNotCreated();
-    assertNotSet(this.toolId, "inspectionToolId");
     return this;
   }
 
@@ -224,12 +225,8 @@ final class HighlightInfoB implements HighlightInfo.Builder {
     return this;
   }
 
-  void setUnresolvedReference(@NotNull PsiReference ref) {
-    unresolvedReference = ref;
-  }
-
   @Override
-  public HighlightInfo.@NotNull Builder registerFix(@NotNull IntentionAction action,
+  public @NotNull HighlightInfo.Builder registerFix(@NotNull IntentionAction action,
                                                     @Nullable List<? extends IntentionAction> options,
                                                     @Nls @Nullable String displayName,
                                                     @Nullable TextRange fixRange,
@@ -241,13 +238,23 @@ final class HighlightInfoB implements HighlightInfo.Builder {
   }
 
   @Override
+  public @NotNull HighlightInfo.Builder registerLazyFixes(@NotNull Consumer<? super QuickFixActionRegistrar> quickFixComputer) {
+    assertNotCreated();
+    myLazyFixes.add(quickFixComputer);
+    return this;
+  }
+
+  @Override
   public @Nullable HighlightInfo create() {
     HighlightInfo info = createUnconditionally();
-    LOG.assertTrue(psiElement != null ||
-                   severity == HighlightInfoType.SYMBOL_TYPE_SEVERITY ||
-                   severity == HighlightInfoType.INJECTED_FRAGMENT_SEVERITY ||
-                   ArrayUtil.find(HighlightSeverity.DEFAULT_SEVERITIES, severity) != -1,
-                   "Custom type requires not-null element to detect its text attributes");
+    boolean canDeduceTextAttributes = psiElement != null ||
+                    severity == HighlightInfoType.SYMBOL_TYPE_SEVERITY ||
+                    severity == HighlightInfoType.INJECTED_FRAGMENT_SEVERITY ||
+                    ArrayUtil.find(HighlightSeverity.DEFAULT_SEVERITIES, severity) != -1;
+    if (!canDeduceTextAttributes) {
+      LOG.error("Custom severity(" + severity+") requires passing not-null PSI element to detect its text attributes. " +
+                "Please see HighlightInfo.Builder.range(PsiElement) and similar methods.");
+    }
     return isAcceptedByFilters(info, psiElement) ? info : null;
   }
 
@@ -262,11 +269,10 @@ final class HighlightInfoB implements HighlightInfo.Builder {
     HighlightInfo info = new HighlightInfo(forcedTextAttributes, forcedTextAttributesKey, type, startOffset, endOffset, escapedDescription,
                                            escapedToolTip, severity, isAfterEndOfLine, myNeedsUpdateOnTyping, isFileLevelAnnotation,
                                            navigationShift,
-                                           problemGroup, toolId, gutterIconRenderer, group, unresolvedReference);
+                                           problemGroup, null, gutterIconRenderer, group, false, myLazyFixes);
     // fill IntentionActionDescriptor.problemGroup and IntentionActionDescriptor.severity - they can be null because .registerFix() might have been called before .problemGroup() and .severity()
-    List<HighlightInfo.IntentionActionDescriptor> iads = ContainerUtil.map(fixes, fixInfo -> new HighlightInfo.IntentionActionDescriptor(
-      fixInfo.getAction(), fixInfo.myOptions, fixInfo.getDisplayName(), fixInfo.getIcon(), fixInfo.myKey, problemGroup, severity, fixInfo.getFixRange()));
-    info.registerFixes(iads);
+    List<HighlightInfo.IntentionActionDescriptor> iads = ContainerUtil.map(fixes, fixInfo -> fixInfo.withProblemGroupAndSeverity(problemGroup, severity));
+    info.registerFixes(iads, null);
     return info;
   }
 

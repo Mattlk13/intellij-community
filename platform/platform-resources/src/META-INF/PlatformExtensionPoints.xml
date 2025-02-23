@@ -513,6 +513,10 @@
     <extensionPoint name="contentTabActionProvider" interface="com.intellij.openapi.wm.impl.content.tabActions.ContentTabActionProvider"
                     dynamic="true"/>
 
+    <extensionPoint name="toolWindowTabInEditorHelper" beanClass="com.intellij.util.KeyedLazyInstanceEP" dynamic="true">
+      <with attribute="implementationClass" implements="com.intellij.openapi.wm.impl.tabInEditor.ToolWindowTabInEditorHelper"/>
+    </extensionPoint>
+
     <extensionPoint name="inspectionPopupLevelChangePolicy" interface="com.intellij.openapi.editor.impl.InspectionPopupLevelChangePolicy" dynamic="true"/>
 
     <extensionPoint name="protocolHandler" interface="com.intellij.ide.ProtocolHandler" dynamic="true"/>
@@ -554,7 +558,6 @@
 
     <extensionPoint name="codeWithMe.authorizationProvider" interface="com.intellij.codeWithMe.CodeWithMeAuthorizationProvider" dynamic="true" />
     <extensionPoint name="codeWithMe.serverUrlProvider" interface="com.intellij.codeWithMe.CodeWithMeServerUrlProvider" dynamic="true" />
-    <extensionPoint name="emptyIntentionProvider" interface="com.intellij.codeInsight.daemon.impl.EmptyIntentionProvider" dynamic="true"/>
 
     <extensionPoint name="idePerformanceListener" interface="com.intellij.diagnostic.PerformanceListener" dynamic="true"/>
 
@@ -580,6 +583,10 @@
 
     <extensionPoint name="recentProjectsBranchesProvider"
                     interface="com.intellij.ide.vcs.RecentProjectsBranchesProvider"
+                    dynamic="true"/>
+
+    <extensionPoint name="recentProjectsProvider"
+                    interface="com.intellij.ide.RecentProjectProvider"
                     dynamic="true"/>
 
     <extensionPoint name="applicationSettings"
@@ -610,6 +617,10 @@
     <extensionPoint qualifiedName="com.intellij.actionGroupCustomization" interface="com.intellij.ide.ui.customization.ActionGroupCustomizationExtension" dynamic="true"/>
     <extensionPoint name="subprojectInfoProvider"
                     interface="com.intellij.openapi.project.workspace.SubprojectInfoProvider"
+                    dynamic="true"/>
+
+    <extensionPoint name="commandLineEnvCustomizer"
+                    interface="com.intellij.execution.process.CommandLineEnvCustomizer"
                     dynamic="true"/>
 
   </extensionPoints>

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment")
 package com.intellij.ide.plugins
 
@@ -83,6 +83,11 @@ class ClassLoaderConfigurator(
   }
 
   fun configureModule(module: IdeaPluginDescriptorImpl): Boolean {
+    val mainDescriptor = pluginSet.findEnabledPlugin(module.pluginId)
+    if (mainDescriptor == null) {
+      log.warn("Module '${module.moduleName}' is not loaded, because plugin ${module.pluginId} is not found in enabled plugins")
+      return false
+    }
     checkPackagePrefixUniqueness(module)
 
     val isMain = module.moduleName == null
@@ -117,7 +122,6 @@ class ClassLoaderConfigurator(
       }
 
       val mainInfo = mainToClassPath.get(module.pluginId) ?: run {
-        val mainDescriptor = pluginSet.findEnabledPlugin(module.pluginId) ?: throw PluginException("Plugin ${module.pluginId} is not found in enabled plugins", module.pluginId)
         configureMainPluginModule(mainDescriptor)
       }
       
@@ -159,14 +163,14 @@ class ClassLoaderConfigurator(
   }
 
   private fun getSortedDependencies(module: IdeaPluginDescriptorImpl): Array<IdeaPluginDescriptorImpl> {
-    val dependenciesList = pluginSet.moduleGraph.getDependencies(module)
+    val dependenciesList = pluginSet.getSortedDependencies(module)
     var mutableDependenciesList: MutableList<IdeaPluginDescriptorImpl>? = null
     for (moduleItem in module.content.modules) {
       if (moduleItem.loadingRule == ModuleLoadingRule.EMBEDDED) {
         if (mutableDependenciesList == null) {
           mutableDependenciesList = dependenciesList.toMutableList()
         }
-        mutableDependenciesList.addAll(pluginSet.moduleGraph.getDependencies(moduleItem.requireDescriptor()))
+        mutableDependenciesList.addAll(pluginSet.getSortedDependencies(moduleItem.requireDescriptor()))
       }
     }
     val dependencies = (mutableDependenciesList ?: dependenciesList).toTypedArray()

@@ -7,6 +7,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.testFramework.PlatformTestUtil;
 import com.intellij.testFramework.UsefulTestCase;
+import com.intellij.textmate.joni.JoniRegexFactory;
 import com.intellij.util.PathUtil;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
@@ -20,7 +21,7 @@ import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorC
 import org.jetbrains.plugins.textmate.language.syntax.selector.TextMateSelectorWeigherImpl;
 import org.jetbrains.plugins.textmate.regex.CachingRegexFactory;
 import org.jetbrains.plugins.textmate.regex.RegexFactory;
-import org.jetbrains.plugins.textmate.regex.joni.JoniRegexFactory;
+import org.jetbrains.plugins.textmate.regex.RememberingLastMatchRegexFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -84,7 +85,8 @@ abstract public class LexerTestCase extends UsefulTestCase {
 
     StringBuilder output = new StringBuilder();
     String text = sourceData.replaceAll("$(\\n+)", "");
-    RegexFactory regexFactory = new CachingRegexFactory(new JoniRegexFactory());
+    RegexFactory regexFactory = new CachingRegexFactory(new RememberingLastMatchRegexFactory(new JoniRegexFactory()));
+
     TextMateSelectorCachingWeigher weigher = new TextMateSelectorCachingWeigher(new TextMateSelectorWeigherImpl());
     TextMateCachingSyntaxMatcher syntaxMatcher = new TextMateCachingSyntaxMatcher(new TextMateSyntaxMatcherImpl(regexFactory, weigher));
     Lexer lexer = new TextMateHighlightingLexer(new TextMateLanguageDescriptor(myRootScope, mySyntaxTable.getSyntax(myRootScope)),

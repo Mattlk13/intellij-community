@@ -2,8 +2,6 @@
 package com.intellij.codeInspection.defUse;
 
 import com.intellij.codeInsight.ExpressionUtil;
-import com.intellij.codeInsight.daemon.impl.analysis.HighlightControlFlowUtil;
-import com.intellij.codeInsight.daemon.impl.analysis.JavaHighlightUtil;
 import com.intellij.codeInspection.*;
 import com.intellij.codeInspection.dataFlow.java.ControlFlowAnalyzer;
 import com.intellij.codeInspection.dataFlow.java.anchor.JavaExpressionAnchor;
@@ -16,6 +14,7 @@ import com.intellij.psi.augment.PsiAugmentProvider;
 import com.intellij.psi.controlFlow.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
+import com.intellij.util.JavaPsiConstructorUtil;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
 import com.siyeh.ig.psiutils.EquivalenceChecker;
@@ -179,10 +178,10 @@ public final class DefUseInspection extends AbstractBaseJavaLocalInspectionTool 
       if (classInitializer.hasModifierProperty(PsiModifier.STATIC) == isStatic) {
         final List<PsiAssignmentExpression> assignments = collectAssignments(field, classInitializer);
         if (!assignments.isEmpty()) {
-          boolean isDefinitely = HighlightControlFlowUtil.variableDefinitelyAssignedIn(field, classInitializer.getBody());
+          boolean isDefinitely = ControlFlowUtil.variableDefinitelyAssignedIn(field, classInitializer.getBody());
           if (isDefinitely) {
             try {
-              ControlFlow flow = HighlightControlFlowUtil.getControlFlowNoConstantEvaluate(classInitializer.getBody());
+              ControlFlow flow = ControlFlowFactory.getControlFlowNoConstantEvaluate(classInitializer.getBody());
               if (ContainerUtil.exists(ControlFlowUtil.getReadBeforeWrite(flow),
                                        read -> (isStatic || ExpressionUtil.isEffectivelyUnqualified(read)) &&
                                                read.isReferenceTo(field))) {
@@ -227,13 +226,13 @@ public final class DefUseInspection extends AbstractBaseJavaLocalInspectionTool 
       return false;
     }
     for (PsiMethod constructor : constructors) {
-      if (!JavaHighlightUtil.getChainedConstructors(constructor).isEmpty()) continue;
+      if (!JavaPsiConstructorUtil.getChainedConstructors(constructor).isEmpty()) continue;
       final PsiCodeBlock body = constructor.getBody();
-      if (body == null || !HighlightControlFlowUtil.variableDefinitelyAssignedIn(field, body)) {
+      if (body == null || !ControlFlowUtil.variableDefinitelyAssignedIn(field, body)) {
         return false;
       }
       try {
-        ControlFlow flow = HighlightControlFlowUtil.getControlFlowNoConstantEvaluate(body);
+        ControlFlow flow = ControlFlowFactory.getControlFlowNoConstantEvaluate(body);
         if (ContainerUtil.exists(ControlFlowUtil.getReadBeforeWrite(flow),
                                  read -> ExpressionUtil.isEffectivelyUnqualified(read) && read.isReferenceTo(field))) {
           return false;

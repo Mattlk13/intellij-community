@@ -247,7 +247,7 @@ class ReimportingTest : MavenMultiVersionImportingTestCase() {
   fun testMoveModuleWithSystemScopedDependency() = runBlocking {
     zipFile {
       file("a.txt")
-    }.generate(Paths.get(projectPath.toString(), "lib.jar").toFile())
+    }.generate(projectPath.resolve("lib.jar").toFile())
     updateModulePom("m1", generatePomWithSystemDependency("../lib.jar"))
     importProjectAsync()
 
@@ -268,7 +268,6 @@ class ReimportingTest : MavenMultiVersionImportingTestCase() {
 
   @Test
   fun testParentVersionProperty() = runBlocking {
-    if (ignore()) return@runBlocking
     val parentPomTemplate =
 
       """

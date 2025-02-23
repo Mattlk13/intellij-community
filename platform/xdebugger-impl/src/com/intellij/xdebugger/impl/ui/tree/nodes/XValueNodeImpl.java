@@ -177,6 +177,9 @@ public class XValueNodeImpl extends XValueContainerNode<XValue> implements XValu
 
   public void addAdditionalHyperlink(@NotNull XDebuggerTreeNodeHyperlink link) {
     invokeNodeUpdate(() -> {
+      if (hasLinks()) {
+        return;
+      }
       myAdditionalHyperLinks.add(link);
       fireNodeChanged();
     });

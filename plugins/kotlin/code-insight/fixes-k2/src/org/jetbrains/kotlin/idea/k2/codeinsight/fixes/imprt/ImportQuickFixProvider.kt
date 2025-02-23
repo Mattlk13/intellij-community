@@ -1,10 +1,9 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.fixes.imprt
 
-import com.intellij.psi.PsiElement
-import com.intellij.psi.util.startOffset
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
+import org.jetbrains.kotlin.analysis.api.diagnostics.KaDiagnosticWithPsi
 import org.jetbrains.kotlin.analysis.api.renderer.base.annotations.KaRendererAnnotationsFilter
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.KaCallableReturnTypeFilter
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.KaDeclarationRenderer
@@ -13,14 +12,13 @@ import org.jetbrains.kotlin.analysis.api.renderer.declarations.modifiers.rendere
 import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.api.types.KaErrorType
 import org.jetbrains.kotlin.analysis.utils.printer.prettyPrint
-import org.jetbrains.kotlin.idea.base.analysis.api.utils.KtSymbolFromIndexProvider
 import org.jetbrains.kotlin.idea.base.analysis.api.utils.getDefaultImports
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinIconProvider.getIconFor
 import org.jetbrains.kotlin.idea.base.util.isImported
 import org.jetbrains.kotlin.idea.codeInsight.K2StatisticsInfoProvider
-import org.jetbrains.kotlin.idea.highlighter.KotlinUnresolvedReferenceKind
-import org.jetbrains.kotlin.idea.highlighter.KotlinUnresolvedReferenceKind.UnresolvedDelegateFunction
-import org.jetbrains.kotlin.idea.highlighter.kotlinUnresolvedReferenceKinds
+import org.jetbrains.kotlin.idea.k2.codeinsight.fixes.imprt.factories.DelegateMethodImportQuickFixFactory
+import org.jetbrains.kotlin.idea.k2.codeinsight.fixes.imprt.factories.UnresolvedNameReferenceImportQuickFixFactory
+import org.jetbrains.kotlin.idea.quickfix.AutoImportVariant
 import org.jetbrains.kotlin.idea.quickfix.ImportFixHelper
 import org.jetbrains.kotlin.idea.quickfix.ImportPrioritizer
 import org.jetbrains.kotlin.idea.util.positionContext.*
@@ -30,68 +28,19 @@ import org.jetbrains.kotlin.resolve.ImportPath
 import javax.swing.Icon
 
 object ImportQuickFixProvider {
-
     context(KaSession)
-    fun getFixes(diagnosticPsi: PsiElement): List<ImportQuickFix> {
-        val position = diagnosticPsi.containingFile.findElementAt(diagnosticPsi.startOffset)
-        val positionContext = position?.let { KotlinPositionContextDetector.detect(it) }
-
-        if (positionContext !is KotlinNameReferencePositionContext) return emptyList()
-        val indexProvider = KtSymbolFromIndexProvider(positionContext.nameExpression.containingKtFile)
-
-        return diagnosticPsi.kotlinUnresolvedReferenceKinds
-            .asSequence()
-            .ifEmpty { sequenceOf(KotlinUnresolvedReferenceKind.Regular) }
-            .map { unresolvedReferenceKind ->
-                when (unresolvedReferenceKind) {
-                    is KotlinUnresolvedReferenceKind.Regular -> getCandidateProviders(positionContext)
-                    is UnresolvedDelegateFunction -> sequenceOf(
-                        DelegateMethodImportCandidatesProvider(unresolvedReferenceKind, positionContext),
-                    )
-                }.flatMap { it.collectCandidates(indexProvider) }
-                    .toList()
-            }.mapNotNull { candidates ->
-                createImportFix(positionContext.nameExpression, candidates)
-            }.toList()
+    fun getFixes(diagnostic: KaDiagnosticWithPsi<*>): List<ImportQuickFix> {
+        return getFixes(setOf(diagnostic))
     }
 
     context(KaSession)
-    private fun getCandidateProviders(
-        positionContext: KotlinNameReferencePositionContext,
-    ): Sequence<AbstractImportCandidatesProvider> = when (positionContext) {
-        is KotlinSuperTypeCallNameReferencePositionContext,
-        is KotlinTypeNameReferencePositionContext -> sequenceOf(
-            ClassifierImportCandidatesProvider(positionContext),
+    fun getFixes(diagnostics: Set<KaDiagnosticWithPsi<*>>): List<ImportQuickFix> {
+        val factories = listOf(
+            UnresolvedNameReferenceImportQuickFixFactory(),
+            DelegateMethodImportQuickFixFactory(),
         )
 
-        is KotlinAnnotationTypeNameReferencePositionContext -> sequenceOf(
-            AnnotationImportCandidatesProvider(positionContext),
-        )
-
-        is KotlinWithSubjectEntryPositionContext,
-        is KotlinExpressionNameReferencePositionContext -> sequenceOf(
-            CallableImportCandidatesProvider(positionContext),
-            ClassifierImportCandidatesProvider(positionContext),
-        )
-
-        is KotlinInfixCallPositionContext -> sequenceOf(
-            InfixCallableImportCandidatesProvider(positionContext),
-        )
-
-        is KDocLinkNamePositionContext -> sequenceOf(
-            // TODO
-        )
-
-        is KotlinCallableReferencePositionContext -> sequenceOf(
-            CallableImportCandidatesProvider(positionContext),
-            ConstructorReferenceImportCandidatesProvider(positionContext),
-        )
-
-        is KotlinImportDirectivePositionContext,
-        is KotlinPackageDirectivePositionContext,
-        is KotlinSuperReceiverNameReferencePositionContext,
-        is KotlinLabelReferencePositionContext,
-        is KDocParameterNamePositionContext -> sequenceOf()
+        return factories.flatMap { it.run { createQuickFixes(diagnostics) } }
     }
 
     @KaExperimentalApi
@@ -112,7 +61,10 @@ object ImportQuickFixProvider {
     @OptIn(KaExperimentalApi::class)
     private fun renderCandidate(candidate: ImportCandidate): String = prettyPrint {
         val fqName = candidate.getFqName()
-        if (candidate.symbol is KaNamedClassSymbol) {
+        if (
+            candidate.symbol is KaNamedClassSymbol || 
+            candidate.symbol is KaEnumEntrySymbol
+        ) {
             append("class $fqName")
         } else {
             renderer.renderDeclaration(useSiteSession, candidate.symbol, printer = this)
@@ -124,10 +76,22 @@ object ImportQuickFixProvider {
         }
     }
 
-    private fun KaSession.createImportFix(
+    internal fun KaSession.createImportFix(
+        position: KtElement,
+        data: ImportData,
+    ): ImportQuickFix? {
+        val text = ImportFixHelper.calculateTextForFix(
+            data.importsInfo,
+            suggestions = data.uniqueFqNameSortedImportCandidates.map { (candidate, _) -> candidate.getFqName() }
+        )
+        return ImportQuickFix(position, text, data.importVariants)
+    }
+
+    context(KaSession)
+    internal fun createImportData(
         position: KtElement,
         importCandidates: List<ImportCandidate>,
-    ): ImportQuickFix? {
+    ): ImportData? {
         if (importCandidates.isEmpty()) return null
 
         val containingKtFile = position.containingKtFile
@@ -159,10 +123,6 @@ object ImportQuickFixProvider {
         val uniqueFqNameSortedImportCandidates =
             sortedImportCandidatesWithPriorities.distinctBy { (candidate, _) -> candidate.getFqName() }
 
-        val text = ImportFixHelper.calculateTextForFix(
-            sortedImportInfos,
-            suggestions = uniqueFqNameSortedImportCandidates.map { (candidate, _) -> candidate.getFqName() }
-        )
 
         val implicitReceiverTypes = containingKtFile.scopeContext(position).implicitReceivers.map { it.type }
         // don't import callable on the fly as it might be unresolved because of an erroneous implicit receiver
@@ -171,6 +131,7 @@ object ImportQuickFixProvider {
         val sortedImportVariants = uniqueFqNameSortedImportCandidates
             .map { (candidate, priority) ->
                 SymbolBasedAutoImportVariant(
+                    candidate.createPointer(),
                     candidate.getFqName(),
                     candidate.psi,
                     getIconFor(candidate),
@@ -180,8 +141,14 @@ object ImportQuickFixProvider {
                 )
             }
 
-        return ImportQuickFix(position, text, sortedImportVariants)
+        return ImportData(sortedImportVariants, sortedImportInfos, uniqueFqNameSortedImportCandidates)
     }
+
+    internal data class ImportData(
+        val importVariants: List<AutoImportVariant>,
+        val importsInfo:  List<ImportFixHelper.ImportInfo<ImportPrioritizer.Priority>>,
+        val uniqueFqNameSortedImportCandidates: List<Pair<ImportCandidate, ImportPrioritizer.Priority>>
+    )
 
     context(KaSession)
     private fun ImportCandidate.doNotImportOnTheFly(doNotImportCallablesOnFly: Boolean): Boolean = when (this) {
@@ -206,6 +173,8 @@ object ImportQuickFixProvider {
             symbol is KaNamedFunctionSymbol && symbol.isInfix -> ImportFixHelper.ImportKind.INFIX_FUNCTION
             symbol is KaNamedFunctionSymbol -> ImportFixHelper.ImportKind.FUNCTION
             
+            symbol is KaEnumEntrySymbol -> ImportFixHelper.ImportKind.CLASS
+            
             else -> null
         }
 
@@ -220,7 +189,10 @@ object ImportQuickFixProvider {
 
     context(KaSession)
     private fun ImportCandidate.getImportName(): String = buildString {
-        if (this@getImportName is CallableImportCandidate) {
+        if (
+            this@getImportName is CallableImportCandidate && 
+            symbol !is KaEnumEntrySymbol
+        ) {
             val classSymbol = when {
                 receiverType != null -> receiverType?.expandedSymbol
                 else -> containingClass

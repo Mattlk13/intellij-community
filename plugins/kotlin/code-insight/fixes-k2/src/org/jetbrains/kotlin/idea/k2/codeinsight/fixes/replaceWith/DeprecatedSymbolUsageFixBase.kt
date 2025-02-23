@@ -40,7 +40,6 @@ import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.util.application.isDispatchThread
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.calls.util.getCalleeExpressionIfAny
-import java.util.Locale.getDefault
 
 object DeprecationFixFactory {
     val deprecatedWarning = IntentionBased { diagnostics: KaFirDiagnostic.Deprecation ->
@@ -222,7 +221,7 @@ abstract class DeprecatedSymbolUsageFixBase(
 
             val expression = createReplacementExpression(project, replaceWith, context) ?: return null
 
-            return buildCodeToInline(target, expression, isUnitType != false, null, object : CodeToInlineBuilder(original = target) {
+            return buildCodeToInline(target, expression, isUnitType != false, null, object : CodeToInlineBuilder(original = target, replaceWith.imports) {
                 override fun saveComments(codeToInline: MutableCodeToInline, contextDeclaration: KtDeclaration) {}
             })
         }

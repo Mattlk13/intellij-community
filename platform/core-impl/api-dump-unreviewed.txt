@@ -751,19 +751,6 @@ c:com.intellij.lang.impl.PsiBuilderImpl
 - setTokenTypeRemapper(com.intellij.lang.ITokenTypeRemapper):V
 - setWhitespaceSkippedCallback(com.intellij.lang.WhitespaceSkippedCallback):V
 - whitespaceOrComment(com.intellij.psi.tree.IElementType):Z
-a:com.intellij.lang.impl.PsiBuilderImpl$ProductionMarker
-- com.intellij.lang.LighterASTNode
-- com.intellij.lang.SyntaxTreeBuilder$Production
-- pf:myBuilder:com.intellij.lang.impl.PsiBuilderImpl
-- p:myLexemeIndex:I
-- p:myNext:com.intellij.lang.impl.PsiBuilderImpl$ProductionMarker
-- p:myParent:com.intellij.lang.impl.PsiBuilderImpl$ProductionMarker
-- getEndIndex():I
-- getStartIndex():I
-- getStartOffset():I
-- isCollapsed():Z
-- remapTokenType(com.intellij.psi.tree.IElementType):V
-- a:tokenTextMatches(java.lang.CharSequence):Z
 c:com.intellij.lexer.DelegateLexer
 - com.intellij.lexer.LexerBase
 - pf:myDelegate:com.intellij.lexer.Lexer
@@ -1067,7 +1054,7 @@ f:com.intellij.openapi.application.TransactionGuardImpl
 - assertWriteActionAllowed():V
 - assertWriteSafeContext(com.intellij.openapi.application.ModalityState):V
 - enteredModality(com.intellij.openapi.application.ModalityState):V
-- getContextTransaction():com.intellij.openapi.application.TransactionGuardImpl$TransactionIdImpl
+- getContextTransaction():com.intellij.openapi.application.TransactionId
 - isWriteSafeModality(com.intellij.openapi.application.ModalityState):Z
 - isWritingAllowed():Z
 - submitTransaction(com.intellij.openapi.Disposable,com.intellij.openapi.application.TransactionId,java.lang.Runnable):V
@@ -1105,7 +1092,6 @@ a:com.intellij.openapi.application.ex.ApplicationInfoEx
 - a:getApiVersionAsNumber():com.intellij.openapi.util.BuildNumber
 - a:getApplicationSvgIconUrl():java.lang.String
 - a:getBuiltinPluginsUrl():java.lang.String
-- a:getChannelListUrl():java.lang.String
 - a:getCopyrightStart():java.lang.String
 - a:getDefaultClassicDarkLaf():java.lang.String
 - a:getDefaultClassicLightLaf():java.lang.String
@@ -1126,7 +1112,6 @@ a:com.intellij.openapi.application.ex.ApplicationInfoEx
 - a:getSupportUrl():java.lang.String
 - a:getUpdateUrls():com.intellij.openapi.application.ex.ApplicationInfoEx$UpdateUrls
 - a:getWebHelpUrl():java.lang.String
-- a:getWelcomeScreenLogoUrl():java.lang.String
 - a:getWhatsNewUrl():java.lang.String
 - a:getWinKeymapUrl():java.lang.String
 - a:getYoutrackUrl():java.lang.String
@@ -1495,11 +1480,8 @@ a:com.intellij.openapi.fileEditor.impl.FileDocumentManagerBase
 - f:getDocument(com.intellij.openapi.vfs.VirtualFile):com.intellij.openapi.editor.Document
 - pa:getDocumentListener():com.intellij.openapi.editor.event.DocumentListener
 - getFile(com.intellij.openapi.editor.Document):com.intellij.openapi.vfs.VirtualFile
-- ps:getPreviewCharCount(com.intellij.openapi.vfs.VirtualFile):I
-- ps:isBinaryWithoutDecompiler(com.intellij.openapi.vfs.VirtualFile):Z
 - isPartialPreviewOfALargeFile(com.intellij.openapi.editor.Document):Z
 - reloadBinaryFiles():V
-- ps:setDocumentTooLarge(com.intellij.openapi.editor.Document,Z):V
 f:com.intellij.openapi.fileEditor.impl.LoadTextUtil
 - s:changeLineSeparators(com.intellij.openapi.project.Project,com.intellij.openapi.vfs.VirtualFile,java.lang.String,java.lang.Object):V
 - s:charsetForWriting(com.intellij.openapi.project.Project,com.intellij.openapi.vfs.VirtualFile,java.lang.String,java.nio.charset.Charset):com.intellij.openapi.util.Pair$NonNull
@@ -1634,7 +1616,6 @@ c:com.intellij.openapi.progress.util.AbstractProgressIndicatorBase
 - finishNonCancelableSection():V
 - p:getCancellationTrace():java.lang.Throwable
 - getFraction():D
-- p:getLock():java.lang.Object
 - getModalityState():com.intellij.openapi.application.ModalityState
 - getText():java.lang.String
 - getText2():java.lang.String

@@ -1,4 +1,4 @@
-// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.codeinsight.inspections
 
 import com.intellij.codeInspection.ProblemHighlightType
@@ -71,8 +71,7 @@ internal class NullableBooleanElvisInspection : KotlinApplicableInspectionBase.S
 
     override fun isApplicableByPsi(element: KtBinaryExpression): Boolean = element.isTargetOfNullableBooleanElvisInspection()
 
-    context(KaSession)
-    override fun prepareContext(element: KtBinaryExpression): Unit? {
+    override fun KaSession.prepareContext(element: KtBinaryExpression): Unit? {
         return element.left
             ?.expressionType
             ?.let { it.isBooleanType && it.nullability.isNullable }
@@ -82,7 +81,7 @@ internal class NullableBooleanElvisInspection : KotlinApplicableInspectionBase.S
     override fun createQuickFix(
         element: KtBinaryExpression,
         context: Unit,
-    ) = object : KotlinModCommandQuickFix<KtBinaryExpression>() {
+    ): KotlinModCommandQuickFix<KtBinaryExpression> = object : KotlinModCommandQuickFix<KtBinaryExpression>() {
 
         override fun getFamilyName(): String =
             KotlinBundle.message("inspection.nullable.boolean.elvis.action.name")

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.changeSignature;
 
 import com.intellij.java.refactoring.JavaRefactoringBundle;
@@ -114,7 +114,7 @@ public class ChangeSignatureProcessor extends ChangeSignatureProcessorBase {
        if (oldVisibility.equals(VisibilityUtil.getHighestVisibility(visibility, oldVisibility)) &&
            (!ApplicationManager.getApplication().isUnitTestMode() && 
             Messages.showYesNoDialog(myProject, JavaRefactoringBundle.message("dialog.message.overriding.methods.with.weaken.visibility", visibility), RefactoringBundle.message("changeSignature.refactoring.name"), Messages.getQuestionIcon()) == Messages.YES)) {
-         ((JavaChangeInfoImpl)myChangeInfo).propagateVisibility = true;
+         ((JavaChangeInfoImpl)myChangeInfo).setPropagateVisibility(true);
        }
      }
     MultiMap<PsiElement, String> conflictDescriptions = new MultiMap<>();

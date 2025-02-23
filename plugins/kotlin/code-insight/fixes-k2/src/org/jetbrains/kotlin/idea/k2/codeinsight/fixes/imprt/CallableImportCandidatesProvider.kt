@@ -2,69 +2,92 @@
 package org.jetbrains.kotlin.idea.k2.codeinsight.fixes.imprt
 
 import com.intellij.psi.PsiMember
-import com.intellij.psi.util.parentOfType
+import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
 import org.jetbrains.kotlin.idea.base.analysis.api.utils.KtSymbolFromIndexProvider
 import org.jetbrains.kotlin.idea.base.analysis.api.utils.collectReceiverTypesForElement
-import org.jetbrains.kotlin.idea.highlighter.KotlinUnresolvedReferenceKind.UnresolvedDelegateFunction
 import org.jetbrains.kotlin.idea.util.positionContext.KotlinInfixCallPositionContext
 import org.jetbrains.kotlin.idea.util.positionContext.KotlinNameReferencePositionContext
+import org.jetbrains.kotlin.idea.util.positionContext.KotlinOperatorCallPositionContext
 import org.jetbrains.kotlin.idea.util.positionContext.KotlinSimpleNameReferencePositionContext
 import org.jetbrains.kotlin.lexer.KtTokens
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
-import org.jetbrains.kotlin.psi.KtPropertyDelegate
 import org.jetbrains.kotlin.psi.psiUtil.isExtensionDeclaration
-import org.jetbrains.kotlin.util.OperatorNameConventions
 
+internal class CallableImportCandidatesProvider(
+    override val positionContext: KotlinNameReferencePositionContext,
+    private val allowInapplicableExtensions: Boolean = false,
+) : AbstractImportCandidatesProvider() {
 
-internal open class CallableImportCandidatesProvider(
-    positionContext: KotlinNameReferencePositionContext,
-) : AbstractImportCandidatesProvider(positionContext) {
+    private fun acceptsKotlinCallable(kotlinCallable: KtCallableDeclaration): Boolean =
+        acceptsKotlinCallableAtPosition(kotlinCallable) && !kotlinCallable.isImported() && kotlinCallable.canBeImported()
 
-    protected open fun acceptsKotlinCallable(kotlinCallable: KtCallableDeclaration): Boolean =
-        !kotlinCallable.isImported() && kotlinCallable.canBeImported()
+    private fun acceptsKotlinCallableAtPosition(kotlinCallable: KtCallableDeclaration): Boolean =
+        when (positionContext) {
+            is KotlinInfixCallPositionContext -> kotlinCallable.hasModifier(KtTokens.INFIX_KEYWORD)
+            is KotlinOperatorCallPositionContext -> kotlinCallable.hasModifier(KtTokens.OPERATOR_KEYWORD)
+            else -> true
+        }
 
-    protected open fun acceptsJavaCallable(javaCallable: PsiMember): Boolean =
-        !javaCallable.isImported() && javaCallable.canBeImported()
+    private fun acceptsJavaCallable(javaCallable: PsiMember): Boolean =
+        acceptsJavaCallableAtPosition() && !javaCallable.isImported() && javaCallable.canBeImported()
 
-    protected open fun acceptsCallableCandidate(kotlinCallable: CallableImportCandidate): Boolean = true
+    private fun acceptsJavaCallableAtPosition(): Boolean =
+        when (positionContext) {
+            is KotlinInfixCallPositionContext, 
+            is KotlinOperatorCallPositionContext -> false
+            else -> true
+        }
+
+    private fun acceptsCallableCandidate(kotlinCallable: CallableImportCandidate): Boolean =
+        when (positionContext) {
+            is KotlinInfixCallPositionContext -> (kotlinCallable.symbol as? KaNamedFunctionSymbol)?.isInfix == true
+            is KotlinOperatorCallPositionContext -> (kotlinCallable.symbol as? KaNamedFunctionSymbol)?.isOperator == true
+            else -> true
+        }
 
     context(KaSession)
+    @OptIn(KaExperimentalApi::class)
     override fun collectCandidates(
+        name: Name,
         indexProvider: KtSymbolFromIndexProvider,
     ): List<CallableImportCandidate> {
-        val unresolvedName = positionContext.name
         val explicitReceiver = positionContext.explicitReceiver
         val fileSymbol = getFileSymbol()
 
         val candidates = sequence {
             if (explicitReceiver == null) {
-                yieldAll(indexProvider.getKotlinCallableSymbolsByName(unresolvedName) { declaration ->
+                yieldAll(indexProvider.getKotlinCallableSymbolsByName(name) { declaration ->
                     // filter out extensions here, because they are added later with the use of information about receiver types
-                    acceptsKotlinCallable(declaration) && !declaration.isExtensionDeclaration()
+                    acceptsKotlinCallable(declaration) &&  (allowInapplicableExtensions || !declaration.isExtensionDeclaration())
                 }.map { CallableImportCandidate.create(it) })
 
-                yieldAll(indexProvider.getJavaMethodsByName(unresolvedName) { acceptsJavaCallable(it) }.map { CallableImportCandidate.create(it) })
-                yieldAll(indexProvider.getJavaFieldsByName(unresolvedName) { acceptsJavaCallable(it) }.map { CallableImportCandidate.create(it) })
+                yieldAll(indexProvider.getJavaMethodsByName(name) { acceptsJavaCallable(it) }.map { CallableImportCandidate.create(it) })
+                yieldAll(indexProvider.getJavaFieldsByName(name) { acceptsJavaCallable(it) }.map { CallableImportCandidate.create(it) })
 
                 yieldAll(
-                    indexProvider.getCallableSymbolsFromSubclassObjects(unresolvedName)
+                    indexProvider.getCallableSymbolsFromSubclassObjects(name)
                         .map { (dispatcherObject, callableSymbol) -> CallableImportCandidate.create(callableSymbol, dispatcherObject) }
-                        .filter { !it.symbol.isExtension }
+                        .filter { allowInapplicableExtensions || !it.symbol.isExtension }
                 )
             }
 
-            when (val context = positionContext) {
-                is KotlinSimpleNameReferencePositionContext -> {
+            val context = positionContext
+            when {
+                allowInapplicableExtensions -> {
+                    // extensions were already provided
+                }
+                context is KotlinSimpleNameReferencePositionContext -> {
                     val receiverTypes = collectReceiverTypesForElement(context.nameExpression, context.explicitReceiver)
                     yieldAll(
-                        indexProvider.getExtensionCallableSymbolsByName(unresolvedName, receiverTypes) { acceptsKotlinCallable(it) }
+                        indexProvider.getExtensionCallableSymbolsByName(name, receiverTypes) { acceptsKotlinCallable(it) }
                             .map { CallableImportCandidate.create(it) }
                     )
                     
                     yieldAll(
-                        indexProvider.getExtensionCallableSymbolsFromSubclassObjects(unresolvedName, receiverTypes)
+                        indexProvider.getExtensionCallableSymbolsFromSubclassObjects(name, receiverTypes)
                             .map { (dispatcherObject, callableSymbol) -> CallableImportCandidate.create(callableSymbol, dispatcherObject) }
                     )
                 }
@@ -73,52 +96,12 @@ internal open class CallableImportCandidatesProvider(
             }
         }
 
+        val visibilityChecker = createUseSiteVisibilityChecker(fileSymbol, receiverExpression = null, positionContext.position)
+
         return candidates
             .distinct()
             .filter { acceptsCallableCandidate(it) }
-            .filter { it.isVisible(fileSymbol) && it.callableId != null }
-            .toList()
-    }
-}
-
-
-internal class InfixCallableImportCandidatesProvider(
-    positionContext: KotlinInfixCallPositionContext,
-) : CallableImportCandidatesProvider(positionContext) {
-
-    override fun acceptsKotlinCallable(kotlinCallable: KtCallableDeclaration): Boolean =
-        kotlinCallable.hasModifier(KtTokens.INFIX_KEYWORD) && super.acceptsKotlinCallable(kotlinCallable)
-
-    override fun acceptsJavaCallable(javaCallable: PsiMember): Boolean = false
-
-    override fun acceptsCallableCandidate(kotlinCallable: CallableImportCandidate): Boolean {
-        return (kotlinCallable.symbol as? KaNamedFunctionSymbol)?.isInfix == true
-    }
-}
-
-
-internal class DelegateMethodImportCandidatesProvider(
-    private val unresolvedDelegateFunction: UnresolvedDelegateFunction,
-    positionContext: KotlinNameReferencePositionContext,
-) : CallableImportCandidatesProvider(positionContext) {
-
-    context(KaSession)
-    override fun collectCandidates(
-        indexProvider: KtSymbolFromIndexProvider,
-    ): List<CallableImportCandidate> {
-        val functionName = OperatorNameConventions.GET_VALUE.takeIf {
-            unresolvedDelegateFunction.expectedFunctionSignature.startsWith(OperatorNameConventions.GET_VALUE.asString() + "(")
-        } ?: OperatorNameConventions.SET_VALUE.takeIf {
-            unresolvedDelegateFunction.expectedFunctionSignature.startsWith(OperatorNameConventions.SET_VALUE.asString() + "(")
-        } ?: return emptyList()
-
-        val expressionType = positionContext.position.parentOfType<KtPropertyDelegate>()?.expression?.expressionType ?: return emptyList()
-        return indexProvider.getExtensionCallableSymbolsByName(
-            name = functionName,
-            receiverTypes = listOf(expressionType),
-        ) { acceptsKotlinCallable(it) }
-            .map { CallableImportCandidate.create(it) }
-            .filter { acceptsCallableCandidate(it) }
+            .filter { it.isVisible(visibilityChecker) && it.callableId != null }
             .toList()
     }
 }

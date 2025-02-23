@@ -23,9 +23,8 @@ import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.TaskInfo
 import com.intellij.openapi.progress.blockingContext
-import com.intellij.openapi.progress.impl.BridgeTaskSuspender
-import com.intellij.openapi.progress.impl.ProgressSuspender
-import com.intellij.openapi.progress.impl.TaskToProgressSuspenderSynchronizer
+import com.intellij.openapi.progress.impl.BridgeTaskSupport
+import com.intellij.openapi.progress.impl.PerProjectTaskInfoEntityCollector
 import com.intellij.openapi.progress.util.AbstractProgressIndicatorExBase
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
@@ -46,14 +45,9 @@ import com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneablePro
 import com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneableProjectsService.CloneProjectListener
 import com.intellij.platform.diagnostic.telemetry.impl.span
 import com.intellij.platform.ide.progress.ModalTaskOwner
-import com.intellij.platform.ide.progress.TaskCancellation
 import com.intellij.platform.ide.progress.runWithModalProgressBlocking
-import com.intellij.platform.ide.progress.suspender.TaskSuspender
-import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.platform.util.coroutines.childScope
-import com.intellij.platform.util.progress.RawProgressReporter
 import com.intellij.platform.util.progress.impl.ProgressState
-import com.intellij.platform.util.progress.reportRawProgress
 import com.intellij.ui.*
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.awt.RelativeRectangle
@@ -199,8 +193,6 @@ open class IdeStatusBarImpl @ApiStatus.Internal constructor(
     rightPanel.border = JBUI.Borders.emptyLeft(1)
     add(rightPanel, BorderLayout.EAST)
 
-    registerCloneTasks()
-
     if (addToolWindowWidget) {
       val disposable = Disposer.newDisposable()
       coroutineScope.coroutineContext.job.invokeOnCompletion { Disposer.dispose(disposable) }
@@ -221,6 +213,13 @@ open class IdeStatusBarImpl @ApiStatus.Internal constructor(
     enableEvents(AWTEvent.MOUSE_EVENT_MASK)
     enableEvents(AWTEvent.MOUSE_MOTION_EVENT_MASK)
     IdeEventQueue.getInstance().addDispatcher({ e -> if (e is MouseEvent) dispatchMouseEvent(e) else false }, coroutineScope)
+  }
+
+  internal fun initialize() {
+    LOG.info("Initializing status bar")
+
+    registerCloneTasks()
+    project?.service<PerProjectTaskInfoEntityCollector>()?.startCollectingActiveTasks()
   }
 
   private fun createInfoAndProgressPanel(): InfoAndProgressPanel {
@@ -468,86 +467,12 @@ open class IdeStatusBarImpl @ApiStatus.Internal constructor(
 
   @Suppress("UsagesOfObsoleteApi")
   override fun addProgress(indicator: ProgressIndicatorEx, info: TaskInfo) {
-    if (!Registry.`is`("rhizome.progress")) {
+    if (Registry.`is`("rhizome.progress")) {
+      @Suppress("DEPRECATION")
+      BridgeTaskSupport.getInstance().withBridgeBackgroundProgress(project, indicator, info)
+    }
+    else {
       addProgressImpl(indicator, info)
-      return
-    }
-
-    val indicatorFinished = CompletableDeferred<Unit>()
-    indicator.addStateDelegate(object : AbstractProgressIndicatorExBase() {
-      override fun finish(task: TaskInfo) {
-        super.finish(task)
-        indicatorFinished.complete(Unit)
-      }
-    })
-
-    // already finished, progress might not send another finished message
-    if (indicator.isFinished(info)) return
-
-    coroutineScope.launch {
-      val project = project ?: return@launch
-
-      val cancellation = if (info.isCancellable) TaskCancellation.cancellable() else TaskCancellation.nonCancellable()
-      val taskSuspender = BridgeTaskSuspender(indicator)
-
-      withBackgroundProgress(project, info.title, cancellation, taskSuspender) {
-        launch {
-          reportRawProgress { reporter ->
-            indicator.addStateDelegate(reporter.toBridgeIndicator())
-            indicatorFinished.await() // Keeps the reporter active, so the indicator can report new statuses there
-          }
-        }
-
-        try {
-          indicatorFinished.await()
-        }
-        catch (ex: CancellationException) {
-          // User can cancel the job from UI, which will cause the job cancellation,
-          // so we need to cancel the original indicator as well
-          if (indicator.isRunning) {
-            LOG.info("Progress \"${info.title}\" was cancelled from UI, cancelling $indicator")
-            indicator.cancel()
-          }
-          throw ex
-        }
-        finally {
-          // Wait for the indicator to finish under the "NonCancellable" block,
-          // so we won't stop showing the progress bar if the job has been canceled, but the indicator is yet to finish.
-          withContext(NonCancellable) {
-            indicatorFinished.await()
-          }
-        }
-      }
-    }
-  }
-
-  @Suppress("UsagesOfObsoleteApi")
-  private fun RawProgressReporter.toBridgeIndicator(): ProgressIndicatorEx {
-    val reporter = this
-    return object : AbstractProgressIndicatorExBase() {
-      override fun setText(text: String?) {
-        super.setText(text)
-        reporter.text(text)
-      }
-
-      override fun setText2(text: String?) {
-        super.setText2(text)
-        reporter.details(text)
-      }
-
-      override fun setIndeterminate(indeterminate: Boolean) {
-        super.setIndeterminate(indeterminate)
-        if (indeterminate)
-          reporter.fraction(null)
-      }
-
-      override fun setFraction(fraction: Double) {
-        super.setFraction(fraction)
-        // RawProgressReporter logs an error if the value is not in the interval 0.0-1.0,
-        // but ProgressIndicator didn't have that check before (although, according to the documentation, it should be in the range),
-        // so some indicators report the wrong value and this can cause error spam - IJPL-166399
-        reporter.fraction(fraction.coerceIn(0.0, 1.0))
-      }
     }
   }
 

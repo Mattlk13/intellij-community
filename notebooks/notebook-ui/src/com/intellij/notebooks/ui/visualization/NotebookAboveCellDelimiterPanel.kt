@@ -8,7 +8,6 @@ import com.intellij.notebooks.ui.visualization.NotebookEditorAppearanceUtils.isD
 import com.intellij.notebooks.ui.visualization.NotebookUtil.notebookAppearance
 import com.intellij.openapi.project.Project
 import com.intellij.ui.IdeBorderFactory
-import com.intellij.ui.JBColor
 import com.intellij.ui.SideBorder
 import java.awt.BorderLayout
 import java.awt.Color
@@ -25,7 +24,6 @@ class NotebookAboveCellDelimiterPanel(
 ) : JPanel(BorderLayout()) {
   private var delimiterPanel: JPanel? = null
   private var roofPanel: JPanel? = null
-  private val frameColor = editor.notebookAppearance.codeCellBackgroundColor.get()
 
   var backgroundColor: Color = editor.colorsScheme.defaultBackground
     set(value) {
@@ -67,7 +65,7 @@ class NotebookAboveCellDelimiterPanel(
     delimiterPanel?.repaint()
   }
 
-  fun setFrameVisible(isVisible: Boolean) {
+  fun setFrameVisible(isVisible: Boolean, frameColor: Color) {
     roofPanel?.let {
       it.border = when (isVisible) {
         true -> IdeBorderFactory.createBorder(frameColor, SideBorder.TOP or SideBorder.RIGHT)
@@ -84,7 +82,7 @@ class NotebookAboveCellDelimiterPanel(
         super.paintComponent(g)
         if (isHighlighted) {
           val g2d = g as Graphics2D
-          g2d.color = JBColor.BLUE
+          g2d.color = editor.notebookAppearance.cellStripeSelectedColor.get()
           val y = height / 2
           g2d.fillRect(0, y - 1, width, 2)
         }

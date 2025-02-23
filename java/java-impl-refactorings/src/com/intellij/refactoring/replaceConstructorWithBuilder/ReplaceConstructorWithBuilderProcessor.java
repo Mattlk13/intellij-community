@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.replaceConstructorWithBuilder;
 
 import com.intellij.ide.highlighter.JavaFileType;
@@ -88,7 +88,7 @@ public class ReplaceConstructorWithBuilderProcessor extends FixableUsagesRefacto
       JavaPsiFacade.getInstance(myProject).findClass(builderQualifiedName, GlobalSearchScope.projectScope(myProject));
 
     for (PsiMethod constructor : myConstructors) {
-      for (PsiReference reference : ReferencesSearch.search(constructor)) {
+      for (PsiReference reference : ReferencesSearch.search(constructor).asIterable()) {
         final PsiElement element = reference.getElement();
         final PsiNewExpression newExpression = PsiTreeUtil.getParentOfType(element, PsiNewExpression.class);
         if (newExpression != null && !PsiTreeUtil.isAncestor(builderClass, element, false) && newExpression.getAnonymousClass() == null) {

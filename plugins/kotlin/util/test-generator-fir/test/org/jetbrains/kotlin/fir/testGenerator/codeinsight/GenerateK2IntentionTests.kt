@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.fir.testGenerator.codeinsight
 
 import org.jetbrains.kotlin.idea.k2.codeInsight.intentions.shared.AbstractSharedK2IntentionTest
@@ -57,7 +57,6 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             model("${idea}intentions/convertBinaryExpressionWithDemorgansLaw", pattern = pattern)
             model("${idea}intentions/invertIfCondition", pattern = pattern)
             model("${idea}intentions/lambdaToAnonymousFunction", pattern = pattern)
-            model("${idea}intentions/removeExplicitTypeArguments", pattern = pattern)
             model("${idea}intentions/replaceWithOrdinaryAssignment", pattern = pattern)
             model("${idea}intentions/specifyExplicitLambdaSignature", pattern = pattern)
             model("${idea}intentions/changeVisibility", pattern = pattern)
@@ -161,6 +160,7 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             //model("${idea}intentions/loopToCallChain/introduceIndex", pattern = pattern, isIgnored = true)
             //model("${idea}intentions/loopToCallChain/indexOf", pattern = pattern, isIgnored = true)
             model("${idea}intentions/moveMemberToTopLevel", pattern = pattern)
+            model("${idea}intentions/moveOutOfCompanion", pattern = pattern)
             model("${idea}intentions/anonymousFunctionToLambda", pattern = pattern)
             model("${idea}intentions/copyConcatenatedStringToClipboard", pattern = pattern, isIgnored = true)
             model("${idea}intentions/inlayHints", pattern = pattern, isIgnored = true)
@@ -182,7 +182,7 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             model("${idea}intentions/addThrowsAnnotation", pattern = pattern)
             model("${idea}intentions/replaceItWithExplicitFunctionLiteralParam", pattern = pattern)
             model("${idea}intentions/iterationOverMap", pattern = pattern, isIgnored = true)
-            model("${idea}intentions/convertPropertyToFunction", pattern = pattern, isIgnored = true)
+            model("${idea}intentions/convertPropertyToFunction", pattern = pattern)
             model("${idea}intentions/convertReceiverToParameter", pattern = pattern)
             model("${idea}intentions/convertUnsafeCastCallToUnsafeCast", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertSnakeCaseTestFunctionToSpaced", pattern = pattern)

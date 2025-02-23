@@ -97,10 +97,6 @@ private class DevKitApplicationPatcher : RunConfigurationExtension() {
     if (vmParametersAsList.none { it.startsWith("-Xmx") }) {
       vmParameters.add("-Xmx2g")
     }
-
-    if (vmParametersAsList.none { it.startsWith("-XX:MaxHeapFreeRatio=") }) {
-      vmParameters.add("-XX:MaxHeapFreeRatio=45")
-    }
     if (is17 && vmParametersAsList.none { it.startsWith("-XX:SoftRefLRUPolicyMSPerMB") }) {
       vmParameters.add("-XX:SoftRefLRUPolicyMSPerMB=50")
     }
@@ -109,6 +105,9 @@ private class DevKitApplicationPatcher : RunConfigurationExtension() {
     }
     if (vmParametersAsList.none { it.startsWith("-Djava.util.zip.use.nio.for.zip.file.access") }) {
       vmParameters.add("-Djava.util.zip.use.nio.for.zip.file.access=true") // IJPL-149160
+    }
+    if (vmParametersAsList.none { it.startsWith("-Djdk.nio.maxCachedBufferSize") }) {
+      vmParameters.add("-Djdk.nio.maxCachedBufferSize=2097152") // IJPL-164109
     }
 
     enableIjentDefaultFsProvider(project, configuration, vmParameters)

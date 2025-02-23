@@ -387,7 +387,7 @@ data class BuildOptions(
 
   /**
    * Pass `true` to this system property to produce .snap packages.
-   * A build configuration should have "docker.version >= 17" in requirements.
+   * Requires Docker.
    */
   var buildUnixSnaps: Boolean = getBooleanProperty("intellij.build.unix.snaps", false)
 
@@ -396,6 +396,12 @@ data class BuildOptions(
    */
   var snapDockerImage: String = System.getProperty("intellij.build.snap.docker.image") ?: DEPENDENCIES_PROPERTIES["snapDockerImage"]
   var snapDockerBuildTimeoutMin: Long = System.getProperty("intellij.build.snap.timeoutMin")?.toLong() ?: 20
+
+  /**
+   * When `true`, `.resx` files are generated and bundled in the localization plugins.
+   * Requires Docker.
+   */
+  var bundleLocalizationPluginResources: Boolean = getBooleanProperty("intellij.build.localization.plugin.resources", false)
 
   /**
    * If `true`, and the incremental compilation fails, fallback to downloading Portable Compilation Cache and full rebuild.
@@ -487,6 +493,11 @@ data class BuildOptions(
    * Use [BuildContext.isNightlyBuild] to get the actual nightly flag in build scripts.
    */
   var isNightlyBuild: Boolean = getBooleanProperty(INTELLIJ_BUILD_IS_NIGHTLY, false)
+
+  /**
+   * By default, the current Git revision is stored as a custom property in the product-info.json file. Set this property to `false` to disable this. 
+   */
+  var storeGitRevision: Boolean = getBooleanProperty("intellij.build.store.git.revision", true)
 
   /**
    * Specifies an additional list of compatible plugin names which should not be built, see [ProductModulesLayout.compatiblePluginsToIgnore]

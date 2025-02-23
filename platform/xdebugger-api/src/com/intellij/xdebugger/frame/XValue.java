@@ -67,6 +67,16 @@ public abstract class XValue extends XValueContainer {
     return CompletableFuture.completedFuture(getModifier());
   }
 
+
+  /**
+   * Provides {@link CompletableFuture} which finishes when all XValue's methods can be used
+   * (like {@link XValue#getModifier} or {@link XValueMarkerProvider#getMarker})
+   */
+  @ApiStatus.Internal
+  public @NotNull CompletableFuture<Void> isReady() {
+    return CompletableFuture.completedFuture(null);
+  }
+
   /**
    * Start computing source position of the value and call {@link XNavigatable#setSourcePosition(com.intellij.xdebugger.XSourcePosition)}
    * when computation is finished.
@@ -130,6 +140,14 @@ public abstract class XValue extends XValueContainer {
    * or null if showing referrers for the value is disabled
    */
   public @Nullable XReferrersProvider getReferrersProvider() {
+    return null;
+  }
+
+  /**
+   * Provides additional information about XValue, which frontend may use.
+   */
+  @ApiStatus.Internal
+  public @Nullable CompletableFuture<XValueDescriptor> getXValueDescriptorAsync() {
     return null;
   }
 }

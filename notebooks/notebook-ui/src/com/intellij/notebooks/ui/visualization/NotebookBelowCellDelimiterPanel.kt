@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.Component
 import java.awt.Cursor
 import java.time.ZonedDateTime
@@ -46,7 +47,6 @@ class NotebookBelowCellDelimiterPanel(
   private var elapsedStartTime: ZonedDateTime? = null
   private val updateElapsedTimeDelay = 100L
   private var elapsedTimeJob: Job? = null
-  private val frameColor = editor.notebookAppearance.codeCellBackgroundColor.get()
 
   init {
     border = BorderFactory.createCompoundBorder(
@@ -60,7 +60,7 @@ class NotebookBelowCellDelimiterPanel(
     updateExecutionStatus(initTooltipText, executionCount, initStatusIcon, initExecutionDurationText)
   }
 
-  fun setFrameVisible(isVisible: Boolean) {
+  fun setFrameVisible(isVisible: Boolean, frameColor: Color) {
     val frameBorder = when (isVisible) {
       true -> BorderFactory.createMatteBorder(0, 0, 1, 1, frameColor)
       else -> BorderFactory.createMatteBorder(0, 0, 1, 1, background)
@@ -76,7 +76,7 @@ class NotebookBelowCellDelimiterPanel(
 
   private fun createExecutionLabel(): JLabel {
     return JLabel().apply {
-      font = EditorUtil.getEditorFont()
+      font = EditorUtil.getEditorFont().deriveFont(EditorUtil.getEditorFont().size2D - 1)
       foreground = UIUtil.getLabelInfoForeground()
     }
   }
@@ -135,12 +135,9 @@ class NotebookBelowCellDelimiterPanel(
         toolTipText = tooltipText
       }
     }
-    else {  // temporary measure to fit the drag icon, see PY-65433
-      getOrCreateExecutionLabel().apply {
-        text = ""
-        icon = AllIcons.Empty
-        toolTipText = null
-      }
+    else {
+      executionLabel?.let { remove(it) }
+      executionLabel = null
     }
   }
 

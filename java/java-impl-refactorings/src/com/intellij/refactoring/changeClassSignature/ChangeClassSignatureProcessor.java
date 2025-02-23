@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.refactoring.changeClassSignature;
 
 import com.intellij.history.LocalHistory;
@@ -80,7 +80,7 @@ public class ChangeClassSignatureProcessor extends BaseRefactoringProcessor {
     List<UsageInfo> result = new ArrayList<>();
 
     boolean hadTypeParameters = myClass.hasTypeParameters();
-    for (final PsiReference reference : ReferencesSearch.search(myClass, projectScope, false)) {
+    for (final PsiReference reference : ReferencesSearch.search(myClass, projectScope, false).asIterable()) {
       if (reference.getElement() instanceof PsiJavaCodeReferenceElement referenceElement) {
         PsiElement parent = referenceElement.getParent();
         if (parent instanceof PsiTypeElement && (parent.getParent() instanceof PsiInstanceOfExpression ||

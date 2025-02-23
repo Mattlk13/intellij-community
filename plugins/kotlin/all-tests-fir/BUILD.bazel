@@ -48,6 +48,7 @@ java_library(
     "//plugins/kotlin/copyright/fir-tests:kotlin-copyright-fir-tests",
     "//plugins/kotlin/injection/k2/tests:kotlin-injection-k2-tests",
     "//plugins/kotlin/refactorings/kotlin.refactorings.k2:kotlin-refactorings-k2",
+    "//plugins/kotlin/code-insight/live-templates-shared:kotlin-code-insight-live-templates-shared",
     "//plugins/kotlin/code-insight/live-templates-k2:kotlin-code-insight-live-templates-k2",
     "//plugins/kotlin/highlighting/highlighting-shared/tests:kotlin-highlighting-shared-tests",
     "//plugins/kotlin/j2k/k2/tests:kotlin-j2k-k2-tests",
@@ -61,6 +62,7 @@ java_library(
     "//plugins/kotlin/uast/uast-kotlin-idea-fir/tests:kotlin-uast-uast-kotlin-idea-k2-tests",
     "//plugins/kotlin/features-trainer/tests:kotlin-features-trainer-tests",
     "//plugins/kotlin/base/fir/project-structure:kotlin-base-fir-project-structure",
+    "//plugins/kotlin/gradle/code-insight-groovy/tests.k2:kotlin-gradle-code-insight-groovy-tests-k2",
   ]
 )
 ### auto-generated section `build kotlin.fir-all-tests` end

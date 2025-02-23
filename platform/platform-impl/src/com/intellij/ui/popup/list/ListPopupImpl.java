@@ -75,6 +75,7 @@ public class ListPopupImpl extends WizardPopup implements ListPopup, NextStepHan
   private boolean myShowSubmenuOnHover;
   private boolean myExecuteExpandedItemOnClick;
   private boolean myRepackWhenEmptyStateChanges;
+  private @Nullable Dimension myNonEmptySize;
 
   /**
    * @deprecated use {@link #ListPopupImpl(Project, ListPopupStep)}
@@ -944,7 +945,13 @@ public class ListPopupImpl extends WizardPopup implements ListPopup, NextStepHan
     if (step instanceof FilterableListPopupStep<?> o) {
       o.updateFilter(mySpeedSearch.getFilter());
     }
+    var before = myListModel.getSize();
     myListModel.refilter();
+    var after = myListModel.getSize();
+    var fusActivity = ActionGroupPopupActivity.getCurrentActivity(this);
+    if (fusActivity != null) {
+      fusActivity.filtered(StringUtil.length(mySpeedSearch.getFilter()), before, after);
+    }
     boolean nowEmpty = myListModel.getSize() == 0;
     if (myListModel.getSize() > 0) {
       if (!(shouldUseStatistics() && autoSelectUsingStatistics())) {
@@ -952,7 +959,13 @@ public class ListPopupImpl extends WizardPopup implements ListPopup, NextStepHan
       }
     }
     if (myRepackWhenEmptyStateChanges && wasEmpty != nowEmpty) {
-      pack(false, true);
+      if (nowEmpty) {
+        myNonEmptySize = getSize();
+        pack(false, true);
+      }
+      else if (myNonEmptySize != null) {
+        setSize(myNonEmptySize);
+      }
     }
   }
 

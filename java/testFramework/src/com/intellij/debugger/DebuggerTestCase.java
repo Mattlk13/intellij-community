@@ -479,7 +479,9 @@ public abstract class DebuggerTestCase extends ExecutionWithDebuggerToolsTestCas
   }
 
   protected void printAsyncStackTrace() {
-    printContext(getDebugProcess().getDebuggerContext());
+    if (!myLogAllCommands) {
+      printContext(getDebugProcess().getDebuggerContext());
+    }
     List<XStackFrame> frames = collectFrames(getDebuggerSession().getXDebugSession());
     systemPrintln("vvv stack trace vvv");
     frames.forEach(f -> {
@@ -611,13 +613,23 @@ public abstract class DebuggerTestCase extends ExecutionWithDebuggerToolsTestCas
       renderer.setEnabled(state);
     }
   }
+  protected void doWhenXSessionPaused(ThrowableRunnable runnable) {
+    doWhenXSessionPaused(runnable, false);
+  }
 
   protected void doWhenXSessionPausedThenResume(ThrowableRunnable runnable) {
+    doWhenXSessionPaused(runnable, true);
+  }
+
+  private void doWhenXSessionPaused(ThrowableRunnable runnable, boolean thenResume) {
     XDebugSession session = getDebuggerSession().getXDebugSession();
     assertNotNull(session);
     session.addSessionListener(new XDebugSessionListener() {
       @Override
       public void sessionPaused() {
+        if (myLogAllCommands) {
+          printContext("Stopped at ", getDebugProcess().getDebuggerContext());
+        }
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
           try {
             runnable.run();
@@ -626,11 +638,23 @@ public abstract class DebuggerTestCase extends ExecutionWithDebuggerToolsTestCas
             addException(e);
           }
           finally {
-            //noinspection SSBasedInspection
-            SwingUtilities.invokeLater(session::resume);
+            if (thenResume) {
+              resume();
+            }
           }
         });
       }
+    });
+  }
+
+  protected void resume() {
+    SwingUtilities.invokeLater(() -> {
+      if (myLogAllCommands) {
+        printContext("Resuming ", getDebugProcess().getDebuggerContext());
+      }
+      XDebugSession session = getDebuggerSession().getXDebugSession();
+      assertNotNull(session);
+      session.resume();
     });
   }
 
@@ -638,6 +662,7 @@ public abstract class DebuggerTestCase extends ExecutionWithDebuggerToolsTestCas
     ApplicationManagerEx.setInStressTest(true);
     setRegistryPropertyForTest("debugger.track.instrumentation", "false");
     setRegistryPropertyForTest("debugger.evaluate.single.threaded.timeout", "-1");
+    setRegistryPropertyForTest("debugger.preload.types.hierarchy", "false");
 
     boolean dfa = ViewsGeneralSettings.getInstance().USE_DFA_ASSIST;
     boolean dfaGray = ViewsGeneralSettings.getInstance().USE_DFA_ASSIST_GRAY_OUT;

@@ -210,11 +210,13 @@ f:org.jetbrains.jewel.intui.standalone.styling.IntUiHorizontalProgressBarStyling
 - sf:light-zf8z9n0(org.jetbrains.jewel.ui.component.styling.HorizontalProgressBarColors$Companion,J,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.HorizontalProgressBarColors
 f:org.jetbrains.jewel.intui.standalone.styling.IntUiIconButtonStylingKt
 - sf:dark(org.jetbrains.jewel.ui.component.styling.IconButtonStyle$Companion,org.jetbrains.jewel.ui.component.styling.IconButtonColors,org.jetbrains.jewel.ui.component.styling.IconButtonMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.IconButtonStyle
-- sf:dark-8v1krLo(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,androidx.compose.runtime.Composer,I,I,I):org.jetbrains.jewel.ui.component.styling.IconButtonColors
+- sf:dark-7HESe_I(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J):org.jetbrains.jewel.ui.component.styling.IconButtonColors
+- bs:dark-7HESe_I$default(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.ui.component.styling.IconButtonColors
 - sf:defaults-ij7-PLE(org.jetbrains.jewel.ui.component.styling.IconButtonMetrics$Companion,androidx.compose.foundation.shape.CornerSize,F,androidx.compose.foundation.layout.PaddingValues,J):org.jetbrains.jewel.ui.component.styling.IconButtonMetrics
 - bs:defaults-ij7-PLE$default(org.jetbrains.jewel.ui.component.styling.IconButtonMetrics$Companion,androidx.compose.foundation.shape.CornerSize,F,androidx.compose.foundation.layout.PaddingValues,J,I,java.lang.Object):org.jetbrains.jewel.ui.component.styling.IconButtonMetrics
 - sf:light(org.jetbrains.jewel.ui.component.styling.IconButtonStyle$Companion,org.jetbrains.jewel.ui.component.styling.IconButtonColors,org.jetbrains.jewel.ui.component.styling.IconButtonMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.IconButtonStyle
-- sf:light-8v1krLo(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,androidx.compose.runtime.Composer,I,I,I):org.jetbrains.jewel.ui.component.styling.IconButtonColors
+- sf:light-7HESe_I(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J):org.jetbrains.jewel.ui.component.styling.IconButtonColors
+- bs:light-7HESe_I$default(org.jetbrains.jewel.ui.component.styling.IconButtonColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.ui.component.styling.IconButtonColors
 f:org.jetbrains.jewel.intui.standalone.styling.IntUiInformationBannerColorFactory
 - sf:$stable:I
 - sf:INSTANCE:org.jetbrains.jewel.intui.standalone.styling.IntUiInformationBannerColorFactory
@@ -431,11 +433,11 @@ f:org.jetbrains.jewel.intui.standalone.styling.IntUiTextAreaStylingKt
 - sf:light(org.jetbrains.jewel.ui.component.styling.TextAreaStyle$Companion,org.jetbrains.jewel.ui.component.styling.TextAreaColors,org.jetbrains.jewel.ui.component.styling.TextAreaMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TextAreaStyle
 - sf:light-a3tHFA8(org.jetbrains.jewel.ui.component.styling.TextAreaColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,androidx.compose.runtime.Composer,I,I,I,I):org.jetbrains.jewel.ui.component.styling.TextAreaColors
 f:org.jetbrains.jewel.intui.standalone.styling.IntUiTextFieldStylingKt
-- sf:dark(org.jetbrains.jewel.ui.component.styling.TextFieldStyle$Companion,org.jetbrains.jewel.ui.component.styling.TextFieldColors,org.jetbrains.jewel.ui.component.styling.TextFieldMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldStyle
+- sf:dark(org.jetbrains.jewel.ui.component.styling.TextFieldStyle$Companion,org.jetbrains.jewel.ui.component.styling.TextFieldColors,org.jetbrains.jewel.ui.component.styling.TextFieldMetrics,org.jetbrains.jewel.ui.component.styling.IconButtonStyle,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldStyle
 - sf:dark-a3tHFA8(org.jetbrains.jewel.ui.component.styling.TextFieldColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,androidx.compose.runtime.Composer,I,I,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldColors
 - sf:defaults-H1KY9o8(org.jetbrains.jewel.ui.component.styling.TextFieldMetrics$Companion,androidx.compose.foundation.shape.CornerSize,androidx.compose.foundation.layout.PaddingValues,J,F):org.jetbrains.jewel.ui.component.styling.TextFieldMetrics
 - bs:defaults-H1KY9o8$default(org.jetbrains.jewel.ui.component.styling.TextFieldMetrics$Companion,androidx.compose.foundation.shape.CornerSize,androidx.compose.foundation.layout.PaddingValues,J,F,I,java.lang.Object):org.jetbrains.jewel.ui.component.styling.TextFieldMetrics
-- sf:light(org.jetbrains.jewel.ui.component.styling.TextFieldStyle$Companion,org.jetbrains.jewel.ui.component.styling.TextFieldColors,org.jetbrains.jewel.ui.component.styling.TextFieldMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldStyle
+- sf:light(org.jetbrains.jewel.ui.component.styling.TextFieldStyle$Companion,org.jetbrains.jewel.ui.component.styling.TextFieldColors,org.jetbrains.jewel.ui.component.styling.TextFieldMetrics,org.jetbrains.jewel.ui.component.styling.IconButtonStyle,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldStyle
 - sf:light-a3tHFA8(org.jetbrains.jewel.ui.component.styling.TextFieldColors$Companion,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,J,androidx.compose.runtime.Composer,I,I,I,I):org.jetbrains.jewel.ui.component.styling.TextFieldColors
 f:org.jetbrains.jewel.intui.standalone.styling.IntUiTooltipStylingKt
 - sf:dark(org.jetbrains.jewel.ui.component.styling.TooltipStyle$Companion,org.jetbrains.jewel.ui.component.styling.TooltipColors,org.jetbrains.jewel.ui.component.styling.TooltipMetrics,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.TooltipStyle
@@ -468,14 +470,22 @@ f:org.jetbrains.jewel.intui.standalone.styling.IntUiWarningBannerColorFactory
 - f:dark-dgg9oW8(J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.BannerColors
 - f:light-dgg9oW8(J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.ui.component.styling.BannerColors
 f:org.jetbrains.jewel.intui.standalone.theme.IntUiGlobalColorsKt
-- sf:dark-GyCwops(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.BorderColors
-- sf:dark-Hformbs(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.OutlineColors
-- sf:dark-Hformbs(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.TextColors
-- sf:dark-yrwZFoE(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.GlobalColors
-- sf:light-GyCwops(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.BorderColors
-- sf:light-Hformbs(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.OutlineColors
-- sf:light-Hformbs(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.TextColors
-- sf:light-yrwZFoE(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J,androidx.compose.runtime.Composer,I,I):org.jetbrains.jewel.foundation.GlobalColors
+- sf:dark-jdqzblg(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J):org.jetbrains.jewel.foundation.OutlineColors
+- sf:dark-jdqzblg(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J):org.jetbrains.jewel.foundation.TextColors
+- bs:dark-jdqzblg$default(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.OutlineColors
+- bs:dark-jdqzblg$default(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.TextColors
+- sf:dark-xwkQ0AY(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J):org.jetbrains.jewel.foundation.GlobalColors
+- bs:dark-xwkQ0AY$default(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J,I,java.lang.Object):org.jetbrains.jewel.foundation.GlobalColors
+- sf:dark-zSO0fhY(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J):org.jetbrains.jewel.foundation.BorderColors
+- bs:dark-zSO0fhY$default(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.BorderColors
+- sf:light-jdqzblg(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J):org.jetbrains.jewel.foundation.OutlineColors
+- sf:light-jdqzblg(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J):org.jetbrains.jewel.foundation.TextColors
+- bs:light-jdqzblg$default(org.jetbrains.jewel.foundation.OutlineColors$Companion,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.OutlineColors
+- bs:light-jdqzblg$default(org.jetbrains.jewel.foundation.TextColors$Companion,J,J,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.TextColors
+- sf:light-xwkQ0AY(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J):org.jetbrains.jewel.foundation.GlobalColors
+- bs:light-xwkQ0AY$default(org.jetbrains.jewel.foundation.GlobalColors$Companion,org.jetbrains.jewel.foundation.BorderColors,org.jetbrains.jewel.foundation.OutlineColors,org.jetbrains.jewel.foundation.TextColors,J,I,java.lang.Object):org.jetbrains.jewel.foundation.GlobalColors
+- sf:light-zSO0fhY(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J):org.jetbrains.jewel.foundation.BorderColors
+- bs:light-zSO0fhY$default(org.jetbrains.jewel.foundation.BorderColors$Companion,J,J,J,I,java.lang.Object):org.jetbrains.jewel.foundation.BorderColors
 f:org.jetbrains.jewel.intui.standalone.theme.IntUiGlobalMetricsKt
 - sf:defaults-VpY3zN4(org.jetbrains.jewel.foundation.GlobalMetrics$Companion,F,F):org.jetbrains.jewel.foundation.GlobalMetrics
 - bs:defaults-VpY3zN4$default(org.jetbrains.jewel.foundation.GlobalMetrics$Companion,F,F,I,java.lang.Object):org.jetbrains.jewel.foundation.GlobalMetrics

@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.k2.refactoring.move.processor
 
 import com.intellij.ide.util.EditorHelper
@@ -37,19 +37,21 @@ import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveDescriptor
 import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveOperationDescriptor
 import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveSourceDescriptor
 import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveTargetDescriptor
-import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveTargetDescriptor.DeclarationTarget
-import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveTargetDescriptor.DeclarationTarget.DeclarationTargetType
+import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveTargetDescriptor.Declaration
+import org.jetbrains.kotlin.idea.k2.refactoring.move.descriptor.K2MoveTargetDescriptor.Declaration.DeclarationTargetType
 import org.jetbrains.kotlin.idea.k2.refactoring.move.processor.usages.K2MoveRenameUsageInfo
 import org.jetbrains.kotlin.idea.k2.refactoring.move.processor.usages.OuterInstanceReferenceUsageInfo
 import org.jetbrains.kotlin.idea.refactoring.KotlinRefactoringListener
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.containingClass
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.psi.psiUtil.isIdentifier
 import org.jetbrains.kotlin.psi.psiUtil.startOffset
 import org.jetbrains.kotlin.types.Variance
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.decapitalizeAsciiOnly
 
-internal class K2MoveDeclarationsRefactoringProcessor(
+open class K2MoveDeclarationsRefactoringProcessor(
     private val operationDescriptor: K2MoveOperationDescriptor.Declarations
 ) : BaseRefactoringProcessor(operationDescriptor.project) {
     companion object {
@@ -72,7 +74,7 @@ internal class K2MoveDeclarationsRefactoringProcessor(
             } + findInternalOuterInstanceUsages(moveDescriptor.source)
     }
 
-    override fun findUsages(): Array<UsageInfo> {
+    protected override fun findUsages(): Array<UsageInfo> {
         if (!operationDescriptor.searchReferences) return emptyArray()
         val allUsages = operationDescriptor.moveDescriptors.flatMap { moveDescriptor ->
             val usages = operationDescriptor.moveDescriptors.flatMapTo(mutableSetOf(), ::getUsages)
@@ -123,7 +125,7 @@ internal class K2MoveDeclarationsRefactoringProcessor(
 
     private val conflicts: MultiMap<PsiElement, String> = MultiMap<PsiElement, String>()
 
-    override fun preprocessUsages(refUsages: Ref<Array<UsageInfo>>): Boolean {
+    protected override fun preprocessUsages(refUsages: Ref<Array<UsageInfo>>): Boolean {
         val usages = refUsages.get()
         ActionUtil.underModalProgress(
             operationDescriptor.project,
@@ -157,7 +159,7 @@ internal class K2MoveDeclarationsRefactoringProcessor(
                     val declarationsToMove = moveDescriptor.source.elements
                     declarationsToMove.forEach { elementToMove ->
                         preprocessDeclaration(elementToMove)
-                        operationDescriptor.preDeclarationMoved(elementToMove)
+                        preDeclarationMoved(elementToMove)
                     }
 
                     val elementsToMove = declarationsToMove.withContext()
@@ -175,7 +177,7 @@ internal class K2MoveDeclarationsRefactoringProcessor(
                         val originalDeclaration = original as? KtNamedDeclaration
                         val newDeclaration = new as? KtNamedDeclaration
                         if (originalDeclaration != null && newDeclaration != null) {
-                            operationDescriptor.postDeclarationMoved(original, new)
+                            postDeclarationMoved(original, new)
                         }
                     }
                     oldToNewMap.values
@@ -183,10 +185,8 @@ internal class K2MoveDeclarationsRefactoringProcessor(
             }
         }
 
-        if (MoveFilesOrDirectoriesDialog.isOpenInEditorProperty()) { // for simplicity, we re-use logic from move files
-            ApplicationManager.getApplication().invokeLater {
-                EditorHelper.openFilesInEditor(movedElements.toTypedArray())
-            }
+        ApplicationManager.getApplication().invokeLater {
+            openFilesAfterMoving(movedElements)
         }
     }
 
@@ -213,7 +213,7 @@ internal class K2MoveDeclarationsRefactoringProcessor(
             return usedOuterNestedDeclarations[this]
         }
         val nameToUse = if (isValid && usesOuterInstanceParameter()) {
-            operationDescriptor.outerInstanceParameterNameProvider(this)
+            generateOuterInstanceParameterName(this)
         } else {
             null
         }
@@ -250,8 +250,12 @@ internal class K2MoveDeclarationsRefactoringProcessor(
             val isConflict = when (usage) {
                 is K2MoveRenameUsageInfo.Light -> {
                     val referencedElement = usage.upToDateReferencedElement as? KtNamedDeclaration
-                    if (referencedElement?.containingClassOrObject != null && referencedElement !is KtClassOrObject) {
+                    if (referencedElement?.containingClassOrObject != null &&
+                        referencedElement.containingClassOrObject !is KtObjectDeclaration &&
+                        referencedElement !is KtClassOrObject
+                    ) {
                         // We only have the facility to correct outer class usages if the moved declaration is a nested class.
+                        // If the containing class is an object we have no problem at all.
                         conflicts.putValue(
                             element,
                             KotlinBundle.message("usages.of.nested.declarations.from.non.kotlin.code.won.t.be.processed", element.text)
@@ -372,7 +376,8 @@ internal class K2MoveDeclarationsRefactoringProcessor(
                             ) ?: return
                             val possiblyQuotedName = quoteNameIfNeeded(outerInstanceParameterName)
                             val parameter = KtPsiFactory(project).createParameter("private val $possiblyQuotedName: $type")
-                            createPrimaryConstructorParameterListIfAbsent().addParameter(parameter)
+                            val constructorParameterList = createPrimaryConstructorParameterListIfAbsent()
+                            constructorParameterList.addParameterBefore(parameter, constructorParameterList.parameters.firstOrNull())
                         }
                     }
                 }
@@ -423,13 +428,68 @@ internal class K2MoveDeclarationsRefactoringProcessor(
                     val addedParameter = newDeclaration.valueParameterList?.parameters?.firstOrNull() ?: return
                     shortenReferences(addedParameter)
                 }
-                val moveTargetType = (moveTarget as? DeclarationTarget<*>)?.getTargetType()
+                val moveTargetType = (moveTarget as? Declaration<*>)?.getTargetType()
                 if (moveTargetType == DeclarationTargetType.COMPANION_OBJECT || moveTargetType == DeclarationTargetType.OBJECT) {
                     newDeclaration.removeModifier(KtTokens.OPEN_KEYWORD)
                     newDeclaration.removeModifier(KtTokens.FINAL_KEYWORD)
                     newDeclaration.reformatted(true)
                 }
             }
+        }
+    }
+
+    /**
+     * This method attempts to find a name for the outer instance
+     * based on the outer classes name and avoids name clashes by attempting to
+     * choose a name that is not already taken anywhere in the declaration.
+     */
+    private fun generateOuterInstanceParameterName(declaration: KtNamedDeclaration): String? {
+        val suggestedName = declaration.containingClass()?.takeIf {
+            (declaration !is KtClass || declaration.isInner()) && declaration !is KtProperty
+        }?.name?.decapitalizeAsciiOnly() ?: return null
+
+        val usedNames = mutableSetOf<String>()
+        declaration.accept(object : KtTreeVisitorVoid() {
+            override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
+                super.visitNamedDeclaration(declaration)
+                usedNames.add(declaration.nameAsSafeName.asString())
+            }
+
+            override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
+                super.visitSimpleNameExpression(expression)
+                expression.getIdentifier()?.text?.let { usedNames.add(it) }
+            }
+        })
+
+        if (suggestedName !in usedNames) return suggestedName
+        for (i in 1..1000) {
+            val nameWithNum = "$suggestedName$i"
+            if (nameWithNum !in usedNames) return nameWithNum
+        }
+        return null
+    }
+
+    /**
+     * Invoked before the [declaration] is moved to its target.
+     * Implementations can override this method to modify the [declaration] before it is moved.
+     */
+    open fun preDeclarationMoved(declaration: KtNamedDeclaration) {}
+
+    /**
+     * Invoked after the [originalDeclaration] is moved to its target and changed to be the [newDeclaration].
+     * Implementations can override this method to modify the [newDeclaration] after it is moved.
+     * Note: The [originalDeclaration] is usually not valid anymore at this point because it was moved.
+     */
+    open fun postDeclarationMoved(originalDeclaration: KtNamedDeclaration, newDeclaration: KtNamedDeclaration) {}
+
+    /**
+     * Called after the move is completed to open the [movedElements] in the editor in their respective new files.
+     * Can be overridden to not open the files or to invoke other operations like rename.
+     * Note: this is invoked in an `invokeLater` so it does not happen immediately after the move is completed.
+     */
+    open fun openFilesAfterMoving(movedElements: List<KtNamedDeclaration>) {
+        if (MoveFilesOrDirectoriesDialog.isOpenInEditorProperty()) { // for simplicity, we re-use logic from move files
+            EditorHelper.openFilesInEditor(movedElements.toTypedArray())
         }
     }
 }

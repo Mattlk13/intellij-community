@@ -1,4 +1,4 @@
-// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel;
@@ -42,6 +42,7 @@ import com.intellij.util.SmartList;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.Interner;
 import com.intellij.xml.util.XmlStringUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -52,7 +53,8 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass implements PossiblyDumbAware {
+@ApiStatus.Internal
+public final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass implements PossiblyDumbAware {
   private static final Logger LOG = Logger.getInstance(LocalInspectionsPass.class);
   private final TextRange myPriorityRange;
   private final boolean myIgnoreSuppressed;
@@ -326,7 +328,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
     if (info == null || !UpdateHighlightersUtil.HighlightInfoPostFilters.accept(myProject, info)) {
       return;
     }
-    info.toolId = toolWrapper.getShortName();
+    info.setToolId(toolWrapper.getShortName());
     info.setGroup(HighlightInfoUpdaterImpl.MANAGED_HIGHLIGHT_INFO_GROUP);
     if (isInInjected) {
       Document documentRange = documentManager.getDocument(file);
@@ -376,7 +378,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
         registerQuickFixes(builder, fixes, shortName);
         HighlightInfo patched = builder.createUnconditionally();
         patched.markFromInjection();
-        patched.toolId = info.toolId;
+        patched.setToolId(info.getToolId());
         patched.setGroup(HighlightInfoUpdaterImpl.MANAGED_HIGHLIGHT_INFO_GROUP);
         outInfos.accept(patched);
       }
@@ -434,9 +436,7 @@ final class LocalInspectionsPass extends ProgressableTextEditorHighlightingPass 
       String displayNameByKey = HighlightDisplayKey.getDisplayNameByKey(key);
       LOG.assertTrue(displayNameByKey != null, key.toString());
 
-      result.add(Registry.is("llm.empty.intention.generation")
-                 ? new EmptyIntentionGeneratorIntention(displayNameByKey, descriptor.getDescriptionTemplate())
-                 : new EmptyIntentionAction(displayNameByKey));
+      result.add(new EmptyIntentionAction(displayNameByKey));
     }
     return result;
   }
