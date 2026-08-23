@@ -36,7 +36,7 @@ jvm_library(
     visibility = ["//visibility:public"],
     deps = [
         # do not sort,
-        "//plugins/gitlab/gitlab-core:vcs-gitlab",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend",
         "//plugins/yaml/backend",
         "@lib//:kotlin-stdlib",
         "//platform/util",
@@ -64,7 +64,7 @@ jvm_library(
     runtime_deps = [
         # do not sort,
         ":vcs-gitlab-yaml",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab_test_lib",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend_test_lib",
         "//plugins/yaml/backend:backend_test_lib",
         "//platform/util:util_test_lib",
         "//platform/util/base:base_test_lib",
@@ -127,8 +127,8 @@ jvm_library(
         "//platform/analysis-api:analysis_test_lib",
         "//platform/core-api:core",
         "//platform/core-api:core_test_lib",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab_test_lib",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend_test_lib",
         "//plugins/yaml/backend",
         "//plugins/yaml/backend:backend_test_lib",
         "@lib//:kotlin-stdlib",

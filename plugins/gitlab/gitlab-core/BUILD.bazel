@@ -1,6 +1,5 @@
 load("@community//build:bazel_targets_json.bzl", "current_bazel_targets_json")
 load("@community//build:tests-options.bzl", "jps_test")
-load("@community//platform/build-scripts/bazel-rules:dev_dist_plugin.bzl", "dev_dist_plugin")
 load("@rules_jvm//:jvm.bzl", "jvm_library", "jvm_provided_library", "resourcegroup")
 load("//platform/build-scripts/bazel-rules:content_module_jar.bzl", "content_module_jar")
 
@@ -25,9 +24,9 @@ jps_test(
 )
 ### skip generation section `test intellij.vcs.gitlab.tests`
 
-### auto-generated section `build intellij.vcs.gitlab` start
+### auto-generated section `build intellij.vcs.gitlab.backend` start
 resourcegroup(
-    name = "vcs-gitlab_resources",
+    name = "vcs-gitlab-backend_resources",
     srcs = glob(
         ["gen-resources/**/*"],
     ),
@@ -40,7 +39,7 @@ jvm_provided_library(
 )
 
 jvm_library(
-    name = "vcs-gitlab",
+    name = "vcs-gitlab-backend",
     srcs = glob(
         [
             "gen/**/*.kt",
@@ -51,8 +50,8 @@ jvm_library(
         ],
         allow_empty = True,
     ),
-    module_name = "intellij.vcs.gitlab",
-    resource_jars = [":vcs-gitlab_resources"],
+    module_name = "intellij.vcs.gitlab.backend",
+    resource_jars = [":vcs-gitlab-backend_resources"],
     resource_strip_prefix = "resources",
     resources = glob(
         ["resources/**/*"],
@@ -107,6 +106,7 @@ jvm_library(
         "//platform/observable",
         "//platform/progress/shared:ide-progress",
         "//platform/lang-api:lang",
+        "//platform/backend",
         "//platform/built-in-server:builtInServer-impl",
         "//platform/built-in-server-api:builtInServer",
         "//libraries/netty/codec-http:libraries-netty-codec-http",
@@ -117,20 +117,20 @@ jvm_library(
     ],
 )
 
-content_module_jar(module = ":vcs-gitlab")
+content_module_jar(module = ":vcs-gitlab-backend")
 
 jvm_library(
-    name = "vcs-gitlab_test_lib",
+    name = "vcs-gitlab-backend_test_lib",
     testonly = True,
     srcs = glob(
         [],
         allow_empty = True,
     ),
-    module_name = "intellij.vcs.gitlab",
+    module_name = "intellij.vcs.gitlab.backend",
     visibility = ["//visibility:public"],
     runtime_deps = [
         # do not sort,
-        ":vcs-gitlab",
+        ":vcs-gitlab-backend",
         "//platform/analysis-api:analysis_test_lib",
         "//platform/core-api:core_test_lib",
         "//platform/core-ui:core-ui_test_lib",
@@ -195,6 +195,7 @@ jvm_library(
         "//platform/observable:observable_test_lib",
         "//platform/progress/shared:ide-progress_test_lib",
         "//platform/lang-api:lang_test_lib",
+        "//platform/backend:backend_test_lib",
         "//platform/built-in-server:builtInServer-impl_test_lib",
         "//platform/built-in-server-api:builtInServer_test_lib",
         "//libraries/netty/codec-http:libraries-netty-codec-http_test_lib",
@@ -203,28 +204,17 @@ jvm_library(
         "//platform/credential-store:credential-store_test_lib",
     ],
 )
-### auto-generated section `build intellij.vcs.gitlab` end
+### auto-generated section `build intellij.vcs.gitlab.backend` end
 
-### auto-generated section `iml intellij.vcs.gitlab` start
+### auto-generated section `iml intellij.vcs.gitlab.backend` start
 exports_files(
     [
-        "intellij.vcs.gitlab.iml",
-        "resources/META-INF/plugin.xml",
-        "resources/intellij.vcs.gitlab.xml",
+        "intellij.vcs.gitlab.backend.iml",
+        "resources/intellij.vcs.gitlab.backend.xml",
     ],
     visibility = ["//visibility:public"],
 )
-### auto-generated section `iml intellij.vcs.gitlab` end
-
-### auto-generated section `dev intellij.vcs.gitlab` start
-dev_dist_plugin(
-    descriptor_module = ":vcs-gitlab",
-    prepacked_content_modules = [
-        "//plugins/gitlab/gitlab-git:vcs-gitlab-git_content_module_jar",
-        "//plugins/gitlab/gitlab-yaml:vcs-gitlab-yaml_content_module_jar",
-    ],
-)
-### auto-generated section `dev intellij.vcs.gitlab` end
+### auto-generated section `iml intellij.vcs.gitlab.backend` end
 
 ### auto-generated section `build intellij.vcs.gitlab.tests` start
 jvm_library(
@@ -253,8 +243,8 @@ jvm_library(
         allow_empty = True,
     ),
     associates = [
-        "//plugins/gitlab/gitlab-core:vcs-gitlab",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab_test_lib",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend_test_lib",
     ],
     resource_strip_prefix = "testResources",
     resources = glob(
@@ -381,6 +371,8 @@ jvm_library(
         "//platform/vcs/plugin:plugin_test_lib",
         "//plugins/git4idea:vcs-git",
         "//plugins/git4idea:vcs-git_test_lib",
+        "//plugins/gitlab",
+        "//plugins/gitlab:gitlab_test_lib",
     ],
 )
 ### auto-generated section `build intellij.vcs.gitlab.tests` end

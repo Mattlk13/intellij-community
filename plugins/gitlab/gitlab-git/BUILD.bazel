@@ -43,7 +43,7 @@ jvm_library(
         "//plugins/git4idea:vcs-git",
         "//plugins/git4idea/backend",
         "//plugins/git4idea/shared",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend",
     ],
 )
 
@@ -83,7 +83,7 @@ jvm_library(
         "//plugins/git4idea:vcs-git_test_lib",
         "//plugins/git4idea/backend:backend_test_lib",
         "//plugins/git4idea/shared:shared_test_lib",
-        "//plugins/gitlab/gitlab-core:vcs-gitlab_test_lib",
+        "//plugins/gitlab/gitlab-core:vcs-gitlab-backend_test_lib",
     ],
 )
 ### auto-generated section `build intellij.vcs.gitlab.git` end

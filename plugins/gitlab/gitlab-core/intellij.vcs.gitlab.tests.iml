@@ -85,7 +85,7 @@
     <orderEntry type="module" module-name="intellij.platform.vcs.impl.shared" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.codeStyle" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.ide.observable" scope="TEST" />
-    <orderEntry type="module" module-name="intellij.vcs.gitlab" scope="TEST" />
+    <orderEntry type="module" module-name="intellij.vcs.gitlab.backend" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.collaborationTools.tests" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.testFramework.junit5.codeInsight" scope="TEST" />
     <orderEntry type="module" module-name="intellij.libraries.junit5" scope="TEST" />
@@ -93,6 +93,7 @@
     <orderEntry type="module" module-name="intellij.libraries.misc.plugin" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.vcs.plugin" scope="TEST" />
     <orderEntry type="module" module-name="intellij.vcs.git" scope="TEST" />
+    <orderEntry type="module" module-name="intellij.vcs.gitlab" scope="TEST" />
   </component>
-  <component name="TestModuleProperties" production-module="intellij.vcs.gitlab" />
+  <component name="TestModuleProperties" production-module="intellij.vcs.gitlab.backend" />
 </module>

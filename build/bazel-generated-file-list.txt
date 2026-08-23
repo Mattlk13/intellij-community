@@ -1227,9 +1227,12 @@ plugins/github/github-git
 plugins/github/github-json
 plugins/github/github-tracker
 plugins/github/ultimate-promo
+plugins/gitlab
+plugins/gitlab/frontend
 plugins/gitlab/gitlab-core
 plugins/gitlab/gitlab-git
 plugins/gitlab/gitlab-yaml
+plugins/gitlab/shared
 plugins/gradle
 plugins/gradle-maven
 plugins/gradle/backend
