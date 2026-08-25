@@ -42,8 +42,6 @@ jvm_library(
     name = "vcs-gitlab-backend",
     srcs = glob(
         [
-            "gen/**/*.kt",
-            "gen/**/*.java",
             "src/**/*.kt",
             "src/**/*.java",
             "src/**/*.form",
@@ -113,6 +111,7 @@ jvm_library(
         "//libraries/netty/buffer",
         "//platform/platform-util-netty:ide-util-netty",
         "//platform/credential-store",
+        "//plugins/gitlab/shared",
         ":libraries_kotlinc_libraries-kotlinc-kotlinx-serialization-compiler-plugin_provided",
     ],
 )
@@ -202,6 +201,7 @@ jvm_library(
         "//libraries/netty/buffer:buffer_test_lib",
         "//platform/platform-util-netty:ide-util-netty_test_lib",
         "//platform/credential-store:credential-store_test_lib",
+        "//plugins/gitlab/shared:shared_test_lib",
     ],
 )
 ### auto-generated section `build intellij.vcs.gitlab.backend` end

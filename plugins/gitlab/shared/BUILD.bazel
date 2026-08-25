@@ -6,6 +6,8 @@ jvm_library(
     name = "shared",
     srcs = glob(
         [
+            "gen/**/*.kt",
+            "gen/**/*.java",
             "src/**/*.kt",
             "src/**/*.java",
             "src/**/*.form",
@@ -24,6 +26,8 @@ jvm_library(
         "//libraries/kotlinx/coroutines/core",
         "//libraries/kotlinx/serialization/core",
         "//libraries/kotlinx/serialization/json",
+        "//platform/core-api:core",
+        "//platform/util",
     ],
 )
 
@@ -44,6 +48,8 @@ jvm_library(
         "//libraries/kotlinx/coroutines/core:core_test_lib",
         "//libraries/kotlinx/serialization/core:core_test_lib",
         "//libraries/kotlinx/serialization/json:json_test_lib",
+        "//platform/core-api:core_test_lib",
+        "//platform/util:util_test_lib",
     ],
 )
 ### auto-generated section `build intellij.vcs.gitlab.shared` end

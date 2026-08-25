@@ -51,6 +51,7 @@
     <module name="intellij.platform.vcs.log.impl"/>
     <module name="intellij.vcs.git.backend"/>
     <module name="intellij.vcs.git.shared"/>
+    <module name="intellij.vcs.gitlab.shared"/>
   </dependencies>
   <!-- endregion -->
 

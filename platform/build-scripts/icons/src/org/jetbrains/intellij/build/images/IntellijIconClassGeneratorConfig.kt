@@ -170,6 +170,11 @@ class IntellijIconClassGeneratorConfig : IconClasses() {
         packageName = "com.intellij.vcs.git.icons"
       )
 
+      "intellij.vcs.gitlab.shared" -> IntellijIconClassGeneratorModuleConfig(
+        className = "GitlabIcons",
+        packageName = "com.intellij.vcs.gitlab.icons"
+      )
+
       "intellij.vcs.github" -> IntellijIconClassGeneratorModuleConfig(
         className = "GithubIcons",
         packageName = "org.jetbrains.plugins.github"
