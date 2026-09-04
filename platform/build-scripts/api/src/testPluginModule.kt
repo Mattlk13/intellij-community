@@ -43,10 +43,8 @@ fun isTestOnlyPluginModule(moduleName: String, module: JpsModule?, outputProvide
            moduleName != "intellij.rider.test.build.shared" &&
            moduleName != "intellij.rider.test.framework.core" &&
            moduleName != "intellij.rider.test.framework.perforator" &&
-           moduleName != "intellij.rider.test.framework.testng" &&
            moduleName != "intellij.rider.test.framework.junit" &&
            moduleName != "intellij.rider.test.framework.unit" &&
-           moduleName != "intellij.rider.test.framework.integration.testng" &&
            moduleName != "intellij.rider.test.framework.integration.junit"
   }
   return moduleName.endsWith("._test")
