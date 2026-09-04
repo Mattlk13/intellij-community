@@ -267,19 +267,18 @@ internal fun fetchCaseSensitivityUsingEel(eelPath: EelPath): FileAttributes.Case
     eelPath
   }
 
-  return eelPathToCheck.fsBlocking {
-    val eelApi = eelPathToCheck.descriptor.toEelApi()
-    val stat = eelApi.fs.stat(eelPathToCheck).doNotResolve().eelIt().getOr {
+  // The caller asks about the case sensitivity of the directory that contains the child.
+  // Stat that directory itself: a stat of the child answers nothing when the child
+  // is a regular file, a symlink, or does not exist.
+  val directoryToCheck = eelPathToCheck.parent ?: eelPathToCheck
+  return directoryToCheck.fsBlocking {
+    val eelApi = directoryToCheck.descriptor.toEelApi()
+    val stat = eelApi.fs.stat(directoryToCheck).doNotResolve().eelIt().getOr {
       return@fsBlocking FileAttributes.CaseSensitivity.UNKNOWN
     }
 
     when (val type = stat.type) {
-      is EelFileInfo.Type.Directory ->
-        when (type.sensitivity) {
-          EelFileInfo.CaseSensitivity.SENSITIVE -> FileAttributes.CaseSensitivity.SENSITIVE
-          EelFileInfo.CaseSensitivity.INSENSITIVE -> FileAttributes.CaseSensitivity.INSENSITIVE
-          EelFileInfo.CaseSensitivity.UNKNOWN -> FileAttributes.CaseSensitivity.UNKNOWN
-        }
+      is EelFileInfo.Type.Directory -> type.getCaseSensitivity()
 
       is EelFileInfo.Type.Other, is EelFileInfo.Type.Regular, is EelPosixFileInfo.Type.Symlink ->
         FileAttributes.CaseSensitivity.UNKNOWN
