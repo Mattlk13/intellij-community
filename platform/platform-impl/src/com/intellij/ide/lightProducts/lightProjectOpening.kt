@@ -55,6 +55,9 @@ private const val PROJECTS_DIR_NAME = "projects"
  * a `null` result leaves the project without an Eel machine.
  * [showWelcomeScreen] tells the platform whether the welcome frame is a valid outcome of a project that does not open;
  * pass `false` in a product that has nothing to show without its project.
+ * [projectRootDir] is the directory the platform treats as the project root.
+ * When it is `null`, it is derived from a stat of [path], which costs a network round trip on a remote host;
+ * pass the known value when the caller has already touched [path].
  */
 @ApiStatus.Internal
 suspend fun openProjectForLightProduct(
@@ -62,6 +65,7 @@ suspend fun openProjectForLightProduct(
   projectStoreSeed: String,
   materializeProject: Boolean,
   showWelcomeScreen: Boolean = true,
+  projectRootDir: Path? = null,
   beforeInit: (Project) -> Unit = {},
   eelMachineInitializer: suspend (EelDescriptor) -> EelMachine? = ::defaultLightEelMachineInitializer,
 ): Project? {
@@ -77,10 +81,11 @@ suspend fun openProjectForLightProduct(
     TrustedProjects.setProjectTrusted(projectFile, project = null, isTrusted = pathTrustedState.toBoolean())
   }
 
+  val rootDir = projectRootDir ?: if (path.isDirectory()) path else path.parent
   val options = OpenProjectTask {
     isNewProject = !ProjectUtil.isValidProjectPath(projectFile)
     this.showWelcomeScreen = showWelcomeScreen
-    projectRootDir = if (path.isDirectory()) path else path.parent
+    this.projectRootDir = rootDir
     createModule = false
     runConfigurators = false
     useDefaultProjectAsTemplate = false
