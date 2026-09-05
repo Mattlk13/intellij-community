@@ -4,7 +4,7 @@ package com.intellij.platform.ide.nonModalWelcomeScreen.rightTab
 import com.intellij.openapi.vfs.DeprecatedVirtualFileSystem
 import com.intellij.openapi.vfs.NonPhysicalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.VirtualFileSystem
 
 internal const val WELCOME_SCREEN_TAB_PROTOCOL: String = "welcome-screen"
 
@@ -49,6 +49,7 @@ internal class WelcomeScreenRightTabFileSystem : DeprecatedVirtualFileSystem(), 
 }
 
 internal fun welcomeScreenRightTabFileSystem(): WelcomeScreenRightTabFileSystem {
-  return VirtualFileManager.getInstance().getFileSystem(WELCOME_SCREEN_TAB_PROTOCOL) as? WelcomeScreenRightTabFileSystem
+  val fileSystem = VirtualFileSystem.EP_NAME.extensionList.firstOrNull { it.key == WELCOME_SCREEN_TAB_PROTOCOL }?.instance
+  return fileSystem as? WelcomeScreenRightTabFileSystem
          ?: error("WelcomeScreenRightTabFileSystem is not registered for protocol $WELCOME_SCREEN_TAB_PROTOCOL")
 }
