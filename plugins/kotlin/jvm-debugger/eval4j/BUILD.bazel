@@ -1,6 +1,17 @@
+load("@community//build:tests-options.bzl", "jps_test")
 load("@rules_jvm//:jvm.bzl", "jvm_library")
 load("//platform/build-scripts/bazel-rules:content_module_jar.bzl", "content_module_jar")
 
+jps_test(
+    name = "kotlin-jvm-debugger-eval4j-tests_test",
+    timeout = "short",
+    env = {"JB_TEST_FILTER": "org.jetbrains.eval4j.test.Eval4jTest"},
+    tags = ["community-aggregator"],
+    runtime_deps = [
+        ":kotlin-jvm-debugger-eval4j-tests_test_lib",
+        "//:main_test_lib",
+    ],
+)
 ### skip generation section `test intellij.kotlin.jvm.debugger.eval4j.tests`
 
 ### auto-generated section `build intellij.kotlin.jvm.debugger.eval4j` start
