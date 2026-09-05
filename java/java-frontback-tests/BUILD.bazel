@@ -1,5 +1,12 @@
+load("@community//build:tests-options.bzl", "jps_test")
 load("@rules_jvm//:jvm.bzl", "jvm_library")
 
+jps_test(
+    name = "frontback-tests_test",
+    timeout = "short",
+    tags = ["community-aggregator"],
+    runtime_deps = [":frontback-tests_test_lib"],
+)
 ### skip generation section `test intellij.java.frontback.tests`
 
 ### auto-generated section `build intellij.java.frontback.tests` start
