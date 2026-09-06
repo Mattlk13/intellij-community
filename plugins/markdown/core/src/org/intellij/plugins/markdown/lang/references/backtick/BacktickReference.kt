@@ -1,6 +1,7 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.intellij.plugins.markdown.lang.references.backtick
 
+import com.intellij.find.findUsages.TextOccurrenceReference
 import com.intellij.navigation.ChooseByNameContributor
 import com.intellij.navigation.ChooseByNameContributorEx
 import com.intellij.navigation.NavigationItem
@@ -20,7 +21,6 @@ import com.intellij.psi.PsiPolyVariantReferenceBase
 import com.intellij.psi.ResolveResult
 import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.psi.impl.source.resolve.ResolveCache
-import com.intellij.refactoring.rename.TextOccurrenceReference
 import com.intellij.util.indexing.FindSymbolParameters
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownCodeSpan
 

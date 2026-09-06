@@ -3,6 +3,7 @@ package com.intellij.refactoring.rename;
 
 import com.intellij.codeInsight.CodeInsightUtilCore;
 import com.intellij.find.findUsages.FindUsagesHelper;
+import com.intellij.find.findUsages.TextOccurrenceReference;
 import com.intellij.ide.actions.FqnUtil;
 import com.intellij.injected.editor.DocumentWindow;
 import com.intellij.lang.Language;

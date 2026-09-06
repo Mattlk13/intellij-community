@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.ProperTextRange;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
@@ -119,5 +120,45 @@ public final class FindUsagesHelper {
                                                             @NotNull PsiElement psiElement,
                                                             boolean isSingleFile) {
     return handler.isSearchForTextOccurrencesAvailable(psiElement, isSingleFile);
+  }
+
+  /**
+   * Returns {@code true} when Find Usages must skip {@code reference}.
+   * A {@link TextOccurrenceReference} is skipped when {@link FindUsagesOptions#isSearchForTextOccurrences} is {@code false}.
+   */
+  @ApiStatus.Internal
+  public static boolean isHiddenTextOccurrence(@NotNull PsiReference reference, @NotNull FindUsagesOptions options) {
+    return !options.isSearchForTextOccurrences && reference instanceof TextOccurrenceReference;
+  }
+
+  /**
+   * Returns {@code true} when Find Usages must skip {@code usageInfo}.
+   * The usage is skipped when {@link FindUsagesOptions#isSearchForTextOccurrences} is {@code false}
+   * and each reference at the position of the usage is a {@link TextOccurrenceReference}.
+   * <p>
+   * A usage keeps the class of the reference that made it only when the handler builds the usage from the reference.
+   * A handler can also build the usage from the element and the range, and then the class is absent.
+   * For that reason the check reads the references of the element again.
+   */
+  @ApiStatus.Internal
+  public static boolean isHiddenTextOccurrence(@NotNull UsageInfo usageInfo, @NotNull FindUsagesOptions options) {
+    if (options.isSearchForTextOccurrences) return false;
+    Class<? extends PsiReference> referenceClass = usageInfo.getReferenceClass();
+    if (referenceClass != null && !TextOccurrenceReference.class.isAssignableFrom(referenceClass)) return false;
+    return ReadAction.computeBlocking(() -> hasTextOccurrenceReferencesOnly(usageInfo));
+  }
+
+  private static boolean hasTextOccurrenceReferencesOnly(@NotNull UsageInfo usageInfo) {
+    PsiElement element = usageInfo.getElement();
+    if (element == null) return false;
+    ProperTextRange usageRange = usageInfo.getRangeInElement();
+    if (usageRange == null) return false;
+    boolean found = false;
+    for (PsiReference reference : element.getReferences()) {
+      if (!reference.getRangeInElement().intersectsStrict(usageRange)) continue;
+      if (!(reference instanceof TextOccurrenceReference)) return false;
+      found = true;
+    }
+    return found;
   }
 }

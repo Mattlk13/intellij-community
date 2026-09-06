@@ -1,6 +1,9 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.intellij.plugins.markdown.reference
 
+import com.intellij.find.FindManager
+import com.intellij.find.findUsages.FindUsagesHandler
+import com.intellij.find.impl.FindManagerBase
 import com.intellij.openapi.application.runWriteActionAndWait
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
@@ -14,6 +17,8 @@ import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReferen
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesHandler
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.usageView.UsageInfo
+import com.intellij.util.Processor
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownCodeSpan
 import org.intellij.plugins.markdown.lang.references.backtick.BacktickReference
 import org.junit.Test
@@ -73,6 +78,68 @@ class BacktickReferenceTest : BasePlatformTestCase() {
 
     """.trimIndent()
     assertEquals(expectations, myFixture.getUsageViewTreeTextRepresentation(javaClass))
+  }
+
+  @Test
+  fun `test backtick usage is hidden when text occurrences are disabled`() {
+    val javaClass = createJavaClass()
+    createFile("Other.java", "class Other { JavaClass field; }")
+    myFixture.configureByText("some.md", "There is an `JavaClass` backtick")
+
+    val expectations = """
+      <root> (1)
+       Class
+        JavaClass
+       Usages in Project Files (1)
+        Field declaration (1)
+         light_idea_test_case (1)
+           (1)
+           Other (1)
+            1class Other { JavaClass field; }
+
+    """.trimIndent()
+    val representation = withoutTextOccurrences(javaClass) {
+      myFixture.getUsageViewTreeTextRepresentation(javaClass)
+    }
+    assertEquals(expectations, representation)
+  }
+
+  @Test
+  fun `test backtick usage of a static method is hidden when text occurrences are disabled`() {
+    val method = createStaticMethod()
+    createFile("Caller.java", "class Caller { void call() { StaticHolder.getElementName1234567(); } }")
+    createFile("some.md", "Call `getElementName1234567` here")
+
+    val representation = withoutTextOccurrences(method) {
+      myFixture.getUsageViewTreeTextRepresentation(method)
+    }
+    assertTrue(representation, representation.contains("Caller"))
+    assertFalse(representation, representation.contains("some.md"))
+  }
+
+  @Test
+  fun `test backtick usage of a static method is reported with text occurrences`() {
+    val method = createStaticMethod()
+    createFile("some.md", "Call `getElementName1234567` here")
+
+    val representation = withTextOccurrences(method) {
+      myFixture.getUsageViewTreeTextRepresentation(method)
+    }
+    assertTrue(representation, representation.contains("some.md"))
+  }
+
+  @Test
+  fun `test find usages of file hides backtick mention without text occurrences`() {
+    val target = createFile("src/deep/file.md")
+    createFile("docs/document.md", "See `file.md` for details")
+
+    val usages = mutableListOf<UsageInfo>()
+    val handler = findUsagesHandler(target)
+    val options = handler.findUsagesOptions
+    options.isSearchForTextOccurrences = false
+    handler.processElementUsages(target, Processor { usages.add(it) }, options)
+
+    assertEmpty(usages)
   }
 
   @Test
@@ -137,6 +204,59 @@ class BacktickReferenceTest : BasePlatformTestCase() {
     myFixture.configureByText("some.md", "There is an `JavaClass` backtick")
     myFixture.renameElement(javaClass, "NewJavaClass", false, false)
     myFixture.checkResult("There is an `JavaClass` backtick")
+  }
+
+  @Test
+  fun `test renaming file updates relative path mention without text occurrences`() {
+    val document = createFile("docs/document.md", "See `../src/file.md`")
+    val target = createFile("src/file.md")
+    myFixture.configureFromExistingVirtualFile(document.virtualFile)
+    myFixture.renameElement(target, "renamed.md", false, false)
+    myFixture.checkResult("See `../src/renamed.md`")
+  }
+
+  @Test
+  fun `test renaming file updates same directory mention without text occurrences`() {
+    val document = createFile("document.md", "See `file.md`")
+    val target = createFile("file.md")
+    myFixture.configureFromExistingVirtualFile(document.virtualFile)
+    myFixture.renameElement(target, "renamed.md", false, false)
+    myFixture.checkResult("See `renamed.md`")
+  }
+
+  @Test
+  fun `test renaming method updates qualified mention without text occurrences`() {
+    val method = createSampleClass().findMethodsByName("doStuff", false).single()
+    myFixture.configureByText("some.md", "Call `com.example.Sample#doStuff`")
+    myFixture.renameElement(method, "doOther", false, false)
+    myFixture.checkResult("Call `com.example.Sample#doOther`")
+  }
+
+  @Test
+  fun `test renaming method keeps plain mention without text occurrences`() {
+    val method = createLongNamedMethod()
+    myFixture.configureByText("some.md", "Call `longLongLong` here")
+    myFixture.renameElement(method, "renamedLongName", false, false)
+    myFixture.checkResult("Call `longLongLong` here")
+  }
+
+  @Test
+  fun `test renaming method updates plain mention with text occurrences`() {
+    val method = createLongNamedMethod()
+    myFixture.configureByText("some.md", "Call `longLongLong` here")
+    renameWithTextOccurrences(method, "renamedLongName")
+    myFixture.checkResult("Call `renamedLongName` here")
+  }
+
+  @Test
+  fun `test java reference in qualified mention stays a usage without text occurrences`() {
+    val method = createSampleClass().findMethodsByName("doStuff", false).single()
+    createFile("some.md", "Call `com.example.Sample#doStuff`")
+
+    val representation = withoutTextOccurrences(method) {
+      myFixture.getUsageViewTreeTextRepresentation(method)
+    }
+    assertTrue(representation, representation.contains("some.md"))
   }
 
   @Test
@@ -582,6 +702,29 @@ class BacktickReferenceTest : BasePlatformTestCase() {
     myFixture.renameElement(element, newName, false, true)
   }
 
+  private fun findUsagesHandler(target: PsiElement): FindUsagesHandler {
+    val findUsagesManager = (FindManager.getInstance(project) as FindManagerBase).findUsagesManager
+    return findUsagesManager.getFindUsagesHandler(target, false)!!
+  }
+
+  /** Runs [action] with the text occurrence option off on the shared handler options for [target], then restores it. */
+  private fun <T> withoutTextOccurrences(target: PsiElement, action: () -> T): T = withTextOccurrences(target, false, action)
+
+  /** Runs [action] with the text occurrence option on the shared handler options for [target], then restores it. */
+  private fun <T> withTextOccurrences(target: PsiElement, action: () -> T): T = withTextOccurrences(target, true, action)
+
+  private fun <T> withTextOccurrences(target: PsiElement, enabled: Boolean, action: () -> T): T {
+    val options = findUsagesHandler(target).findUsagesOptions
+    val previous = options.isSearchForTextOccurrences
+    options.isSearchForTextOccurrences = enabled
+    try {
+      return action()
+    }
+    finally {
+      options.isSearchForTextOccurrences = previous
+    }
+  }
+
   private fun createJavaClass(name: String = "JavaClass"): PsiClass {
     val file = createFile("$name.java", "class $name {}")
     return file.children.single { it is PsiClass } as PsiClass
@@ -599,6 +742,32 @@ class BacktickReferenceTest : BasePlatformTestCase() {
       """.trimIndent()
     )
     return file.children.single { it is PsiClass } as PsiClass
+  }
+
+  private fun createStaticMethod(): PsiMethod {
+    val file = createFile(
+      "StaticHolder.java",
+      """
+        class StaticHolder {
+           public static void getElementName1234567() {}
+        }
+      """.trimIndent()
+    )
+    val javaClass = file.children.single { it is PsiClass } as PsiClass
+    return javaClass.findMethodsByName("getElementName1234567", false).single()
+  }
+
+  private fun createLongNamedMethod(): PsiMethod {
+    val file = createFile(
+      "Holder.java",
+      """
+        class Holder {
+           public void longLongLong() {}
+        }
+      """.trimIndent()
+    )
+    val javaClass = file.children.single { it is PsiClass } as PsiClass
+    return javaClass.findMethodsByName("longLongLong", false).single()
   }
 
   private fun createFile(path: String, text: String = ""): PsiFileSystemItem {

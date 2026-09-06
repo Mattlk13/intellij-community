@@ -432,6 +432,7 @@ public final class FindUsagesManager {
       }
       ClusteringSearchSession clusteringSearchSession = ClusteringSearchSession.createClusteringSessionIfEnabled();
       Processor<UsageInfo> usageInfoProcessor = new CommonProcessors.UniqueProcessor<>(usageInfo -> {
+        if (FindUsagesHelper.isHiddenTextOccurrence(usageInfo, optionsClone)) return true;
         Usage usage = ReadAction.computeBlocking(
           () -> clusteringSearchSession != null
                 ? UsageInfoToUsageConverter.convertToSimilarUsage(primaryElements, usageInfo, clusteringSearchSession)
@@ -472,6 +473,7 @@ public final class FindUsagesManager {
 
         PsiSearchHelper.getInstance(project)
           .processRequests(optionsClone.fastTrack, ref -> {
+            if (FindUsagesHelper.isHiddenTextOccurrence(ref, optionsClone)) return true;
             UsageInfo info = ReadAction.computeBlocking(() -> {
               if (!ref.getElement().isValid()) return null;
               return new UsageInfo(ref);

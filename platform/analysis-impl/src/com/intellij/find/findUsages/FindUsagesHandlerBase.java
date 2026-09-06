@@ -84,8 +84,8 @@ public class FindUsagesHandlerBase {
     SearchScope scope = options.searchScope;
 
     if (options.isUsages) {
-      boolean success =
-        ReferencesSearch.search(createSearchParameters(element, scope, options)).forEach(refProcessor);
+      boolean success = ReferencesSearch.search(createSearchParameters(element, scope, options))
+        .forEach(ref -> FindUsagesHelper.isHiddenTextOccurrence(ref, options) || refProcessor.process(ref));
       if (!success) return false;
     }
 
