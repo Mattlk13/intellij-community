@@ -5216,6 +5216,7 @@ com.intellij.openapi.wm.StatusBarWidgetFactory
 - isAvailable(com.intellij.openapi.project.Project):Z
 - isConfigurable():Z
 - isEnabledByDefault():Z
+- isInternal():Z
 com.intellij.openapi.wm.StatusBarWidgetProvider
 - sf:EP_NAME:com.intellij.openapi.extensions.ExtensionPointName
 - getAnchor():java.lang.String

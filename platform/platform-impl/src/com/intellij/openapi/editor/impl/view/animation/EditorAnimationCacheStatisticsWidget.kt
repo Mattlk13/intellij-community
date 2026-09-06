@@ -2,11 +2,9 @@
 package com.intellij.openapi.editor.impl.view.animation
 
 import com.intellij.ide.setToolTipText
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.wm.CustomStatusBarWidget
-import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
 import com.intellij.openapi.wm.impl.status.TextPanel
@@ -32,21 +30,12 @@ private const val WINDOW_SECONDS = STATISTICS_BUCKET_MS * STATISTICS_BUCKET_COUN
 
 internal class EditorAnimationCacheStatisticsWidgetFactory : StatusBarWidgetFactory {
   override fun getId(): String = ID
-
   override fun getDisplayName(): String = UIBundle.message("status.bar.editor.animation.cache.widget.name")
-
   override fun isEnabledByDefault(): Boolean = false
-
-  override fun isAvailable(project: Project): Boolean = isInternalMode()
+  override fun isInternal(): Boolean = true
 
   override fun createWidget(project: Project): StatusBarWidget = EditorAnimationCacheStatisticsWidget()
-
-  override fun isConfigurable(): Boolean = isInternalMode()
-
-  override fun canBeEnabledOn(statusBar: StatusBar): Boolean = isInternalMode()
 }
-
-private fun isInternalMode(): Boolean = ApplicationManager.getApplication().isInternal
 
 private class EditorAnimationCacheStatisticsWidget : CustomStatusBarWidget {
   private val lazyUi = lazy(::EditorAnimationCacheStatisticsUi)

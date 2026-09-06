@@ -2,11 +2,8 @@
 package com.intellij.openapi.wm.impl.status
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.newvfs.persistent.FSRecords
 import com.intellij.openapi.wm.IconWidgetPresentation
-import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidgetFactory
 import com.intellij.openapi.wm.WidgetPresentation
 import com.intellij.openapi.wm.WidgetPresentationDataContext
@@ -22,14 +19,10 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal class IndexesAndVfsFlushIndicatorWidgetFactory : StatusBarWidgetFactory, WidgetPresentationFactory {
   override fun getId(): String = "IndexesAndVfsFlushIndicator"
-
   override fun getDisplayName(): String = UIBundle.message("status.bar.vfs.and.index.flushing.state.widget.name")
-
   override fun isEnabledByDefault(): Boolean = false
+  override fun isInternal(): Boolean  = true
 
-  override fun isAvailable(project: Project): Boolean = ApplicationManager.getApplication().isInternal
-  override fun canBeEnabledOn(statusBar: StatusBar): Boolean = ApplicationManager.getApplication().isInternal
-  override fun isConfigurable(): Boolean = ApplicationManager.getApplication().isInternal
   override fun createPresentation(context: WidgetPresentationDataContext, scope: CoroutineScope): WidgetPresentation {
     return IndexesAndVfsFlushIndicatorWidget(context)
   }
