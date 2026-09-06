@@ -294,6 +294,8 @@ public final class JBCefApp {
 
     void onInternalJcefTestFailed() {
       myInternalJcefTestFailed = true;
+      if (myCefApp != null)
+        myCefApp.dispose();
     }
 
     private void doCefStartup() {

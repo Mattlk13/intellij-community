@@ -227,11 +227,11 @@ final class InternalJcefTest {
           }
 
           if (FAIL_BROWSER_CREATED) {
-            result.complete("Browser creation is failed by QA request.");
+            result.complete("Browser creation is failed.");
             return;
           }
           if (FAIL_BROWSER_LOAD) {
-            result.complete("Browser loading is failed by QA request.");
+            result.complete("Browser loading is failed.");
             return;
           }
 

@@ -97,8 +97,10 @@ public final class JBCefHealthMonitor {
     myInitialHealthCheck.invokeOnCompletion(throwable -> {
       Status status = getStatus();
       if (status != Status.UNPRIVILEGED_USER_NS_DISABLED && status != Status.RUN_UNDER_SUPER_USER) {
-        myStatus.set(Status.OK);
         myGPUCrashCounter = 0;
+        myStatus.set(Status.OK);
+        ApplicationManager.getApplication().getMessageBus().syncPublisher(JBCefHealthCheckTopic.TOPIC)
+          .onHealthHealthStatusChanged(Status.OK);
 
         if (isRemoteEnabled) {
           myInternalJcefTest = new InternalJcefTest();
@@ -108,10 +110,9 @@ public final class JBCefHealthMonitor {
 
             JBCefNotifications.showInternalJcefTestFailed(errText, myJcefStarter, myGPUCrashCounter, myCefServerCrashCounter);
 
-            if (myStatus.compareAndSet(Status.OK, Status.STARTUP_TEST_FAILED)) {
-              ApplicationManager.getApplication().getMessageBus().syncPublisher(JBCefHealthCheckTopic.TOPIC)
-                .onHealthHealthStatusChanged(getStatus());
-            }
+            myStatus.set(Status.STARTUP_TEST_FAILED);
+            ApplicationManager.getApplication().getMessageBus().syncPublisher(JBCefHealthCheckTopic.TOPIC)
+              .onHealthHealthStatusChanged(getStatus());
           });
           myInternalJcefTest.setOnSuccess(() -> {
             if (myJcefStarter != null)
