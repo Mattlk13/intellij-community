@@ -332,6 +332,7 @@ public final class JBCefApp {
 
       myIsRemoteEnabled = false;
       CefApp.setIsRemoteEnabled(false);
+      CefApp.setDefaultInstance(null); // Necessary to prevent exception ""Settings can only be passed to CEF before createClient is called the first time."
       doCefStartup();
       return initCefApp(withVerboseLogging, false, null);
     }
