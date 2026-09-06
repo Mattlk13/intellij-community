@@ -1,4 +1,4 @@
-// Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.execution.eel
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
@@ -170,13 +170,12 @@ class EelLocalExecApiTest {
       }
     }
 
-    val outputType =
-      if (ptyManagement.hasTTY) {
-        OutputType.TTY(PTY_COLS, PTY_ROWS)
-      }
-      else {
-        OutputType.NoTTY(process.stderr)
-      }
+    val outputType = if (ptyManagement.hasTTY) {
+      OutputType.TTY(PTY_COLS, PTY_ROWS)
+    }
+    else {
+      OutputType.NoTTY(process.stderr)
+    }
     ProcessOutputReader(process.stdout, outputType).use { output ->
 
       withTimeout(30.seconds) {

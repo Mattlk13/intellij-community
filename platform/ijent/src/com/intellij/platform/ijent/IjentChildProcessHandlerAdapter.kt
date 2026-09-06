@@ -61,13 +61,8 @@ class IjentChildProcessHandlerAdapter internal constructor(
   override fun children(): Stream<ProcessHandle> {
     val snapshot = currentSnapshot()
     val ownStart = (cachedInfo ?: snapshot.firstOrNull { it.pid.value == pidValue })?.startInstant
-    return snapshot
-      .asSequence()
-      .filter { it.parentPid?.value == pidValue }
-      .filter { isPlausibleChild(ownStart, it) }
-      .map { handleFor(it) as ProcessHandle }
-      .toList()
-      .stream()
+    return snapshot.asSequence().filter { it.parentPid?.value == pidValue }.filter { isPlausibleChild(ownStart, it) }
+      .map { handleFor(it) as ProcessHandle }.toList().stream()
   }
 
   override fun descendants(): Stream<ProcessHandle> {
@@ -126,11 +121,10 @@ class IjentChildProcessHandlerAdapter internal constructor(
     }.asCompletableFuture()
   }
 
-  override fun supportsNormalTermination(): Boolean =
-    when (processManagement) {
-      is EelProcessManagementPosixApi -> true
-      is EelProcessManagementWindowsApi -> false
-    }
+  override fun supportsNormalTermination(): Boolean = when (processManagement) {
+    is EelProcessManagementPosixApi -> true
+    is EelProcessManagementWindowsApi -> false
+  }
 
   override fun destroy(): Boolean = terminate(force = false)
 
@@ -163,12 +157,11 @@ class IjentChildProcessHandlerAdapter internal constructor(
     }
   }
 
-  private suspend fun killByPid(force: Boolean): Boolean =
-    when (val processManagement = processManagement) {
-      // Windows has no graceful termination of an arbitrary process by pid, so `destroy()` there behaves like `destroyForcibly()`.
-      is EelProcessManagementWindowsApi -> processManagement.kill(pidValue)
-      is EelProcessManagementPosixApi -> if (force) processManagement.kill(pidValue) else processManagement.terminate(pidValue)
-    }
+  private suspend fun killByPid(force: Boolean): Boolean = when (val processManagement = processManagement) {
+    // Windows has no graceful termination of an arbitrary process by pid, so `destroy()` there behaves like `destroyForcibly()`.
+    is EelProcessManagementWindowsApi -> processManagement.kill(pidValue)
+    is EelProcessManagementPosixApi -> if (force) processManagement.kill(pidValue) else processManagement.terminate(pidValue)
+  }
 
   private suspend fun isAliveSuspend(): Boolean {
     val ownProcess = ownProcess
@@ -186,21 +179,19 @@ class IjentChildProcessHandlerAdapter internal constructor(
 
   private fun currentSnapshot(): List<EelProcessInfo> = runBlockingInScope { currentSnapshotSuspend() }
 
-  private suspend fun currentSnapshotSuspend(): List<EelProcessInfo> =
-    try {
-      processManagement.listProcesses()
-    }
-    catch (_: UnsupportedOperationException) {
-      emptyList()
-    }
+  private suspend fun currentSnapshotSuspend(): List<EelProcessInfo> = try {
+    processManagement.listProcesses()
+  }
+  catch (_: UnsupportedOperationException) {
+    emptyList()
+  }
 
-  private suspend fun processInfoFor(pid: Long): EelProcessInfo? =
-    try {
-      processManagement.processInfo(pid)
-    }
-    catch (_: UnsupportedOperationException) {
-      null
-    }
+  private suspend fun processInfoFor(pid: Long): EelProcessInfo? = try {
+    processManagement.processInfo(pid)
+  }
+  catch (_: UnsupportedOperationException) {
+    null
+  }
 
   private fun <T> runBlockingInScope(body: suspend () -> T): T =
     @Suppress("SSBasedInspection") runBlocking(coroutineScope.coroutineContext) { body() }
@@ -215,8 +206,7 @@ class IjentChildProcessHandlerAdapter internal constructor(
       return Optional.of(if (arguments.isEmpty()) exe else "$exe ${arguments.joinToString(" ")}")
     }
 
-    override fun arguments(): Optional<Array<String>> =
-      if (arguments.isEmpty()) Optional.empty() else Optional.of(arguments.toTypedArray())
+    override fun arguments(): Optional<Array<String>> = if (arguments.isEmpty()) Optional.empty() else Optional.of(arguments.toTypedArray())
 
     override fun startInstant(): Optional<Instant> = Optional.ofNullable(info?.startInstant)
 

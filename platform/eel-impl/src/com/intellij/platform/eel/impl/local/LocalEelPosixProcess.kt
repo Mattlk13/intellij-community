@@ -62,11 +62,9 @@ internal class LocalEelPosixProcess private constructor(
   override val stdin: EelSendChannel = process.outputStream.asEelChannel()
   override val stdout: EelReceiveChannel = StreamClosedAwareEelReceiveChannel(process.inputStream.consumeAsEelChannel())
   override val stderr: EelReceiveChannel = StreamClosedAwareEelReceiveChannel(process.errorStream.consumeAsEelChannel())
-  override val exitCode: SafeDeferred<Int> = SafeDeferred(
-    scope.async(CoroutineName("LocalEelPosixProcess pid=${process.pid()}")) {
-      process.awaitExit()
-    }
-  )
+  override val exitCode: SafeDeferred<Int> = SafeDeferred(scope.async(CoroutineName("LocalEelPosixProcess pid=${process.pid()}")) {
+    process.awaitExit()
+  })
 
   override suspend fun kill() {
     sendSignalToProcessGroup(process, UnixSignal.SIGKILL, platform)
